@@ -1,9 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
+
+const HOME_PANELS = ["cover", "latest", "hot"];
+const FLIP_LOCK_MS = 820;
 
 const { site, ensureSite, error: siteError } = useSite();
 const posts = ref([]);
@@ -11,6 +14,9 @@ const hotPosts = ref([]);
 const postsError = ref("");
 const postsLoading = ref(false);
 const activeHomePanel = ref("cover");
+const isHomeFlipping = ref(false);
+
+let homeFlipTimer = 0;
 
 const latestPosts = computed(() => posts.value.slice(0, 5));
 const leadPost = computed(() => latestPosts.value[0] || null);
@@ -20,17 +26,50 @@ function formatClicks(count = 0) {
   return `${count} 次阅读`;
 }
 
+function finishHomeFlip() {
+  isHomeFlipping.value = false;
+  if (homeFlipTimer) {
+    window.clearTimeout(homeFlipTimer);
+    homeFlipTimer = 0;
+  }
+}
+
 function showHomePanel(panel) {
+  if (panel === activeHomePanel.value || isHomeFlipping.value) {
+    return false;
+  }
+
+  isHomeFlipping.value = true;
   activeHomePanel.value = panel;
+
+  if (homeFlipTimer) {
+    window.clearTimeout(homeFlipTimer);
+  }
+  homeFlipTimer = window.setTimeout(finishHomeFlip, FLIP_LOCK_MS);
+  return true;
+}
+
+function moveHomePanel(step) {
+  const currentIndex = HOME_PANELS.indexOf(activeHomePanel.value);
+  const nextIndex = Math.min(Math.max(currentIndex + step, 0), HOME_PANELS.length - 1);
+  return showHomePanel(HOME_PANELS[nextIndex]);
 }
 
 function handleHomeWheel(event) {
-  if (activeHomePanel.value !== "cover" || event.deltaY <= 18) {
+  const intent = Math.abs(event.deltaY);
+  if (intent <= 18) {
     return;
   }
 
-  event.preventDefault();
-  showHomePanel("latest");
+  if (isHomeFlipping.value) {
+    event.preventDefault();
+    return;
+  }
+
+  const moved = moveHomePanel(event.deltaY > 0 ? 1 : -1);
+  if (moved) {
+    event.preventDefault();
+  }
 }
 
 onMounted(async () => {
@@ -55,18 +94,25 @@ onMounted(async () => {
     postsLoading.value = false;
   }
 });
+
+onBeforeUnmount(() => {
+  if (homeFlipTimer) {
+    window.clearTimeout(homeFlipTimer);
+  }
+});
 </script>
 
 <template>
   <div class="home-view personal-home spacious-home calendar-home-view">
     <div class="calendar-stage home-calendar-stage" @wheel="handleHomeWheel">
-      <Transition name="calendar-flip" mode="out-in">
+      <Transition name="calendar-flip" mode="out-in" @after-enter="finishHomeFlip">
         <section
           v-if="activeHomePanel === 'cover'"
           key="home-cover"
           class="spacious-cover calendar-page journal-cover-only"
           aria-label="首页封面"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <h1 class="journal-title">ZHI ZHI JOURNAL</h1>
 
           <p v-if="siteError" class="feedback cover-feedback">{{ siteError }}</p>
@@ -93,9 +139,10 @@ onMounted(async () => {
           v-else-if="activeHomePanel === 'latest'"
           id="latest-posts"
           key="home-latest"
-          class="simple-section latest-spacious-section calendar-page home-article-panel"
+          class="simple-section latest-spacious-section calendar-page home-article-panel latest-calendar-panel"
           aria-label="最近文章"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <div class="section-head spacious-section-head calendar-section-head">
             <div>
               <p class="section-label">Latest writing</p>
@@ -154,9 +201,10 @@ onMounted(async () => {
           v-else
           id="hot-posts"
           key="home-hot"
-          class="simple-section hot-spacious-section calendar-page home-article-panel"
+          class="simple-section hot-spacious-section calendar-page home-article-panel hot-calendar-panel"
           aria-label="热点文章"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <div class="section-head spacious-section-head calendar-section-head">
             <div>
               <p class="section-label">Most opened</p>
@@ -193,3 +241,4 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+

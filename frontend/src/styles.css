@@ -3363,12 +3363,89 @@ body {
     filter: none;
   }
 }
+/* --- Single-page calendar flip refinements --- */
+.calendar-stage {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
 
-/* Keep the calendar cover to the three requested visible elements. */
+.calendar-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.calendar-page > :not(.calendar-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.spacious-cover::after,
 .journal-cover-only::after {
-  content: "";
-  width: min(520px, 68vw);
-  height: min(220px, 22vw);
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(183, 121, 31, 0.08), rgba(183, 121, 31, 0));
+  content: none;
+}
+
+.calendar-watermark {
+  position: absolute;
+  z-index: 0;
+  right: clamp(-18px, 3vw, 46px);
+  bottom: clamp(22px, 5vw, 78px);
+  width: clamp(220px, 34vw, 520px);
+  height: clamp(120px, 18vw, 280px);
+  color: rgba(47, 52, 45, 0.052);
+  background: currentColor;
+  pointer-events: none;
+  user-select: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Ctext x='50%25' y='78%25' text-anchor='middle' font-family='serif' font-size='138' font-weight='800' letter-spacing='-14'%3E%E8%87%B3%E7%9F%A5%3C/text%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Ctext x='50%25' y='78%25' text-anchor='middle' font-family='serif' font-size='138' font-weight='800' letter-spacing='-14'%3E%E8%87%B3%E7%9F%A5%3C/text%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.journal-cover-only .calendar-watermark,
+.about-cover-page .calendar-watermark {
+  right: 50%;
+  bottom: clamp(42px, 8vw, 104px);
+  width: clamp(260px, 42vw, 640px);
+  height: clamp(140px, 22vw, 340px);
+  transform: translateX(50%);
+  color: rgba(47, 52, 45, 0.045);
+}
+
+.latest-calendar-panel .calendar-watermark,
+.about-story-page .calendar-watermark,
+.about-contact-page .calendar-watermark {
+  color: rgba(47, 52, 45, 0.048);
+}
+
+.hot-calendar-panel .calendar-watermark {
+  color: rgba(255, 253, 247, 0.066);
+}
+
+.calendar-stage .calendar-page.latest-spacious-section,
+.calendar-stage .calendar-page.hot-spacious-section,
+.calendar-stage .about-story-page,
+.calendar-stage .about-contact-page {
+  width: 100%;
+}
+
+.calendar-flip-enter-active,
+.calendar-flip-leave-active {
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .calendar-stage {
+    overflow: visible;
+  }
+
+  .calendar-watermark {
+    right: -18px;
+    bottom: 18px;
+    width: clamp(180px, 44vw, 360px);
+    height: clamp(98px, 24vw, 200px);
+  }
+
+  .journal-cover-only .calendar-watermark,
+  .about-cover-page .calendar-watermark {
+    right: 50%;
+    bottom: 40px;
+  }
 }

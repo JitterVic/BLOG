@@ -1,9 +1,15 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useSite } from "../composables/useSite";
+
+const ABOUT_PANELS = ["cover", "story", "contact"];
+const FLIP_LOCK_MS = 820;
 
 const { site, ensureSite, error } = useSite();
 const activeAboutPanel = ref("cover");
+const isAboutFlipping = ref(false);
+let aboutFlipTimer = 0;
+
 const introParagraphs = computed(() => {
   const paragraphs = site.value?.about_intro || [];
   if (paragraphs.length) return paragraphs.slice(0, 2);
@@ -14,17 +20,50 @@ const introParagraphs = computed(() => {
 });
 const contactLinks = computed(() => site.value?.social_links || []);
 
+function finishAboutFlip() {
+  isAboutFlipping.value = false;
+  if (aboutFlipTimer) {
+    window.clearTimeout(aboutFlipTimer);
+    aboutFlipTimer = 0;
+  }
+}
+
 function showAboutPanel(panel) {
+  if (panel === activeAboutPanel.value || isAboutFlipping.value) {
+    return false;
+  }
+
+  isAboutFlipping.value = true;
   activeAboutPanel.value = panel;
+
+  if (aboutFlipTimer) {
+    window.clearTimeout(aboutFlipTimer);
+  }
+  aboutFlipTimer = window.setTimeout(finishAboutFlip, FLIP_LOCK_MS);
+  return true;
+}
+
+function moveAboutPanel(step) {
+  const currentIndex = ABOUT_PANELS.indexOf(activeAboutPanel.value);
+  const nextIndex = Math.min(Math.max(currentIndex + step, 0), ABOUT_PANELS.length - 1);
+  return showAboutPanel(ABOUT_PANELS[nextIndex]);
 }
 
 function handleAboutWheel(event) {
-  if (activeAboutPanel.value !== "cover" || event.deltaY <= 18) {
+  const intent = Math.abs(event.deltaY);
+  if (intent <= 18) {
     return;
   }
 
-  event.preventDefault();
-  showAboutPanel("story");
+  if (isAboutFlipping.value) {
+    event.preventDefault();
+    return;
+  }
+
+  const moved = moveAboutPanel(event.deltaY > 0 ? 1 : -1);
+  if (moved) {
+    event.preventDefault();
+  }
 }
 
 onMounted(async () => {
@@ -34,18 +73,25 @@ onMounted(async () => {
     // The UI already renders a friendlier message via error.
   }
 });
+
+onBeforeUnmount(() => {
+  if (aboutFlipTimer) {
+    window.clearTimeout(aboutFlipTimer);
+  }
+});
 </script>
 
 <template>
   <div class="content-view about-view minimal-about-view about-calendar-view">
     <div class="calendar-stage about-calendar-stage" @wheel="handleAboutWheel">
-      <Transition name="calendar-flip" mode="out-in">
+      <Transition name="calendar-flip" mode="out-in" @after-enter="finishAboutFlip">
         <section
           v-if="activeAboutPanel === 'cover'"
           key="about-cover"
           class="minimal-about-hero calendar-page about-cover-page"
           aria-label="关于至知"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <h1>About Zhizhi</h1>
           <div class="spacious-cover-actions calendar-actions" aria-label="关于页入口">
             <button
@@ -71,6 +117,7 @@ onMounted(async () => {
           class="minimal-about-card calendar-page about-story-page"
           aria-label="自述"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <div class="minimal-about-mark">至知</div>
           <div class="minimal-about-copy">
             <div class="calendar-section-head inline">
@@ -97,6 +144,7 @@ onMounted(async () => {
           class="minimal-contact-strip calendar-page about-contact-page"
           aria-label="交流入口"
         >
+          <span class="calendar-watermark" aria-hidden="true"></span>
           <div>
             <p class="section-label">Contact</p>
             <h2>如果你想交流</h2>
@@ -131,3 +179,4 @@ onMounted(async () => {
     </section>
   </div>
 </template>
+
