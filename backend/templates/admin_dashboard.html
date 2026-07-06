@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>博客管理后台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --grid: rgba(148, 163, 184, 0.18);
+        --card: rgba(255, 255, 255, 0.92);
+        --card-strong: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --line: #dbe4f0;
+        --line-strong: #c2d0df;
+        --accent: #1f3b67;
+        --accent-soft: #ecf3ff;
+        --success-bg: #ecfdf3;
+        --success-line: #9ee6b1;
+        --success-text: #166534;
+        --error-bg: #fef2f2;
+        --error-line: #fecaca;
+        --error-text: #991b1b;
+        --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          linear-gradient(var(--bg), var(--bg)),
+          linear-gradient(to right, var(--grid) 1px, transparent 1px),
+          linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+        background-size: auto, 60px 60px, 60px 60px;
+        background-position: 0 0, 0 0, 0 0;
+      }
+
+      a { color: inherit; text-decoration: none; }
+      button, input, textarea, select { font: inherit; }
+
+      .shell {
+        width: min(1440px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 44px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 20px;
+        padding: 18px 22px;
+        border: 1px solid rgba(219, 228, 240, 0.8);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(16px);
+        box-shadow: var(--shadow);
+      }
+
+      .topbar-copy h1 {
+        margin: 0;
+        font-size: clamp(1.6rem, 3vw, 2rem);
+        letter-spacing: -0.03em;
+      }
+
+      .topbar-copy p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .ghost-link,
+      .logout,
+      .toolbar button,
+      .toolbar a,
+      .inline-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text);
+        cursor: pointer;
+        transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      }
+
+      .ghost-link:hover,
+      .logout:hover,
+      .toolbar button:hover,
+      .toolbar a:hover,
+      .inline-action:hover {
+        transform: translateY(-1px);
+        border-color: #93a7bf;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #ffffff;
+        border-color: var(--accent);
+      }
+
+      .primary:hover { background: #183053; }
+
+      .messages {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .message {
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--success-line);
+        background: var(--success-bg);
+        color: var(--success-text);
+      }
+
+      .message.error {
+        border-color: var(--error-line);
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+        gap: 20px;
+      }
+
+      .main-column,
+      .side-column {
+        display: grid;
+        gap: 20px;
+      }
+
+      .card {
+        padding: 22px;
+        border: 1px solid rgba(219, 228, 240, 0.9);
+        border-radius: 26px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .card-head h2,
+      .card-head h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        letter-spacing: -0.02em;
+      }
+
+      .card-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        min-height: 32px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 0.85rem;
+        white-space: nowrap;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .form-stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .form-section {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(248, 250, 252, 0.86);
+      }
+
+      .form-section h4 {
+        margin: 0;
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+      }
+
+      .form-section p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        line-height: 1.65;
+        font-size: 0.92rem;
+      }
+
+      .field,
+      .field-wide {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field-wide {
+        grid-column: 1 / -1;
+      }
+
+      .field span,
+      .field-wide span,
+      .fieldset-label {
+        font-size: 0.93rem;
+        color: #334155;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--card-strong);
+        color: inherit;
+        outline: none;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #90a8c6;
+        box-shadow: 0 0 0 4px rgba(31, 59, 103, 0.08);
+      }
+
+      textarea {
+        min-height: 160px;
+        resize: vertical;
+        line-height: 1.75;
+      }
+
+      .small-textarea { min-height: 116px; }
+      .editor-textarea { min-height: 360px; font-family: "Consolas", "SFMono-Regular", monospace; }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+
+      .helper {
+        font-size: 0.88rem;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .profile-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .avatar-panel {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 22px;
+        background: rgba(248, 250, 252, 0.92);
+      }
+
+      .avatar-preview {
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 24px;
+        object-fit: cover;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #f8fbff 0%, #eef3f8 100%);
+      }
+
+      .avatar-fallback {
+        display: grid;
+        place-items: center;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #f8fbff 0%, #eef3f8 100%);
+        color: #1e293b;
+        font-size: 3rem;
+        font-weight: 700;
+      }
+
+      .split-area {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+        gap: 18px;
+      }
+
+      .preview {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(248, 250, 252, 0.96);
+        border: 1px solid rgba(219, 228, 240, 0.95);
+      }
+
+      .preview-meta,
+      .result-copy {
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.7;
+      }
+
+      .markdown-body {
+        color: #1e293b;
+        line-height: 1.8;
+        word-break: break-word;
+      }
+
+      .markdown-body h1,
+      .markdown-body h2,
+      .markdown-body h3 {
+        margin-top: 1.4em;
+        margin-bottom: 0.65em;
+        line-height: 1.3;
+      }
+
+      .markdown-body p,
+      .markdown-body li,
+      .markdown-body blockquote { margin: 0 0 1em; }
+      .markdown-body pre {
+        padding: 14px;
+        overflow: auto;
+        border-radius: 16px;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      .markdown-body img {
+        max-width: 100%;
+        border-radius: 18px;
+      }
+
+
+      .checkbox-field .checkline {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(248, 250, 252, 0.92);
+        color: var(--text);
+      }
+
+      .checkbox-field input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+
+      .danger-zone {
+        margin-top: 16px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border: 1px solid var(--error-line);
+        border-radius: 18px;
+        background: var(--error-bg);
+      }
+
+      .danger-zone p {
+        margin: 6px 0 0;
+        color: var(--error-text);
+        line-height: 1.7;
+      }
+
+      .danger-button {
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid #ef4444;
+        border-radius: 14px;
+        background: #dc2626;
+        color: #ffffff;
+        cursor: pointer;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-style: normal;
+        font-size: 0.82rem;
+        background: #f1f5f9;
+        color: #475569;
+      }
+
+      .status-badge.published {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .copy-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .copy-row code {
+        overflow-wrap: anywhere;
+      }
+
+      .copy-row button {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      .meta-list {
+        display: grid;
+        gap: 12px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .meta-list li {
+        display: grid;
+        gap: 5px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(248, 250, 252, 0.92);
+      }
+
+      .meta-list span {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .meta-list strong {
+        overflow-wrap: anywhere;
+        font-size: 0.96rem;
+      }
+
+      .result-box {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: rgba(248, 250, 252, 0.94);
+      }
+
+      .result-box.is-error {
+        border-color: var(--error-line);
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+
+      .result-box.is-success {
+        border-color: var(--success-line);
+        background: var(--success-bg);
+      }
+
+      .result-preview {
+        width: 100%;
+        max-height: 220px;
+        object-fit: cover;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      .post-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .post-link {
+        display: grid;
+        gap: 6px;
+        padding: 15px 16px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: rgba(248, 250, 252, 0.94);
+        transition: transform 0.18s ease, border-color 0.18s ease;
+      }
+
+      .post-link:hover {
+        transform: translateY(-1px);
+        border-color: #9fb4cb;
+      }
+
+      .post-link strong {
+        font-size: 1rem;
+        line-height: 1.5;
+      }
+
+      .post-link span {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px dashed var(--line-strong);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(226, 232, 240, 0.7);
+        font-family: "Consolas", "SFMono-Regular", monospace;
+        font-size: 0.9em;
+      }
+
+      @media (max-width: 1180px) {
+        .layout,
+        .split-area,
+        .profile-shell { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 760px) {
+        .shell { width: min(100vw - 20px, 100%); padding-top: 18px; }
+        .danger-zone, .copy-row { grid-template-columns: 1fr; }
+        .danger-zone { align-items: flex-start; flex-direction: column; }
+        .topbar { padding: 16px; }
+        .topbar, .topbar-actions { align-items: flex-start; }
+        .topbar { flex-direction: column; }
+        .form-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar-copy">
+          <h1>博客管理后台</h1>
+          <p>只保留当前前台真正会展示的资料和文章字段，让维护更直接，也更不容易改错。</p>
+        </div>
+        <div class="topbar-actions">
+          <a href="/" class="ghost-link" target="_blank" rel="noreferrer">查看前台</a>
+          <a href="{{ url_for('admin_logout') }}" class="logout">退出后台</a>
+        </div>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="messages">
+            {% for category, message in messages %}
+              <div class="message {% if category == 'error' %}error{% endif %}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <div class="layout">
+        <div class="main-column">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>个人资料</h2>
+                <p>这些字段会直接影响首页、关于页和页脚显示，删掉了目前前台没有在用的文案项。</p>
+              </div>
+              <span class="eyebrow">Home + About</span>
+            </div>
+
+            <form method="post" action="{{ url_for('admin_profile') }}" enctype="multipart/form-data">
+              <div class="profile-shell">
+                <div class="form-stack">
+                  <section class="form-section">
+                    <div>
+                      <h4>Basic Info</h4>
+                      <p>Only affects what is currently visible on the home page and footer.</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Site Name</span>
+                        <input type="text" name="name" value="{{ profile_form.name }}" placeholder="e.g. Study Without End" required />
+                      </label>
+
+                      <label class="field">
+                        <span>Role</span>
+                        <input type="text" name="role" value="{{ profile_form.role }}" placeholder="全栈开发者 / 终身学习者" />
+                      </label>
+
+                      <label class="field">
+                        <span>Location</span>
+                        <input type="text" name="location" value="{{ profile_form.location }}" placeholder="e.g. China / Loves Tech" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>Homepage Headline</span>
+                        <input type="text" name="headline" value="{{ profile_form.headline }}" placeholder="首页主标题，例如：记录成长的点点滴滴" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>Homepage Summary</span>
+                        <textarea class="small-textarea" name="summary" placeholder="首页简介，一两句话说明你是谁、在做什么。">{{ profile_form.summary }}</textarea>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="form-section">
+                    <div>
+                      <h4>Contacts</h4>
+                      <p>The home page currently shows only email and GitHub contact cards.</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Email</span>
+                        <input type="email" name="email" value="{{ profile_form.email }}" placeholder="yourname@example.com" />
+                      </label>
+
+                      <label class="field">
+                        <span>GitHub Label</span>
+                        <input type="text" name="github_label" value="{{ profile_form.github_label }}" placeholder="github.com/yourname" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>GitHub URL</span>
+                        <input type="url" name="github_url" value="{{ profile_form.github_url }}" placeholder="https://github.com/yourname" />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="form-section">
+                    <div>
+                      <h4>About Page</h4>
+                      <p>Write one paragraph per line. Use <code>Date | Event</code> for the update calendar.</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field-wide">
+                        <span>Hero Note</span>
+                        <input type="text" name="hero_note" value="{{ profile_form.hero_note }}" placeholder="Short sentence shown on the about page" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>About Intro</span>
+                        <textarea name="about_intro" placeholder="One paragraph per line">{{ profile_form.about_intro_text }}</textarea>
+                      </label>
+
+                      <label class="field-wide">
+                        <span>Update Calendar</span>
+                        <textarea class="small-textarea" name="update_calendar" placeholder="2026-03-21 | Homepage redesign">{{ profile_form.update_calendar_text }}</textarea>
+                      </label>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="avatar-panel">
+                  <span class="fieldset-label">Avatar Upload</span>
+                  {% if profile.avatar_url %}
+                    <img src="{{ profile.avatar_url }}" alt="avatar" class="avatar-preview" />
+                  {% else %}
+                    <div class="avatar-fallback">{{ (profile_form.name or 'A')[:1] }}</div>
+                  {% endif %}
+                  <input type="file" name="avatar" accept="image/*" />
+                  <p class="helper">Supports common image formats and non-English file names.</p>
+                </div>
+              </div>
+
+              <div class="toolbar">
+                <button type="submit" class="primary">Save Profile</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>文章编辑</h2>
+                <p>支持导入 Markdown、即时预览、保存草稿和发布。当前只保留前台文章页真正会用到的字段。</p>
+              </div>
+              <span class="eyebrow">Markdown Workflow</span>
+            </div>
+
+            <form id="post-form" method="post" action="{{ url_for('admin_save_post') }}">
+              <input type="hidden" name="post_id" value="{{ edit_post.id }}" />
+
+              <div class="form-stack">
+                <section class="form-section">
+                  <div>
+                    <h4>Article Meta</h4>
+                    <p>Only keeps the fields currently visible in the article list and detail page.</p>
+                  </div>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Title</span>
+                      <input type="text" id="title" name="title" value="{{ edit_post.title }}" placeholder="Article title" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Category</span>
+                      <input type="text" name="category" value="{{ edit_post.category }}" placeholder="e.g. Build in Public" />
+                    </label>
+
+                    <label class="field">
+                      <span>Slug</span>
+                      <input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" placeholder="Auto-generated if empty" />
+                    </label>
+
+                    <label class="field">
+                      <span>Publish Date</span>
+                      <input type="date" name="published_at" value="{{ edit_post.published_at }}" />
+                    </label>
+
+                    <label class="field">
+                      <span>Read Time</span>
+                      <input type="text" id="read_time" name="read_time" value="{{ edit_post.read_time }}" placeholder="e.g. 6 min" />
+                    </label>
+
+                    <label class="field">
+                      <span>Tags</span>
+                      <input type="text" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" />
+                    </label>
+
+                    <label class="field checkbox-field">
+                      <span>Featured</span>
+                      <label class="checkline">
+                        <input type="checkbox" name="featured" {% if edit_post.featured %}checked{% endif %} />
+                        <span>设为首页精选文章</span>
+                      </label>
+                    </label>
+
+                    <label class="field-wide">
+                      <span>Excerpt</span>
+                      <textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="Shown in cards and at the top of the article">{{ edit_post.excerpt }}</textarea>
+                    </label>
+
+                    <label class="field-wide">
+                      <span>Quote</span>
+                      <input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="Short line shown below the title" />
+                    </label>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div>
+                    <h4>Content & Preview</h4>
+                    <p>Import Markdown, preview the layout, then save as a draft or publish when ready.</p>
+                  </div>
+
+                  <div class="toolbar">
+                    <label class="inline-action" for="markdown-file">Import Markdown</label>
+                    <input type="file" id="markdown-file" accept=".md,.markdown,text/markdown" hidden />
+                    <button type="button" id="preview-button">Refresh Preview</button>
+                    <button type="submit" name="action" value="draft">Save Draft / Unpublish</button>
+                    <button type="submit" name="action" value="published" class="primary">Publish</button>
+                  </div>
+
+                  <p class="helper">Preview first, then save or publish after you confirm the format.</p>
+
+                  <div class="split-area">
+                    <label class="field-wide">
+                      <span>Markdown Body</span>
+                      <textarea id="markdown_content" name="markdown_content" class="editor-textarea" placeholder="# Title&#10;&#10;Start writing here...">{{ edit_post.markdown_content }}</textarea>
+                    </label>
+
+                    <div class="preview">
+                      <div class="preview-meta" id="preview-meta">The preview shows rendered content, reading time, and the generated excerpt.</div>
+                      <article class="markdown-body" id="preview-target">{{ edit_post.html_content | safe }}</article>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </form>
+
+            {% if edit_post.id %}
+              <form method="post" action="{{ url_for('admin_delete_post', post_id=edit_post.id) }}" class="danger-zone" onsubmit="return confirm('确定删除这篇文章吗？此操作不可撤销。');">
+                <div>
+                  <strong>危险操作</strong>
+                  <p>删除后文章会立即从后台和前台移除；如果只是暂时隐藏，请使用 Save Draft / Unpublish。</p>
+                </div>
+                <button type="submit" class="danger-button">Delete Post</button>
+              </form>
+            {% endif %}
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h3>图片上传</h3>
+                <p>上传后会生成图片地址和 Markdown 片段，你可以一键插入到正文里。</p>
+              </div>
+              <span class="eyebrow">Media</span>
+            </div>
+
+            <label class="field-wide">
+              <span>选择图片</span>
+              <input type="file" id="media-file" accept="image/*" />
+            </label>
+
+            <div class="toolbar">
+              <button type="button" id="upload-image-button">上传图片</button>
+              <button type="button" id="insert-image-button">插入到正文</button>
+            </div>
+
+            <div class="result-box" id="media-result">
+              <div class="result-copy">上传结果会显示在这里。</div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h3>系统信息</h3>
+                <p>方便你核对当前后台入口和数据存储位置。</p>
+              </div>
+              <span class="eyebrow">Status</span>
+            </div>
+
+            <ul class="meta-list">
+              <li><span>数据库路径</span><strong><code>{{ stats.db_path }}</code></strong></li>
+              <li><span>文章总数</span><strong>{{ stats.post_count }}</strong></li>
+              <li><span>已发布</span><strong>{{ stats.published_count }}</strong></li>
+              <li><span>草稿数量</span><strong>{{ stats.draft_count }}</strong></li>
+              <li><span>上传目录</span><strong><code>{{ stats.upload_dir }}</code></strong></li>
+              <li><span>后台入口</span><strong><code>{{ stats.admin_prefix }}</code></strong></li>
+            </ul>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h3>文章列表</h3>
+                <p>点击右侧列表可以快速继续编辑已有文章。</p>
+              </div>
+              <span class="eyebrow">Posts</span>
+            </div>
+
+            <div class="post-list">
+              {% if admin_posts %}
+                {% for item in admin_posts %}
+                  <a class="post-link" href="{{ url_for('admin_dashboard', post_id=item.id) }}">
+                    <strong>{{ item.title }}</strong>
+                    <span><em class="status-badge {{ item.status }}">{{ '已发布' if item.status == 'published' else '草稿' }}</em> · {{ item.updated_at }}</span>
+                  </a>
+                {% endfor %}
+              {% else %}
+                <div class="empty-state">还没有文章，先新建一篇试试。</div>
+              {% endif %}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const previewButton = document.getElementById("preview-button");
+      const markdownInput = document.getElementById("markdown_content");
+      const previewTarget = document.getElementById("preview-target");
+      const previewMeta = document.getElementById("preview-meta");
+      const markdownFileInput = document.getElementById("markdown-file");
+      const uploadImageButton = document.getElementById("upload-image-button");
+      const insertImageButton = document.getElementById("insert-image-button");
+      const mediaFileInput = document.getElementById("media-file");
+      const mediaResult = document.getElementById("media-result");
+      const titleInput = document.getElementById("title");
+      const slugInput = document.getElementById("slug");
+      const excerptInput = document.getElementById("excerpt");
+      const readTimeInput = document.getElementById("read_time");
+      let latestImageMarkdown = "";
+
+      function setPreviewMessage(message, isError = false) {
+        previewMeta.textContent = message;
+        previewMeta.style.color = isError ? "#991b1b" : "#64748b";
+      }
+
+      function renderMediaResult({ url = "", message = "", isError = false } = {}) {
+        mediaResult.classList.remove("is-error", "is-success");
+        mediaResult.classList.add(isError ? "is-error" : "is-success");
+
+        if (!url) {
+          mediaResult.innerHTML = `<div class="result-copy">${message || "操作未完成。"}</div>`;
+          latestImageMarkdown = "";
+          return;
+        }
+
+        const markdownSnippet = `![](${url})`;
+        latestImageMarkdown = markdownSnippet;
+        mediaResult.innerHTML = `
+          <img src="${url}" alt="uploaded preview" class="result-preview" />
+          <div class="result-copy">上传成功，可以直接复制下面两段中的任意一种使用。</div>
+          <div class="copy-row"><code>${url}</code><button type="button" data-copy="${url}">复制 URL</button></div>
+          <div class="copy-row"><code>${markdownSnippet}</code><button type="button" data-copy="${markdownSnippet.replace(/"/g, '&quot;')}">复制 Markdown</button></div>
+        `;
+      }
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || `请求失败：${response.status}`);
+        }
+        return data;
+      }
+
+      previewButton?.addEventListener("click", async () => {
+        try {
+          setPreviewMessage("正在刷新预览……");
+          const data = await fetchJson("{{ url_for('admin_preview_markdown') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ markdown_content: markdownInput.value }),
+          });
+
+          previewTarget.innerHTML = data.html || "<p>暂无预览内容</p>";
+          setPreviewMessage(`预计阅读时间：${data.read_time} ｜ 自动摘要：${data.excerpt || "无"}`);
+          if (!excerptInput.value && data.excerpt) excerptInput.value = data.excerpt;
+          if (!readTimeInput.value && data.read_time) readTimeInput.value = data.read_time;
+        } catch (error) {
+          setPreviewMessage(error.message || "预览失败，请稍后再试。", true);
+        }
+      });
+
+      markdownFileInput?.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("markdown_file", file);
+
+        try {
+          setPreviewMessage("正在导入 Markdown……");
+          const data = await fetchJson("{{ url_for('admin_import_markdown') }}", {
+            method: "POST",
+            body: formData,
+          });
+
+          markdownInput.value = data.markdown_content || "";
+          previewTarget.innerHTML = data.html_content || "";
+          setPreviewMessage(`预计阅读时间：${data.read_time} ｜ 自动摘要：${data.excerpt || "无"}`);
+          titleInput.value = data.title || titleInput.value;
+          slugInput.value = data.slug || slugInput.value;
+          excerptInput.value = data.excerpt || excerptInput.value;
+          readTimeInput.value = data.read_time || readTimeInput.value;
+        } catch (error) {
+          setPreviewMessage(error.message || "导入失败，请检查文件格式。", true);
+        } finally {
+          event.target.value = "";
+        }
+      });
+
+      uploadImageButton?.addEventListener("click", async () => {
+        const file = mediaFileInput.files?.[0];
+        if (!file) {
+          renderMediaResult({ message: "请先选择图片文件。", isError: true });
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("image", file);
+
+        try {
+          renderMediaResult({ message: "图片正在上传……" });
+          const data = await fetchJson("{{ url_for('admin_upload_image') }}", {
+            method: "POST",
+            body: formData,
+          });
+          renderMediaResult({ url: data.url });
+        } catch (error) {
+          renderMediaResult({ message: error.message || "上传失败，请稍后重试。", isError: true });
+        }
+      });
+
+      mediaResult?.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy]");
+        if (!button) return;
+        const text = button.getAttribute("data-copy") || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = "已复制";
+          setTimeout(() => (button.textContent = text.startsWith("![") ? "复制 Markdown" : "复制 URL"), 1200);
+        } catch (error) {
+          renderMediaResult({ message: "复制失败，请手动选中内容复制。", isError: true });
+        }
+      });
+
+      insertImageButton?.addEventListener("click", () => {
+        if (!latestImageMarkdown) {
+          renderMediaResult({ message: "请先上传图片，再插入到正文。", isError: true });
+          return;
+        }
+
+        const spacer = markdownInput.value.trim() ? "\n\n" : "";
+        markdownInput.value += `${spacer}${latestImageMarkdown}`;
+        markdownInput.focus();
+        renderMediaResult({ message: "图片 Markdown 已插入正文末尾。", url: latestImageMarkdown.match(/\((.*)\)/)?.[1] || "" });
+      });
+    </script>
+  </body>
+</html>
+
