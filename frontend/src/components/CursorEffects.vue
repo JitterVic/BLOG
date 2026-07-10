@@ -33,6 +33,10 @@ const PALETTE = [
 const MAX_PARTICLES = 72;
 const TRAIL_INTERVAL = 42;
 const TRAIL_DISTANCE = 24;
+const MAX_DEVICE_SCALE = 2;
+const FRAME_BASELINE_MS = 16.7;
+const MAX_FRAME_DELTA_MS = 32;
+const PRESSING_DURATION_MS = 210;
 
 let enabled = false;
 let canvas = null;
@@ -43,7 +47,7 @@ let deviceScale = 1;
 let particles = [];
 let pointer = { x: 0, y: 0 };
 let lastTrail = { x: 0, y: 0, time: 0, ready: false };
-let pressingTimers = new WeakMap();
+let pressingTimers = new Map();
 
 function canUseEffects() {
   if (typeof window === "undefined") {
@@ -73,7 +77,7 @@ function resizeCanvas() {
     return;
   }
 
-  deviceScale = Math.min(window.devicePixelRatio || 1, 2);
+  deviceScale = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_SCALE);
   const width = window.innerWidth;
   const height = window.innerHeight;
 
@@ -101,8 +105,15 @@ function ensureAnimationLoop() {
   }
 }
 
+function withParticleDefaults(particle) {
+  return {
+    maxLife: particle.life,
+    ...particle,
+  };
+}
+
 function addParticle(particle) {
-  particles.push(particle);
+  particles.push(withParticleDefaults(particle));
   trimParticles();
   ensureAnimationLoop();
 }
@@ -120,12 +131,10 @@ function addTrailParticles(x, y) {
       vy: randomBetween(-0.18, 0.12),
       size: randomBetween(1.4, 3.6),
       life: randomBetween(300, 540),
-      maxLife: 0,
       color,
       gravity: randomBetween(-0.002, 0.004),
       friction: 0.972,
     });
-    particles[particles.length - 1].maxLife = particles[particles.length - 1].life;
   }
 }
 
@@ -242,14 +251,41 @@ function drawRing(particle, alpha) {
   context.restore();
 }
 
+function drawParticle(particle, alpha, step) {
+  if (particle.type === "spark") {
+    drawSpark(particle, alpha, step);
+    return;
+  }
+
+  if (particle.type === "trail") {
+    drawTrail(particle, alpha, step);
+    return;
+  }
+
+  if (particle.type === "ring") {
+    drawRing(particle, alpha);
+  }
+}
+
+function finishAnimationLoopIfIdle() {
+  if (particles.length > 0) {
+    animationFrame = window.requestAnimationFrame(animate);
+    return;
+  }
+
+  animationFrame = 0;
+  lastFrameTime = 0;
+  stage.value?.classList.remove("active");
+}
+
 function animate(timestamp) {
   if (!enabled || !context || !canvas) {
     animationFrame = 0;
     return;
   }
 
-  const delta = lastFrameTime ? Math.min(32, timestamp - lastFrameTime) : 16.7;
-  const step = delta / 16.7;
+  const delta = lastFrameTime ? Math.min(MAX_FRAME_DELTA_MS, timestamp - lastFrameTime) : FRAME_BASELINE_MS;
+  const step = delta / FRAME_BASELINE_MS;
   lastFrameTime = timestamp;
 
   context.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -265,24 +301,30 @@ function animate(timestamp) {
 
     const alpha = particle.life / particle.maxLife;
 
-    if (particle.type === "spark") {
-      drawSpark(particle, alpha, step);
-    } else if (particle.type === "trail") {
-      drawTrail(particle, alpha, step);
-    } else if (particle.type === "ring") {
-      drawRing(particle, alpha);
-    }
+    drawParticle(particle, alpha, step);
   }
 
   trimParticles();
 
-  if (particles.length > 0) {
-    animationFrame = window.requestAnimationFrame(animate);
-  } else {
-    animationFrame = 0;
-    lastFrameTime = 0;
-    stage.value?.classList.remove("active");
+  finishAnimationLoopIfIdle();
+}
+
+function updatePointerPosition(event) {
+  pointer = { x: event.clientX, y: event.clientY };
+  document.documentElement.style.setProperty("--pointer-x", `${pointer.x}px`);
+  document.documentElement.style.setProperty("--pointer-y", `${pointer.y}px`);
+}
+
+function getTrailDistance() {
+  if (!lastTrail.ready) {
+    return Infinity;
   }
+
+  return Math.hypot(pointer.x - lastTrail.x, pointer.y - lastTrail.y);
+}
+
+function shouldEmitTrail(now, distance) {
+  return now - lastTrail.time >= TRAIL_INTERVAL && distance >= TRAIL_DISTANCE;
 }
 
 function handlePointerMove(event) {
@@ -290,17 +332,12 @@ function handlePointerMove(event) {
     return;
   }
 
-  pointer = { x: event.clientX, y: event.clientY };
-  document.documentElement.style.setProperty("--pointer-x", `${pointer.x}px`);
-  document.documentElement.style.setProperty("--pointer-y", `${pointer.y}px`);
+  updatePointerPosition(event);
 
   const now = event.timeStamp || performance.now();
-  const distance = lastTrail.ready
-    ? Math.hypot(pointer.x - lastTrail.x, pointer.y - lastTrail.y)
-    : Infinity;
-  const cooledDown = now - lastTrail.time >= TRAIL_INTERVAL;
+  const distance = getTrailDistance();
 
-  if (cooledDown && distance >= TRAIL_DISTANCE) {
+  if (shouldEmitTrail(now, distance)) {
     addTrailParticles(pointer.x, pointer.y);
     lastTrail = { x: pointer.x, y: pointer.y, time: now, ready: true };
   }
@@ -320,7 +357,7 @@ function markPressed(element) {
   const timer = window.setTimeout(() => {
     element.classList.remove("is-pressing");
     pressingTimers.delete(element);
-  }, 210);
+  }, PRESSING_DURATION_MS);
   pressingTimers.set(element, timer);
 }
 
@@ -332,6 +369,64 @@ function handlePointerDown(event) {
   const interactive = event.target?.closest?.(INTERACTIVE_SELECTOR);
   addBurst(event.clientX, event.clientY, Boolean(interactive));
   markPressed(interactive);
+}
+
+function attachListeners() {
+  window.addEventListener("resize", resizeCanvas, { passive: true });
+  document.addEventListener("pointermove", handlePointerMove, { passive: true });
+  document.addEventListener("pointerdown", handlePointerDown, { passive: true });
+}
+
+function detachListeners() {
+  window.removeEventListener("resize", resizeCanvas);
+  document.removeEventListener("pointermove", handlePointerMove);
+  document.removeEventListener("pointerdown", handlePointerDown);
+}
+
+function clearAnimationFrame() {
+  if (!animationFrame) {
+    return;
+  }
+
+  window.cancelAnimationFrame(animationFrame);
+  animationFrame = 0;
+}
+
+function clearPressingTimers() {
+  pressingTimers.forEach((timer, element) => {
+    window.clearTimeout(timer);
+    element.classList.remove("is-pressing");
+  });
+  pressingTimers.clear();
+}
+
+function resetParticleState() {
+  particles = [];
+  pointer = { x: 0, y: 0 };
+  lastTrail = { x: 0, y: 0, time: 0, ready: false };
+  lastFrameTime = 0;
+}
+
+function resetStageElement() {
+  if (!stage.value) {
+    return;
+  }
+
+  stage.value.classList.remove("active");
+  delete stage.value.dataset.effect;
+  delete stage.value.dataset.particles;
+  stage.value.replaceChildren();
+}
+
+function stopEffects() {
+  enabled = false;
+  detachListeners();
+  clearAnimationFrame();
+  clearPressingTimers();
+  resetParticleState();
+  resetStageElement();
+  canvas = null;
+  context = null;
 }
 
 onMounted(() => {
@@ -354,27 +449,11 @@ onMounted(() => {
   stage.value.dataset.particles = "0";
   resizeCanvas();
 
-  window.addEventListener("resize", resizeCanvas, { passive: true });
-  document.addEventListener("pointermove", handlePointerMove, { passive: true });
-  document.addEventListener("pointerdown", handlePointerDown, { passive: true });
+  attachListeners();
 });
 
 onBeforeUnmount(() => {
-  enabled = false;
-  window.removeEventListener("resize", resizeCanvas);
-  document.removeEventListener("pointermove", handlePointerMove);
-  document.removeEventListener("pointerdown", handlePointerDown);
-
-  if (animationFrame) {
-    window.cancelAnimationFrame(animationFrame);
-  }
-
-  particles = [];
-  pressingTimers = new WeakMap();
-  animationFrame = 0;
-  canvas = null;
-  context = null;
-  stage.value?.replaceChildren();
+  stopEffects();
 });
 </script>
 

@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRINT — 程序员博客</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   PROPERTIES
+   ═══════════════════════════════════════════════════ */
+:root {
+  --paper:#f4efe6;--paper-mid:#ebe5d8;--paper-dark:#ddd6c5;
+  --ink:#1c1710;--ink-mid:#3b3328;--ink-light:#5e5548;--ink-faded:#8a7f6f;
+  --accent:#8b2500;--accent-light:#b84a2a;
+  --rule:#2a241c;--rule-light:rgba(42,36,28,.2);
+  --code-bg:#2a2520;--code-fg:#e8dfd0;
+  --f-display:'Playfair Display','Noto Serif SC',Georgia,serif;
+  --f-mono:'IBM Plex Mono','Courier New',monospace;
+  --ease-expo:cubic-bezier(.16,1,.3,1);
+  --ease-quart:cubic-bezier(.25,1,.5,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+}
+
+/* ═══════════════════════════════════════════════════
+   RESET
+   ═══════════════════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;overflow-x:hidden}
+body{
+  font-family:var(--f-mono);font-weight:400;font-size:.84rem;line-height:1.7;
+  color:var(--ink);background:var(--paper);overflow-x:hidden;-webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+
+/* ═══════════════════════════════════════════════════
+   PAPER TEXTURE + NOISE
+   ═══════════════════════════════════════════════════ */
+body::before{
+  content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:.03;mix-blend-mode:multiply;
+}
+body::after{
+  content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(26,22,17,.005) 3px,rgba(26,22,17,.005) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 5px,rgba(26,22,17,.003) 5px,rgba(26,22,17,.003) 6px);
+}
+
+/* ═══════════════════════════════════════════════════
+   PARTICLE CANVAS
+   ═══════════════════════════════════════════════════ */
+#particles{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+}
+
+/* ═══════════════════════════════════════════════════
+   NAV
+   ═══════════════════════════════════════════════════ */
+.nav{
+  position:fixed;top:0;left:0;width:100%;z-index:1000;
+  padding:1.2rem 2.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(180deg,var(--paper) 50%,transparent);
+  transition:padding .3s,background .3s;
+}
+.nav.scrolled{
+  padding:.7rem 2.5rem;
+  background:linear-gradient(180deg,rgba(244,239,230,.95) 70%,transparent);
+  backdrop-filter:blur(2px);
+}
+.nav__brand{font-family:var(--f-display);font-weight:900;font-size:1.05rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink)}
+.nav__brand i{font-style:italic;color:var(--accent)}
+.nav__links{display:flex;gap:2.2rem;list-style:none}
+.nav__item{
+  display:flex;align-items:baseline;gap:.45rem;cursor:pointer;
+  color:var(--ink-light);transition:color .3s;
+}
+.nav__item:hover,.nav__item.active{color:var(--accent)}
+.nav__num{
+  font-family:var(--f-display);font-weight:700;font-size:.65rem;
+  color:var(--ink-faded);min-width:1.4em;
+  transition:font-size .35s var(--ease-spring),color .3s,transform .35s var(--ease-spring);
+  transform-origin:bottom left;display:inline-block;
+}
+.nav__item:hover .nav__num{font-size:1.35rem;color:var(--accent);transform:translateY(-2px)}
+.nav__label{font-family:var(--f-mono);font-size:.68rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase}
+
+/* ═══════════════════════════════════════════════════
+   PAGE FLIP
+   ═══════════════════════════════════════════════════ */
+.page{
+  position:relative;min-height:100vh;z-index:1;
+  transform-origin:left center;
+  transition:transform .7s var(--ease-expo),opacity .7s var(--ease-expo);
+}
+.page.flipping-out{transform:rotateY(-10deg) scale(.97);opacity:0}
+.page.flipping-in{animation:flipIn .7s var(--ease-expo) forwards}
+@keyframes flipIn{
+  0%{transform:rotateY(7deg) scale(.97) translateX(25px);opacity:0}
+  100%{transform:rotateY(0) scale(1) translateX(0);opacity:1}
+}
+.page::after{
+  content:'';position:absolute;top:0;left:0;width:50px;height:100%;
+  background:linear-gradient(90deg,rgba(0,0,0,.04),transparent);
+  pointer-events:none;z-index:10;
+}
+
+/* ═══════════════════════════════════════════════════
+   PAGE NUMBER
+   ═══════════════════════════════════════════════════ */
+.pg{position:absolute;bottom:1.8rem;font-family:var(--f-display);font-weight:700;font-size:.68rem;color:var(--ink-faded);letter-spacing:.1em}
+.pg--l{left:2.5rem}.pg--r{right:2.5rem}
+
+/* ═══════════════════════════════════════════════════
+   SECTION HEADER
+   ═══════════════════════════════════════════════════ */
+.sec-hd{
+  padding:4.5rem 2.5rem 2rem;
+  border-top:3px double var(--rule);border-bottom:1px solid var(--rule-light);
+  margin-bottom:2.5rem;
+  display:flex;align-items:baseline;gap:1.8rem;
+}
+.sec-hd__n{font-family:var(--f-display);font-weight:900;font-size:3.5rem;color:var(--rule-light);line-height:1;min-width:2ch}
+.sec-hd__t{font-family:var(--f-display);font-weight:700;font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:-.02em;color:var(--ink)}
+.sec-hd__line{flex:1;height:1px;background:var(--rule-light);align-self:center}
+
+/* ═══════════════════════════════════════════════════
+   REVEAL
+   ═══════════════════════════════════════════════════ */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease-quart),transform .7s var(--ease-quart)}
+.rv.vis{opacity:1;transform:translateY(0)}
+.rv-d1{transition-delay:.1s}.rv-d2{transition-delay:.2s}.rv-d3{transition-delay:.3s}.rv-d4{transition-delay:.4s}
+
+/* ═══════════════════════════════════════════════════
+   IMAGE — SEPIA + NOISE
+   ═══════════════════════════════════════════════════ */
+.mimg{position:relative;overflow:hidden;background:var(--paper-dark)}
+.mimg img{
+  width:100%;height:100%;object-fit:cover;
+  filter:sepia(.2) contrast(1.04) brightness(.97);
+  transition:filter .5s,transform .8s var(--ease-quart);
+}
+.mimg:hover img{filter:sepia(.05) contrast(1.08) brightness(1);transform:scale(1.02)}
+.mimg::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:.1;mix-blend-mode:multiply;
+}
+.mimg::before{
+  content:'';position:absolute;inset:0;z-index:2;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.12);pointer-events:none;
+}
+.mimg__cap{
+  position:absolute;bottom:0;left:0;right:0;padding:1.8rem 1rem .8rem;
+  background:linear-gradient(transparent,rgba(26,22,17,.65));
+  font-family:var(--f-mono);font-size:.6rem;font-weight:300;letter-spacing:.06em;color:#f4efe6;z-index:3;
+}
+
+/* ═══════════════════════════════════════════════════
+   ARTICLE CARD
+   ═══════════════════════════════════════════════════ */
+.art{padding-bottom:1.8rem;border-bottom:1px solid var(--rule-light)}
+.art__cat{
+  font-family:var(--f-mono);font-size:.58rem;font-weight:600;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:.7rem;
+}
+.art__t{
+  font-family:var(--f-display);font-weight:700;font-size:1.35rem;
+  line-height:1.28;color:var(--ink);margin-bottom:.7rem;letter-spacing:-.01em;
+}
+.art__t--lg{font-size:clamp(1.8rem,2.8vw,2.5rem)}
+.art__t--xl{font-size:clamp(2.2rem,3.5vw,3.2rem);line-height:1.15}
+.art__p{
+  font-family:var(--f-mono);font-size:.76rem;font-weight:300;
+  line-height:1.8;color:var(--ink-mid);margin-bottom:.9rem;
+}
+.art__meta{
+  font-family:var(--f-mono);font-size:.6rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-faded);display:flex;gap:1.2rem;flex-wrap:wrap;
+}
+.art__meta span::before{content:'·';margin-right:1.2rem;color:var(--accent)}
+.art__meta span:first-child::before{content:none}
+
+/* tags */
+.tag{
+  display:inline-block;font-family:var(--f-mono);font-size:.55rem;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;padding:.2rem .6rem;
+  border:1px solid var(--rule-light);color:var(--ink-faded);margin-right:.4rem;margin-bottom:.3rem;
+}
+.tag--hot{border-color:var(--accent);color:var(--accent)}
+.tag--code{
+  background:var(--code-bg);color:var(--code-fg);border-color:transparent;
+  font-weight:400;letter-spacing:.05em;
+}
+
+/* ═══════════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════════ */
+.tabs{
+  display:flex;gap:0;border-bottom:1px solid var(--rule-light);margin-bottom:2rem;
+}
+.tab{
+  font-family:var(--f-mono);font-size:.68rem;font-weight:500;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:.8rem 1.8rem;cursor:pointer;color:var(--ink-faded);
+  border:none;border-bottom:2px solid transparent;
+  background:none;transition:color .3s,border-color .3s;
+}
+.tab:hover{color:var(--ink-mid)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ═══════════════════════════════════════════════════
+   ARCHIVE
+   ═══════════════════════════════════════════════════ */
+.archive{padding:0 2.5rem 3rem}
+.archive__year{
+  font-family:var(--f-display);font-weight:900;font-size:2.5rem;
+  color:var(--rule-light);line-height:1;margin-bottom:1.2rem;
+  padding-bottom:.5rem;border-bottom:1px solid var(--rule-light);
+  display:flex;align-items:baseline;gap:1rem;
+}
+.archive__count{
+  font-family:var(--f-mono);font-size:.6rem;font-weight:400;
+  letter-spacing:.1em;color:var(--ink-faded);text-transform:uppercase;
+}
+.archive__list{list-style:none;margin-bottom:2.5rem}
+.archive__li{
+  display:grid;grid-template-columns:60px 1fr auto;gap:1.2rem;align-items:baseline;
+  padding:.7rem 0;border-bottom:1px dashed var(--rule-light);
+  cursor:pointer;transition:background .2s;
+}
+.archive__li:hover{background:rgba(42,36,28,.03)}
+.archive__li:last-child{border-bottom:none}
+.archive__date{
+  font-family:var(--f-mono);font-size:.62rem;color:var(--ink-faded);
+  letter-spacing:.05em;
+}
+.archive__title{
+  font-family:var(--f-display);font-weight:700;font-size:.95rem;
+  color:var(--ink);transition:color .3s;
+}
+.archive__li:hover .archive__title{color:var(--accent)}
+.archive__tags{display:flex;gap:.3rem;justify-self:end}
+
+/* ═══════════════════════════════════════════════════
+   CODE SNIPPET (decorative)
+   ═══════════════════════════════════════════════════ */
+.code-block{
+  background:var(--code-bg);color:var(--code-fg);
+  font-family:var(--f-mono);font-size:.68rem;line-height:1.8;
+  padding:1.2rem 1.5rem;overflow-x:auto;
+  border-left:3px solid var(--accent);
+  margin:1rem 0;
+  position:relative;
+}
+.code-block::before{
+  content:attr(data-lang);
+  position:absolute;top:0;right:0;
+  font-size:.5rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--ink-faded);padding:.3rem .8rem;
+  background:rgba(255,255,255,.05);
+}
+.code-block .kw{color:#c4553a}
+.code-block .fn{color:#d4a574}
+.code-block .str{color:#8a9a5e}
+.code-block .cm{color:#6a6050;font-style:italic}
+.code-block .num{color:#c9a96e}
+
+/* ═══════════════════════════════════════════════════
+   PULL QUOTE
+   ═══════════════════════════════════════════════════ */
+.pq{padding:1.8rem 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-light);margin:1.5rem 0}
+.pq__t{font-family:var(--f-display);font-weight:400;font-style:italic;font-size:clamp(1.2rem,2vw,1.7rem);line-height:1.4;color:var(--ink)}
+.pq__a{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faded);margin-top:.8rem}
+
+/* ═══════════════════════════════════════════════════
+   DROP CAP
+   ═══════════════════════════════════════════════════ */
+.dc::first-letter{
+  font-family:var(--f-display);font-weight:900;font-size:3.2em;
+  float:left;line-height:.8;padding-right:.12em;color:var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════
+   FEED
+   ═══════════════════════════════════════════════════ */
+.feed{padding:0 2.5rem;position:relative}
+.feed::before{
+  content:'';position:absolute;left:74px;top:0;bottom:0;width:1px;
+  background:var(--rule-light);
+}
+.feed__item{
+  display:grid;grid-template-columns:90px 1fr;gap:2rem;
+  padding:2rem 0;border-bottom:1px solid var(--rule-light);
+  position:relative;
+}
+.feed__date{
+  font-family:var(--f-display);font-weight:900;font-size:2rem;
+  color:var(--rule-light);line-height:1;padding-top:.2rem;
+}
+.feed__date small{
+  display:block;font-family:var(--f-mono);font-weight:400;
+  font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-faded);margin-top:.3rem;
+}
+.feed__type{
+  font-family:var(--f-mono);font-size:.55rem;font-weight:600;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--accent);margin-bottom:.5rem;
+}
+.feed__title{font-family:var(--f-display);font-weight:700;font-size:1.1rem;color:var(--ink);margin-bottom:.4rem;line-height:1.3}
+.feed__text{font-family:var(--f-mono);font-size:.74rem;font-weight:300;color:var(--ink-mid);line-height:1.75}
+
+/* ═══════════════════════════════════════════════════
+   SKILLS
+   ═══════════════════════════════════════════════════ */
+.sk{display:flex;flex-direction:column;gap:1rem}
+.sk__row{display:grid;grid-template-columns:100px 1fr auto;align-items:center;gap:.8rem}
+.sk__name{font-family:var(--f-mono);font-size:.65rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-light)}
+.sk__bar{height:2px;background:var(--rule-light);position:relative;overflow:hidden}
+.sk__bar::after{content:'';position:absolute;left:0;top:0;height:100%;width:var(--lv,80%);background:var(--ink);transition:width 1.2s var(--ease-quart)}
+.sk__pct{font-family:var(--f-display);font-weight:700;font-size:.75rem;color:var(--ink-faded);min-width:3ch;text-align:right}
+
+/* ═══════════════════════════════════════════════════
+   TIMELINE
+   ═══════════════════════════════════════════════════ */
+.tl{position:relative;padding-left:2.5rem}
+.tl::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--rule-light)}
+.tl__it{position:relative;padding-bottom:2rem;padding-left:.8rem}
+.tl__it::before{
+  content:'';position:absolute;left:-2.85rem;top:.35rem;
+  width:6px;height:6px;border:1.5px solid var(--ink);background:var(--paper);transform:rotate(45deg);
+}
+.tl__yr{font-family:var(--f-display);font-weight:900;font-size:1.4rem;color:var(--rule-light);line-height:1;margin-bottom:.3rem}
+.tl__role{font-family:var(--f-display);font-weight:700;font-size:.95rem;color:var(--ink);margin-bottom:.2rem}
+.tl__org{font-family:var(--f-mono);font-size:.65rem;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:.4rem}
+.tl__desc{font-family:var(--f-mono);font-size:.72rem;font-weight:300;color:var(--ink-light);line-height:1.7}
+
+/* ═══════════════════════════════════════════════════
+   CONTACT
+   ═══════════════════════════════════════════════════ */
+.fld{margin-bottom:1.8rem;position:relative}
+.fld__lb{font-family:var(--f-mono);font-size:.58rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faded);display:block;margin-bottom:.5rem}
+.fld__in,.fld__ta{
+  width:100%;font-family:var(--f-mono);font-size:.82rem;color:var(--ink);
+  background:transparent;border:none;border-bottom:1px solid var(--rule-light);
+  padding:.5rem 0;outline:none;transition:border-color .3s;
+}
+.fld__in:focus,.fld__ta:focus{border-bottom-color:var(--accent)}
+.fld__ta{resize:vertical;min-height:100px;line-height:1.7}
+.fld__line{position:absolute;bottom:0;left:0;width:0;height:1.5px;background:var(--accent);transition:width .4s var(--ease-quart)}
+.fld__in:focus~.fld__line,.fld__ta:focus~.fld__line{width:100%}
+.btn{
+  font-family:var(--f-mono);font-size:.65rem;font-weight:600;letter-spacing:.25em;
+  text-transform:uppercase;color:var(--paper);background:var(--ink);border:none;
+  padding:.9rem 2.5rem;cursor:pointer;transition:background .3s,transform .15s;
+}
+.btn:hover{background:var(--accent)}
+.btn:active{transform:scale(.98)}
+
+/* ═══════════════════════════════════════════════════
+   COLOPHON
+   ═══════════════════════════════════════════════════ */
+.colophon{
+  border-top:3px double var(--rule);padding:2.5rem;margin-top:3rem;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.8rem;
+  font-family:var(--f-mono);font-size:.6rem;line-height:1.9;color:var(--ink-faded);
+}
+.colophon h4{
+  font-family:var(--f-mono);font-weight:600;font-size:.56rem;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--ink-light);
+  margin-bottom:.6rem;padding-bottom:.3rem;border-bottom:1px solid var(--rule-light);
+}
+.colophon__issn{font-family:var(--f-display);font-weight:700;font-size:.85rem;color:var(--ink-light);letter-spacing:.1em;margin-bottom:.4rem}
+.colophon__mark{font-family:var(--f-display);font-weight:900;font-size:1.1rem;color:var(--ink-light);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.4rem}
+.colophon__legal{
+  grid-column:1/-1;border-top:1px solid var(--rule-light);padding-top:1.2rem;margin-top:.8rem;
+  text-align:center;font-size:.55rem;letter-spacing:.06em;
+}
+
+/* ═══════════════════════════════════════════════════
+   GRIDS
+   ═══════════════════════════════════════════════════ */
+.g3{display:grid;grid-template-columns:1.4fr 1fr .8fr;gap:2rem;padding:0 2.5rem 3rem}
+.g3r{display:grid;grid-template-columns:.8fr 1fr 1.4fr;gap:2rem;padding:0 2.5rem 3rem}
+.g2{display:grid;grid-template-columns:1.6fr 1fr;gap:2.5rem;padding:0 2.5rem 3rem}
+.g2e{display:grid;grid-template-columns:1fr 1fr;gap:2rem;padding:0 2.5rem 3rem}
+
+/* ═══════════════════════════════════════════════════
+   MISC
+   ═══════════════════════════════════════════════════ */
+.div{padding:0 2.5rem;margin:.8rem 0}
+.div hr{border:none;border-top:1px solid var(--rule-light)}
+.div--db hr{border-top:3px double var(--rule)}
+.orn{text-align:center;font-family:var(--f-display);font-size:1.1rem;color:var(--rule-light);padding:1.2rem 0;letter-spacing:.5em}
+
+/* ═══════════════════════════════════════════════════
+   TYPING CURSOR (for code blocks)
+   ═══════════════════════════════════════════════════ */
+.cursor{
+  display:inline-block;width:7px;height:1.1em;background:var(--accent);
+  margin-left:2px;vertical-align:text-bottom;
+  animation:blink 1s step-end infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* ═══════════════════════════════════════════════════
+   GLOW LINE (decorative separator)
+   ═══════════════════════════════════════════════════ */
+.glow-line{
+  height:1px;margin:2rem 2.5rem;
+  background:linear-gradient(90deg,transparent,var(--accent-light),var(--accent),var(--accent-light),transparent);
+  opacity:.3;
+}
+
+/* ═══════════════════════════════════════════════════
+   SELECTION & SCROLLBAR
+   ═══════════════════════════════════════════════════ */
+::selection{background:var(--accent);color:var(--paper)}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--paper-dark)}
+::-webkit-scrollbar-thumb{background:var(--ink-faded)}
+::-webkit-scrollbar-thumb:hover{background:var(--ink-light)}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════ */
+@media(max-width:1024px){
+  .g3,.g3r{grid-template-columns:1fr 1fr}
+  .g2,.g2e{grid-template-columns:1fr 1fr}
+  .colophon{grid-template-columns:1fr 1fr}
+  .nav__links{gap:1.2rem}
+  .archive__li{grid-template-columns:50px 1fr auto}
+}
+@media(max-width:640px){
+  .g3,.g3r,.g2,.g2e{grid-template-columns:1fr}
+  .feed__item{grid-template-columns:60px 1fr;gap:1rem}
+  .feed::before{left:44px}
+  .nav{padding:1rem 1.5rem;flex-direction:column;gap:.6rem;align-items:flex-start}
+  .nav__links{gap:.8rem;flex-wrap:wrap}
+  .sec-hd{padding:3.5rem 1.5rem 1.5rem}
+  .sec-hd__n{font-size:2.2rem}
+  .g3,.g3r,.g2,.g2e,.feed,.archive{padding:0 1.5rem 2rem}
+  .colophon{grid-template-columns:1fr;padding:1.5rem}
+  .archive__li{grid-template-columns:1fr;gap:.3rem}
+  .archive__tags{justify-self:start}
+}
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+
+<!-- ════════════ NAV ════════════ -->
+<nav class="nav" id="nav">
+  <div class="nav__brand">Print<i>.</i></div>
+  <ul class="nav__links">
+    <li><a href="#cover" class="nav__item active" data-s="cover"><span class="nav__num">01</span><span class="nav__label">封面</span></a></li>
+    <li><a href="#articles" class="nav__item" data-s="articles"><span class="nav__num">02</span><span class="nav__label">文章</span></a></li>
+    <li><a href="#feed" class="nav__item" data-s="feed"><span class="nav__num">03</span><span class="nav__label">动态</span></a></li>
+    <li><a href="#about" class="nav__item" data-s="about"><span class="nav__num">04</span><span class="nav__label">关于</span></a></li>
+  </ul>
+</nav>
+
+<!-- ════════════ 01 COVER ════════════ -->
+<section class="page" id="cover">
+  <div style="min-height:100vh;display:grid;grid-template-columns:1fr .45fr;grid-template-rows:auto 1fr auto;padding:6rem 2.5rem 2rem;gap:0;position:relative;z-index:1">
+
+    <!-- masthead -->
+    <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px double var(--rule);padding-bottom:.8rem;margin-bottom:2rem">
+      <div style="font-family:var(--f-mono);font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faded)">Vol. IX · No. 07</div>
+      <div style="font-family:var(--f-mono);font-size:.65rem;letter-spacing:.15em;color:var(--ink-faded)">July 2026 · Digital Edition</div>
+    </div>
+
+    <!-- title -->
+    <div style="padding-right:3rem;align-self:center">
+      <h1 style="font-family:var(--f-display);font-weight:900;font-size:clamp(4rem,8.5vw,9.5rem);line-height:.88;color:var(--ink);margin-left:-3vw;letter-spacing:-.03em">
+        Code<br><em style="font-style:italic;color:var(--accent)">&amp; Craft</em>
+      </h1>
+      <div style="width:70px;height:3.5px;background:var(--accent);margin-top:1.8rem"></div>
+      <p style="font-family:var(--f-mono);font-size:.75rem;font-weight:300;letter-spacing:.1em;color:var(--ink-faded);margin-top:1.4rem;max-width:420px;line-height:1.9">
+        程序即设计，代码即表达 — 探索技术与创意的交汇之地
+      </p>
+
+      <!-- code snippet decoration -->
+      <div class="code-block" data-lang="rust" style="margin-top:2rem;max-width:420px">
+<span class="kw">fn</span> <span class="fn">main</span>() {
+    <span class="kw">let</span> life = <span class="str">"write code, make things"</span>;
+    <span class="fn">println!</span>(<span class="str">"{}"</span>, life);<span class="cursor"></span>
+}
+      </div>
+    </div>
+
+    <!-- sidebar -->
+    <div style="border-left:1px solid var(--rule-light);padding-left:2rem;display:flex;flex-direction:column;justify-content:center;gap:2.2rem;align-self:center">
+      <div>
+        <div style="font-family:var(--f-display);font-weight:900;font-size:2.8rem;color:var(--rule-light);line-height:1">47</div>
+        <div style="font-family:var(--f-mono);font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faded);margin-top:.2rem">技术文章</div>
+      </div>
+      <div>
+        <div style="font-family:var(--f-display);font-weight:900;font-size:2.8rem;color:var(--rule-light);line-height:1">12</div>
+        <div style="font-family:var(--f-mono);font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faded);margin-top:.2rem">开源项目</div>
+      </div>
+      <div>
+        <div style="font-family:var(--f-display);font-weight:900;font-size:2.8rem;color:var(--rule-light);line-height:1">06</div>
+        <div style="font-family:var(--f-mono);font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faded);margin-top:.2rem">年编程生涯</div>
+      </div>
+    </div>
+
+    <!-- scroll -->
+    <div style="grid-column:1/-1;justify-self:center;align-self:end;padding-bottom:1.5rem;font-family:var(--f-mono);font-size:.58rem;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-faded);animation:pulse 2s ease-in-out infinite">
+      ▼ 向下翻阅 Scroll to explore ▼
+    </div>
+  </div>
+  <span class="pg pg--r">— 001 —</span>
+</section>
+
+<!-- ════════════ 02 ARTICLES ════════════ -->
+<section class="page" id="articles">
+  <div class="sec-hd rv">
+    <span class="sec-hd__n">02</span>
+    <h2 class="sec-hd__t">文章 Articles</h2>
+    <div class="sec-hd__line"></div>
+  </div>
+
+  <div style="padding:0 2.5rem">
+    <div class="tabs">
+      <button class="tab active" data-tab="recent">最近文章 Recent</button>
+      <button class="tab" data-tab="hot">最热文章 Hot</button>
+      <button class="tab" data-tab="archive">归档 Archive</button>
+    </div>
+  </div>
+
+  <!-- ── TAB: RECENT ── -->
+  <div class="tab-panel active" id="tab-recent">
+
+    <div class="g2 rv">
+      <div class="mimg" style="aspect-ratio:16/10">
+        <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=900&h=560&fit=crop" alt="Code">
+        <div class="mimg__cap">fig. 01 — Rust 异步运行时架构图 · 2026</div>
+      </div>
+      <div class="art" style="display:flex;flex-direction:column;justify-content:center">
+        <div style="margin-bottom:.6rem">
+          <span class="tag tag--code">rust</span>
+          <span class="tag tag--code">async</span>
+          <span class="tag tag--code">tokio</span>
+        </div>
+        <h3 class="art__t art__t--xl">深入 Tokio：异步运行时的内部世界</h3>
+        <p class="art__p dc">从零构建一个迷你异步运行时，理解 Future、Waker 和调度器的工作原理。不只停留在 await 的表面，而是深入到每个字节的流转。</p>
+        <div class="art__meta"><span>Rust</span><span>系统编程</span><span>2026.07.08</span></div>
+      </div>
+    </div>
+
+    <div class="div"><hr></div>
+
+    <div class="g3 rv">
+      <div class="art">
+        <div class="mimg" style="aspect-ratio:3/2;margin-bottom:1.2rem">
+          <img src="https://images.unsplash.com/photo-1518432031352-d6fc5c10da5a?w=600&h=400&fit=crop" alt="Terminal">
+          <div class="mimg__cap">fig. 02 — 终端 UI 框架设计</div>
+        </div>
+        <div style="margin-bottom:.5rem">
+          <span class="tag tag--code">go</span>
+          <span class="tag tag--code">tui</span>
+        </div>
+        <h3 class="art__t">用 Go 构建终端 UI：从 bubbletea 到自研框架</h3>
+        <p class="art__p">记录从使用 charmbracelet/bubbletea 到理解 Elm 架构、最终构建轻量 TUI 框架的全过程。</p>
+        <div class="art__meta"><span>Go</span><span>终端</span><span>2026.06.22</span></div>
+      </div>
+
+      <div class="art">
+        <div class="mimg" style="aspect-ratio:3/2;margin-bottom:1.2rem">
+          <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&h=400&fit=crop" alt="Server">
+          <div class="mimg__cap">fig. 03 — 分布式系统拓扑</div>
+        </div>
+        <div style="margin-bottom:.5rem">
+          <span class="tag tag--code">分布式</span>
+          <span class="tag tag--code">raft</span>
+        </div>
+        <h3 class="art__t">Raft 共识算法的工程实现</h3>
+        <p class="art__p">用 TypeScript 实现一个简化版 Raft，覆盖 Leader 选举、日志复制和安全性保证。</p>
+        <div class="art__meta"><span>TypeScript</span><span>分布式</span><span>2026.06.10</span></div>
+      </div>
+
+      <div>
+        <div class="pq">
+          <p class="pq__t">"代码是给人读的，顺便让机器执行。"</p>
+          <p class="pq__a">— 编程哲学</p>
+        </div>
+        <div class="art" style="margin-top:1.5rem">
+          <div style="margin-bottom:.5rem"><span class="tag tag--code">wasm</span></div>
+          <h3 class="art__t">WASM + Canvas：浏览器中的光线追踪</h3>
+          <p class="art__p">用 Rust 写光线追踪器，编译到 WASM，在浏览器中实现实时渲染。</p>
+          <div class="art__meta"><span>Rust</span><span>WASM</span><span>2026.05.28</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="div"><hr></div>
+
+    <div class="g2e rv">
+      <div class="art">
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">ai</span><span class="tag tag--code">llm</span></div>
+        <h3 class="art__t art__t--lg">从零实现一个 Transformer：<br>数学、代码与直觉</h3>
+        <p class="art__p">不依赖任何深度学习框架，用纯 NumPy 实现一个完整的 Transformer。从 Attention 到 LayerNorm，每一行代码都有对应的数学推导。</p>
+        <div class="art__meta"><span>Python</span><span>深度学习</span><span>2026.05.15</span></div>
+      </div>
+      <div class="art">
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">linux</span><span class="tag tag--code">内核</span></div>
+        <h3 class="art__t art__t--lg">写一个玩具操作系统：<br>从 Boot 到 Shell</h3>
+        <p class="art__p">用汇编和 C 从零构建一个能在 QEMU 上运行的微型 OS。涵盖引导加载、内存管理、中断处理和简易文件系统。</p>
+        <div class="art__meta"><span>C / ASM</span><span>操作系统</span><span>2026.04.20</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: HOT ── -->
+  <div class="tab-panel" id="tab-hot">
+    <div class="g3 rv">
+      <div class="art">
+        <div style="margin-bottom:.8rem"><span class="tag tag--hot">🔥 热门</span><span class="tag">阅读 24.8k</span></div>
+        <div class="mimg" style="aspect-ratio:3/2;margin-bottom:1.2rem">
+          <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&h=400&fit=crop" alt="Code">
+        </div>
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">rust</span><span class="tag tag--code">async</span></div>
+        <h3 class="art__t">深入 Tokio：异步运行时的内部世界</h3>
+        <p class="art__p">从零构建一个迷你异步运行时。</p>
+        <div class="art__meta"><span>Rust</span><span>2026</span></div>
+      </div>
+
+      <div class="art">
+        <div style="margin-bottom:.8rem"><span class="tag tag--hot">🔥 热门</span><span class="tag">阅读 18.2k</span></div>
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">ai</span><span class="tag tag--code">llm</span></div>
+        <h3 class="art__t art__t--lg">从零实现一个 Transformer</h3>
+        <p class="art__p">不依赖任何框架，用纯 NumPy 实现完整 Transformer。</p>
+        <div class="art__meta"><span>Python</span><span>深度学习</span><span>2026</span></div>
+      </div>
+
+      <div>
+        <div class="art">
+          <div style="margin-bottom:.8rem"><span class="tag tag--hot">🔥 热门</span><span class="tag">阅读 15.6k</span></div>
+          <div style="margin-bottom:.5rem"><span class="tag tag--code">linux</span></div>
+          <h3 class="art__t">写一个玩具操作系统</h3>
+          <p class="art__p">从 Boot 到 Shell 的完整实现。</p>
+          <div class="art__meta"><span>C / ASM</span><span>2026</span></div>
+        </div>
+        <div class="art" style="margin-top:1.5rem">
+          <div style="margin-bottom:.8rem"><span class="tag">阅读 11.3k</span></div>
+          <div style="margin-bottom:.5rem"><span class="tag tag--code">wasm</span></div>
+          <h3 class="art__t">WASM 光线追踪</h3>
+          <p class="art__p">Rust + WASM 浏览器实时渲染。</p>
+          <div class="art__meta"><span>Rust</span><span>2026</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="div"><hr></div>
+
+    <div class="g2 rv">
+      <div class="art">
+        <div style="margin-bottom:.8rem"><span class="tag">阅读 9.1k</span></div>
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">go</span><span class="tag tag--code">distributed</span></div>
+        <h3 class="art__t art__t--lg">Raft 共识算法的工程实现</h3>
+        <p class="art__p">用 TypeScript 实现简化版 Raft，覆盖 Leader 选举与日志复制。</p>
+        <div class="art__meta"><span>TypeScript</span><span>分布式</span><span>2026</span></div>
+      </div>
+      <div class="art">
+        <div style="margin-bottom:.8rem"><span class="tag">阅读 7.4k</span></div>
+        <div style="margin-bottom:.5rem"><span class="tag tag--code">go</span><span class="tag tag--code">tui</span></div>
+        <h3 class="art__t art__t--lg">用 Go 构建终端 UI</h3>
+        <p class="art__p">从 bubbletea 到自研框架的探索之路。</p>
+        <div class="art__meta"><span>Go</span><span>终端</span><span>2026</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: ARCHIVE ── -->
+  <div class="tab-panel" id="tab-archive">
+    <div class="archive rv">
+
+      <!-- 2026 -->
+      <div class="archive__year">2026 <span class="archive__count">— 18 篇</span></div>
+      <ul class="archive__list">
+        <li class="archive__li">
+          <span class="archive__date">07-08</span>
+          <span class="archive__title">深入 Tokio：异步运行时的内部世界</span>
+          <span class="archive__tags"><span class="tag tag--code">rust</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">06-22</span>
+          <span class="archive__title">用 Go 构建终端 UI：从 bubbletea 到自研框架</span>
+          <span class="archive__tags"><span class="tag tag--code">go</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">06-10</span>
+          <span class="archive__title">Raft 共识算法的工程实现</span>
+          <span class="archive__tags"><span class="tag tag--code">ts</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">05-28</span>
+          <span class="archive__title">WASM + Canvas：浏览器中的光线追踪</span>
+          <span class="archive__tags"><span class="tag tag--code">rust</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">05-15</span>
+          <span class="archive__title">从零实现一个 Transformer：数学、代码与直觉</span>
+          <span class="archive__tags"><span class="tag tag--code">python</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">04-20</span>
+          <span class="archive__title">写一个玩具操作系统：从 Boot 到 Shell</span>
+          <span class="archive__tags"><span class="tag tag--code">c</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">03-30</span>
+          <span class="archive__title">Zig 语言初探：比 C 更 C 的现代系统语言</span>
+          <span class="archive__tags"><span class="tag tag--code">zig</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">03-12</span>
+          <span class="archive__title">用 eBPF 追踪 Linux 内核：实战指南</span>
+          <span class="archive__tags"><span class="tag tag--code">linux</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">02-18</span>
+          <span class="archive__title">SQLite 内部原理：B-Tree 与 WAL 模式</span>
+          <span class="archive__tags"><span class="tag tag--code">db</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">01-25</span>
+          <span class="archive__title">2026 技术栈展望：我为什么押注 Rust + Zig</span>
+          <span class="archive__tags"><span class="tag tag--code">思考</span></span>
+        </li>
+      </ul>
+
+      <!-- 2025 -->
+      <div class="archive__year">2025 <span class="archive__count">— 22 篇</span></div>
+      <ul class="archive__list">
+        <li class="archive__li">
+          <span class="archive__date">12-20</span>
+          <span class="archive__title">年终总结：一个程序员的 2025</span>
+          <span class="archive__tags"><span class="tag tag--code">年度</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">11-15</span>
+          <span class="archive__title">构建自己的 Git：理解版本控制的本质</span>
+          <span class="archive__tags"><span class="tag tag--code">rust</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">10-28</span>
+          <span class="archive__title">HTTP/3 与 QUIC 协议深度解析</span>
+          <span class="archive__tags"><span class="tag tag--code">网络</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">10-05</span>
+          <span class="archive__title">用 Rust 写一个 JSON 解析器：从 nom 到手写递归下降</span>
+          <span class="archive__tags"><span class="tag tag--code">rust</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">09-12</span>
+          <span class="archive__title">容器底层：Namespace、Cgroup 与 UnionFS</span>
+          <span class="archive__tags"><span class="tag tag--code">容器</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">08-20</span>
+          <span class="archive__title">V8 引擎工作原理：从 JS 到机器码</span>
+          <span class="archive__tags"><span class="tag tag--code">js</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">07-30</span>
+          <span class="archive__title">Kubernetes 调度器源码阅读笔记</span>
+          <span class="archive__tags"><span class="tag tag--code">k8s</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">07-08</span>
+          <span class="archive__title">WebGPU 初探：下一代浏览器图形 API</span>
+          <span class="archive__tags"><span class="tag tag--code">gpu</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">06-15</span>
+          <span class="archive__title">分布式事务：2PC、TCC 与 Saga 模式对比</span>
+          <span class="archive__tags"><span class="tag tag--code">分布式</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">05-22</span>
+          <span class="archive__title">写一个 Lisp 解释器：元循环求值的优雅</span>
+          <span class="archive__tags"><span class="tag tag--code">scheme</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">04-18</span>
+          <span class="archive__title">TCP 拥塞控制：从 Reno 到 BBR</span>
+          <span class="archive__tags"><span class="tag tag--code">网络</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">03-25</span>
+          <span class="archive__title">RISC-V 汇编入门：从指令集到裸机编程</span>
+          <span class="archive__tags"><span class="tag tag--code">asm</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">02-10</span>
+          <span class="archive__title">并发编程模型：CSP vs Actor vs Async</span>
+          <span class="archive__tags"><span class="tag tag--code">并发</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">01-15</span>
+          <span class="archive__title">为什么我从 VSCode 切换到 Neovim</span>
+          <span class="archive__tags"><span class="tag tag--code">工具</span></span>
+        </li>
+      </ul>
+
+      <!-- 2024 -->
+      <div class="archive__year">2024 <span class="archive__count">— 7 篇</span></div>
+      <ul class="archive__list">
+        <li class="archive__li">
+          <span class="archive__date">12-28</span>
+          <span class="archive__title">年终总结：2024，重新理解「工程」</span>
+          <span class="archive__tags"><span class="tag tag--code">年度</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">11-10</span>
+          <span class="archive__title">从 monorepo 到 polyrepo：工程架构的选择</span>
+          <span class="archive__tags"><span class="tag tag--code">工程</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">09-22</span>
+          <span class="archive__title">GraphQL vs REST：2024 年的真实对比</span>
+          <span class="archive__tags"><span class="tag tag--code">api</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">07-15</span>
+          <span class="archive__title">用 Tauri 构建跨平台桌面应用</span>
+          <span class="archive__tags"><span class="tag tag--code">rust</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">05-08</span>
+          <span class="archive__title">Deno 2.0：Node.js 的真正挑战者？</span>
+          <span class="archive__tags"><span class="tag tag--code">deno</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">03-20</span>
+          <span class="archive__title">函数式编程在实际项目中的应用</span>
+          <span class="archive__tags"><span class="tag tag--code">fp</span></span>
+        </li>
+        <li class="archive__li">
+          <span class="archive__date">01-12</span>
+          <span class="archive__title">这个博客是怎么搭的：技术选型与架构</span>
+          <span class="archive__tags"><span class="tag tag--code">博客</span></span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <span class="pg pg--l">— 002 —</span>
+</section>
+
+<!-- ════════════ 03 FEED ════════════ -->
+<section class="page" id="feed">
+  <div class="sec-hd rv">
+    <span class="sec-hd__n">03</span>
+    <h2 class="sec-hd__t">动态 Feed</h2>
+    <div class="sec-hd__line"></div>
+  </div>
+
+  <div class="feed">
+
+    <div class="feed__item rv">
+      <div class="feed__date">09<small>Jul 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">开源</div>
+        <div class="feed__title">mini-tokio v0.3.0 发布</div>
+        <div class="feed__text">配合「深入 Tokio」文章，发布了教学用迷你异步运行时。支持基本的 spawn、select 和 IO 驱动。代码量控制在 800 行以内，适合学习源码。GitHub 已开源。</div>
+      </div>
+    </div>
+
+    <div class="feed__item rv">
+      <div class="feed__date">01<small>Jul 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">演讲</div>
+        <div class="feed__title">RustChinaConf 2026 闪电演讲</div>
+        <div class="feed__text">分享了「用 Rust 从零实现 Raft」的 15 分钟闪电演讲。现场代码演示 Leader 选举过程，居然一次跑通。slides 和录像稍后放出。</div>
+      </div>
+    </div>
+
+    <div class="feed__item rv">
+      <div class="feed__date">18<small>Jun 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">里程碑</div>
+        <div class="feed__title">博客总阅读量突破 100 万</div>
+        <div class="feed__text">从 2024 年 1 月第一篇文章开始，历时两年半。感谢每一位读者的反馈和讨论，特别是那些指出我代码 bug 的人。最有价值的不是数字，而是因此结识的同行者。</div>
+      </div>
+    </div>
+
+    <div class="feed__item rv">
+      <div class="feed__date">05<small>Jun 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">开源</div>
+        <div class="feed__title">raft-ts v1.0 稳定版发布</div>
+        <div class="feed__text">TypeScript 实现的 Raft 共识库达到 1.0。完整的 Leader 选举、日志复制、成员变更和日志压缩。已通过 Jepsen 风格的一致性测试。</div>
+      </div>
+    </div>
+
+    <div class="feed__item rv">
+      <div class="feed__date">22<small>May 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">分享</div>
+        <div class="feed__title">在公司内部做了一次 WASM 技术分享</div>
+        <div class="feed__text">从 WASM 的前世今生讲到实际项目中的应用场景。用光线追踪 demo 做了现场性能对比：WASM vs JS，结果不出意料地碾压。</div>
+      </div>
+    </div>
+
+    <div class="feed__item rv">
+      <div class="feed__date">08<small>May 2026</small></div>
+      <div class="feed__body">
+        <div class="feed__type">项目</div>
+        <div class="feed__title">开始写自己的 Lisp</div>
+        <div class="feed__text">受 Nand2Tetris 启发，决定从头实现一个完整的 Lisp 方言。目前 lexer 和 parser 已完成，正在实现求值器。预计三个月内完成第一版。</div>
+      </div>
+    </div>
+  </div>
+
+  <span class="pg pg--r">— 003 —</span>
+</section>
+
+<!-- ════════════ 04 ABOUT ════════════ -->
+<section class="page" id="about">
+  <div class="sec-hd rv">
+    <span class="sec-hd__n">04</span>
+    <h2 class="sec-hd__t">关于 About</h2>
+    <div class="sec-hd__line"></div>
+  </div>
+
+  <!-- intro -->
+  <div class="g3r rv">
+    <div>
+      <div class="pq" style="margin-top:0">
+        <p class="pq__t">"我相信好的代码和好的设计有相同的内核：简洁、克制、对细节的偏执。"</p>
+        <p class="pq__a">— 写代码的人</p>
+      </div>
+
+      <!-- tech stack -->
+      <div style="margin-top:2rem">
+        <div class="art__cat">技术栈</div>
+        <div style="margin-top:.8rem;display:flex;flex-wrap:wrap;gap:.4rem">
+          <span class="tag tag--code">rust</span>
+          <span class="tag tag--code">go</span>
+          <span class="tag tag--code">typescript</span>
+          <span class="tag tag--code">python</span>
+          <span class="tag tag--code">c</span>
+          <span class="tag tag--code">zig</span>
+          <span class="tag tag--code">linux</span>
+          <span class="tag tag--code">wasm</span>
+          <span class="tag tag--code">k8s</span>
+          <span class="tag tag--code">postgresql</span>
+          <span class="tag tag--code">redis</span>
+          <span class="tag tag--code">neovim</span>
+        </div>
+      </div>
+
+      <div class="sk" style="margin-top:2rem">
+        <div class="sk__row"><span class="sk__name">Rust</span><div class="sk__bar" style="--lv:92%"></div><span class="sk__pct">92</span></div>
+        <div class="sk__row"><span class="sk__name">Go</span><div class="sk__bar" style="--lv:85%"></div><span class="sk__pct">85</span></div>
+        <div class="sk__row"><span class="sk__name">TypeScript</span><div class="sk__bar" style="--lv:88%"></div><span class="sk__pct">88</span></div>
+        <div class="sk__row"><span class="sk__name">Python</span><div class="sk__bar" style="--lv:80%"></div><span class="sk__pct">80</span></div>
+        <div class="sk__row"><span class="sk__name">系统编程</span><div class="sk__bar" style="--lv:78%"></div><span class="sk__pct">78</span></div>
+        <div class="sk__row"><span class="sk__name">分布式</span><div class="sk__bar" style="--lv:75%"></div><span class="sk__pct">75</span></div>
+      </div>
+    </div>
+
+    <div class="art" style="display:flex;flex-direction:column;justify-content:center">
+      <h3 class="art__t art__t--xl" style="margin-bottom:1.2rem">写代码的人</h3>
+      <p class="art__p dc" style="margin-bottom:1.2rem">
+        后端工程师，痴迷于系统编程和底层原理。喜欢从零造轮子，不是因为不信任别人的轮子，而是因为拆解过程本身就是最好的学习。
+      </p>
+      <p class="art__p" style="margin-bottom:1.2rem">
+        白天在公司写分布式系统，晚上回家写技术博客和开源项目。相信「教是最好的学」——每篇文章都是自己真正搞懂之后才动笔的。
+      </p>
+      <p class="art__p">
+        偶尔写点 Rust、偶尔折腾 Linux 内核、偶尔做点无用但有趣的玩具。不追热点，只写自己真正想弄明白的东西。
+      </p>
+    </div>
+
+    <div class="mimg rv rv-d2" style="aspect-ratio:3/4;align-self:stretch">
+      <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&h=667&fit=crop" alt="Portrait" style="filter:sepia(.25) contrast(1.1) brightness(.95) grayscale(.2);height:100%">
+      <div class="mimg__cap">摄于工作室 · 2026 春</div>
+    </div>
+  </div>
+
+  <div class="div--db div"><hr></div>
+
+  <!-- timeline -->
+  <div class="g2 rv" style="padding-top:1rem">
+    <div class="tl">
+      <div class="tl__it">
+        <div class="tl__yr">2026</div>
+        <div class="tl__role">高级后端工程师</div>
+        <div class="tl__org">某基础设施公司</div>
+        <p class="tl__desc">负责核心存储引擎开发，推动 Rust 在内部基础设施中的落地。</p>
+      </div>
+      <div class="tl__it">
+        <div class="tl__yr">2024</div>
+        <div class="tl__role">后端工程师</div>
+        <div class="tl__org">某云服务公司</div>
+        <p class="tl__desc">参与分布式数据库开发，深入理解存储引擎和共识协议。</p>
+      </div>
+      <div class="tl__it">
+        <div class="tl__yr">2022</div>
+        <div class="tl__role">计算机科学硕士</div>
+        <div class="tl__org">某 985 高校</div>
+        <p class="tl__desc">研究方向：分布式系统与形式化验证。硕士论文关于分布式一致性协议的模型检测。</p>
+      </div>
+      <div class="tl__it">
+        <div class="tl__yr">2020</div>
+        <div class="tl__role">计算机科学学士</div>
+        <div class="tl__org">某 211 高校</div>
+        <p class="tl__desc">大二开始接触 Linux 和开源社区，从此走上「造轮子」的不归路。</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="mimg" style="aspect-ratio:4/3;margin-bottom:1.5rem">
+        <img src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=600&h=450&fit=crop" alt="Setup">
+        <div class="mimg__cap">fig. 05 — 工作台</div>
+      </div>
+
+      <div class="code-block" data-lang="bash" style="font-size:.62rem">
+<span class="cm"># this is how I spend most of my time</span>
+$ <span class="fn">nvim</span> .
+$ <span class="fn">cargo</span> build --release
+$ <span class="fn">git</span> push origin main
+$ <span class="fn">echo</span> <span class="str">"ship it"</span><span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="orn">✦ ✦ ✦</div>
+
+  <div class="div"><hr></div>
+
+  <!-- contact -->
+  <div class="g2 rv" style="padding-top:1rem">
+    <div>
+      <div class="pq" style="margin-top:0">
+        <p class="pq__t">"最好的交流，始于一个有趣的问题。"</p>
+      </div>
+
+      <div style="margin-top:2rem">
+        <div class="art__cat">联系方式</div>
+        <div style="margin-top:.8rem;font-family:var(--f-mono);font-size:.76rem;line-height:2.2;color:var(--ink-light)">
+          <div>me@example.dev</div>
+          <div>GitHub · @print-dev</div>
+          <div>Twitter · @print_dev</div>
+        </div>
+      </div>
+
+      <div style="margin-top:2rem">
+        <div class="art__cat">RSS</div>
+        <div style="margin-top:.5rem;font-family:var(--f-mono);font-size:.7rem;color:var(--ink-faded)">
+          /feed.xml · /feed.json
+        </div>
+      </div>
+
+      <div style="margin-top:2rem">
+        <div class="art__cat">PGP</div>
+        <div style="margin-top:.5rem;font-family:var(--f-mono);font-size:.65rem;color:var(--ink-faded);word-break:break-all">
+          4A2B 8C1D 3E5F 6A7B 9C0D<br>E1F2 3A4B 5C6D 7E8F 9A0B
+        </div>
+      </div>
+    </div>
+
+    <div class="art">
+      <form onsubmit="event.preventDefault();this.querySelector('.btn').textContent='已发送 ✓';this.querySelector('.btn').style.background='#2d5016'">
+        <div class="fld">
+          <label class="fld__lb">称呼 / Name</label>
+          <input type="text" class="fld__in" placeholder="你的名字">
+          <div class="fld__line"></div>
+        </div>
+        <div class="fld">
+          <label class="fld__lb">邮箱 / Email</label>
+          <input type="email" class="fld__in" placeholder="your@email.com">
+          <div class="fld__line"></div>
+        </div>
+        <div class="fld">
+          <label class="fld__lb">主题 / Subject</label>
+          <input type="text" class="fld__in" placeholder="技术讨论 / 合作 / 随便聊聊">
+          <div class="fld__line"></div>
+        </div>
+        <div class="fld">
+          <label class="fld__lb">内容 / Message</label>
+          <textarea class="fld__ta" placeholder="说点什么..."></textarea>
+          <div class="fld__line"></div>
+        </div>
+        <button type="submit" class="btn">发送 · Send</button>
+      </form>
+    </div>
+  </div>
+
+  <span class="pg pg--l">— 004 —</span>
+</section>
+
+<!-- ════════════ COLOPHON ════════════ -->
+<footer class="colophon">
+  <div>
+    <div class="colophon__mark">Print.</div>
+    <div class="colophon__issn">ISSN 2836-7419</div>
+    <p>本刊由浏览器渲染引擎印刷<br>Typeset in the digital realm<br>Printed on pixels, bound in code</p>
+  </div>
+  <div>
+    <h4>编辑部 Editorial</h4>
+    <p>主编 · Author &amp; Developer<br>美术编辑 · CSS &amp; Design<br>技术支持 · Vanilla JS<br>摄影 · Unsplash<br>校对 · CI / CD Pipeline</p>
+  </div>
+  <div>
+    <h4>出版信息 Publication</h4>
+    <p>出版发行 · /dev/null Press<br>构建工具 · Vite + 手搓<br>部署 · Cloudflare Pages<br>运行时 · 纯前端，零后端<br>印数 · 1 / ∞</p>
+  </div>
+  <div class="colophon__legal">
+    © 2026 Print. All rights reserved. 版权所有，代码随便抄。<br>
+    本博客中所有代码均经过测试，但不保证没有 bug——因为 bug 是 feature。<br>
+    <span style="color:var(--accent)">✦</span> Built with love, Rust, and too much coffee <span style="color:var(--accent)">✦</span>
+  </div>
+</footer>
+
+<!-- ════════════ PARTICLE UNIVERSE ════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  const canvas=document.getElementById('particles');
+  const ctx=canvas.getContext('2d');
+  let W,H,particles=[],connections=[],mouse={x:-9999,y:-9999},dpr;
+
+  function resize(){
+    dpr=window.devicePixelRatio||1;
+    W=window.innerWidth;H=window.innerHeight;
+    canvas.width=W*dpr;canvas.height=H*dpr;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  // Particle class
+  class P{
+    constructor(){
+      this.x=Math.random()*W;
+      this.y=Math.random()*H;
+      this.vx=(Math.random()-.5)*.3;
+      this.vy=(Math.random()-.5)*.3;
+      this.r=Math.random()*1.5+.5;
+      this.alpha=Math.random()*.4+.1;
+      this.pulseSpeed=Math.random()*.02+.005;
+      this.pulsePhase=Math.random()*Math.PI*2;
+    }
+    update(t){
+      this.x+=this.vx;this.y+=this.vy;
+      // wrap
+      if(this.x<-10)this.x=W+10;if(this.x>W+10)this.x=-10;
+      if(this.y<-10)this.y=H+10;if(this.y>H+10)this.y=-10;
+      // pulse
+      this.currentAlpha=this.alpha+Math.sin(t*this.pulseSpeed+this.pulsePhase)*.15;
+      // mouse repel
+      const dx=this.x-mouse.x,dy=this.y-mouse.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<150){
+        const force=(150-dist)/150*.02;
+        this.vx+=dx/dist*force;this.vy+=dy/dist*force;
+      }
+      // damping
+      this.vx*=.999;this.vy*=.999;
+    }
+    draw(){
+      ctx.beginPath();
+      ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(139,37,0,${this.currentAlpha})`;
+      ctx.fill();
+    }
+  }
+
+  // Shooting star
+  class Star{
+    constructor(){
+      this.reset();
+    }
+    reset(){
+      this.active=false;
+      this.timer=Math.random()*600+200;
+    }
+    launch(){
+      this.active=true;
+      this.x=Math.random()*W*.6;
+      this.y=Math.random()*H*.3;
+      this.vx=Math.random()*3+4;
+      this.vy=Math.random()*1+.5;
+      this.len=Math.random()*80+40;
+      this.alpha=.6;
+      this.decay=Math.random()*.015+.008;
+    }
+    update(){
+      if(!this.active){
+        this.timer--;
+        if(this.timer<=0)this.launch();
+        return;
+      }
+      this.x+=this.vx;this.y+=this.vy;
+      this.alpha-=this.decay;
+      if(this.alpha<=0)this.reset();
+    }
+    draw(){
+      if(!this.active)return;
+      const grad=ctx.createLinearGradient(
+        this.x,this.y,
+        this.x-this.vx/this.vx*this.len,this.y-this.vy/this.vx*this.len
+      );
+      grad.addColorStop(0,`rgba(139,37,0,${this.alpha})`);
+      grad.addColorStop(1,'rgba(139,37,0,0)');
+      ctx.beginPath();
+      ctx.moveTo(this.x,this.y);
+      ctx.lineTo(this.x-this.len,this.y-this.len*(this.vy/this.vx));
+      ctx.strokeStyle=grad;
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+    }
+  }
+
+  function init(){
+    resize();
+    const count=Math.min(Math.floor(W*H/8000),200);
+    particles=[];
+    for(let i=0;i<count;i++)particles.push(new P());
+    connections=[];
+  }
+
+  // Nebula glow (subtle background circles)
+  function drawNebula(t){
+    const cx=W*.5+Math.sin(t*.0003)*100;
+    const cy=H*.4+Math.cos(t*.0002)*80;
+    const r=Math.min(W,H)*.35;
+    const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+    grad.addColorStop(0,'rgba(139,37,0,.015)');
+    grad.addColorStop(.5,'rgba(139,37,0,.005)');
+    grad.addColorStop(1,'rgba(139,37,0,0)');
+    ctx.fillStyle=grad;
+    ctx.fillRect(0,0,W,H);
+
+    const cx2=W*.7+Math.cos(t*.0004)*120;
+    const cy2=H*.7+Math.sin(t*.0003)*90;
+    const r2=Math.min(W,H)*.25;
+    const grad2=ctx.createRadialGradient(cx2,cy2,0,cx2,cy2,r2);
+    grad2.addColorStop(0,'rgba(42,36,28,.02)');
+    grad2.addColorStop(1,'rgba(42,36,28,0)');
+    ctx.fillStyle=grad2;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  const stars=[new Star(),new Star(),new Star()];
+
+  let t=0;
+  function loop(){
+    t++;
+    ctx.clearRect(0,0,W,H);
+
+    // nebula
+    drawNebula(t);
+
+    // particles
+    for(const p of particles){p.update(t);p.draw()}
+
+    // connections
+    const maxDist=120;
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<maxDist){
+          const a=(1-d/maxDist)*.08;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle=`rgba(139,37,0,${a})`;
+          ctx.lineWidth=.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // mouse connections
+    for(const p of particles){
+      const dx=p.x-mouse.x,dy=p.y-mouse.y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d<200){
+        const a=(1-d/200)*.15;
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);
+        ctx.lineTo(mouse.x,mouse.y);
+        ctx.strokeStyle=`rgba(184,74,42,${a})`;
+        ctx.lineWidth=.8;
+        ctx.stroke();
+      }
+    }
+
+    // shooting stars
+    for(const s of stars){s.update();s.draw()}
+
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize',()=>{resize();init()});
+  window.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+  window.addEventListener('mouseleave',()=>{mouse.x=-9999;mouse.y=-9999});
+
+  init();loop();
+})();
+
+// ═══════════ REST OF INTERACTIONS ═══════════
+(function(){
+
+  // ── Reveal ──
+  const rvEls=document.querySelectorAll('.rv');
+  const rvObs=new IntersectionObserver(es=>{
+    es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');rvObs.unobserve(e.target)}})
+  },{threshold:.12,rootMargin:'0px 0px -40px 0px'});
+  rvEls.forEach(el=>rvObs.observe(el));
+
+  // ── Nav scroll ──
+  const nav=document.getElementById('nav');
+  window.addEventListener('scroll',()=>{
+    nav.classList.toggle('scrolled',window.scrollY>60)
+  },{passive:true});
+
+  // ── Active nav ──
+  const pages=document.querySelectorAll('.page');
+  const navItems=document.querySelectorAll('.nav__item');
+  const secObs=new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      if(e.isIntersecting){
+        const id=e.target.id;
+        navItems.forEach(n=>n.classList.toggle('active',n.dataset.s===id))
+      }
+    })
+  },{threshold:.3});
+  pages.forEach(p=>{if(p.id)secObs.observe(p)});
+
+  // ── Page flip ──
+  navItems.forEach(item=>{
+    item.addEventListener('click',function(e){
+      e.preventDefault();
+      const tid=this.getAttribute('href').substring(1);
+      const tgt=document.getElementById(tid);
+      if(!tgt)return;
+      const sy=window.scrollY+window.innerHeight/3;
+      let cur=pages[0];
+      pages.forEach(p=>{if(p.offsetTop<=sy)cur=p});
+      if(cur!==tgt){
+        cur.classList.add('flipping-out');
+        setTimeout(()=>{
+          cur.classList.remove('flipping-out');
+          tgt.classList.add('flipping-in');
+          tgt.scrollIntoView({behavior:'smooth',block:'start'});
+          setTimeout(()=>tgt.classList.remove('flipping-in'),700)
+        },350)
+      }else{
+        tgt.scrollIntoView({behavior:'smooth',block:'start'})
+      }
+    })
+  });
+
+  // ── Tabs ──
+  const tabs=document.querySelectorAll('.tab');
+  const panels=document.querySelectorAll('.tab-panel');
+  tabs.forEach(tab=>{
+    tab.addEventListener('click',function(){
+      tabs.forEach(t=>t.classList.remove('active'));
+      panels.forEach(p=>p.classList.remove('active'));
+      this.classList.add('active');
+      const panel=document.getElementById('tab-'+this.dataset.tab);
+      panel.classList.add('active');
+      panel.querySelectorAll('.rv').forEach(el=>{
+        el.classList.remove('vis');void el.offsetWidth;el.classList.add('vis')
+      })
+    })
+  });
+
+  // ── Cover parallax ──
+  const coverTitle=document.querySelector('#cover h1');
+  if(coverTitle){
+    window.addEventListener('scroll',()=>{
+      const sy=window.scrollY;
+      if(sy<window.innerHeight){
+        coverTitle.style.transform=`translateX(${-sy*.025}vw) translateY(${sy*.12}px)`;
+        coverTitle.style.opacity=1-(sy/window.innerHeight)*.6
+      }
+    },{passive:true})
+  }
+
+  // ── Skill bars ──
+  document.querySelectorAll('.sk__bar').forEach(bar=>{
+    const t=bar.style.getPropertyValue('--lv');
+    bar.style.setProperty('--lv','0%');
+    const obs=new IntersectionObserver(es=>{
+      es.forEach(e=>{if(e.isIntersecting){bar.style.setProperty('--lv',t);obs.unobserve(bar)}})
+    },{threshold:.5});
+    obs.observe(bar)
+  });
+
+  // ── Page crease ──
+  document.querySelectorAll('.page').forEach((p,i)=>{
+    if(i%2===0){
+      const c=document.createElement('div');
+      c.style.cssText=`position:absolute;top:0;right:${38+Math.random()*20}%;width:1px;height:100%;background:linear-gradient(180deg,transparent 10%,rgba(0,0,0,.015) 30%,rgba(0,0,0,.03) 50%,rgba(0,0,0,.015) 70%,transparent 90%);pointer-events:none;z-index:5`;
+      p.appendChild(c)
+    }
+  });
+
+  // ── Typing effect on code blocks ──
+  document.querySelectorAll('.cursor').forEach(cur=>{
+    const parent=cur.parentElement;
+    const text=parent.innerHTML;
+    // just keep the cursor blinking, content is static
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -1,34 +1,22 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { onMounted, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import { usePost } from "../composables/usePost";
 import { useSite } from "../composables/useSite";
-import { getPost } from "../services/api";
 
 const route = useRoute();
 const { site, ensureSite } = useSite();
 
-const post = ref(null);
-const error = ref("");
-const loading = ref(false);
-
-const articleSections = computed(() => post.value?.sections || []);
-const hasFallbackSections = computed(() => !post.value?.html_content && articleSections.value.length > 0);
-const relatedPosts = computed(() => post.value?.related_posts || []);
-
-async function loadPost(slug) {
-  loading.value = true;
-  error.value = "";
-  post.value = null;
-
-  try {
-    post.value = await getPost(slug);
-  } catch (err) {
-    error.value = "这篇文章不存在，或仍是草稿未发布。";
-  } finally {
-    loading.value = false;
-  }
-}
+const {
+  post,
+  error,
+  loading,
+  articleSections,
+  hasFallbackSections,
+  relatedPosts,
+  loadPost,
+} = usePost({ errorMessage: "这篇文章不存在，或仍是草稿未发布。" });
 
 onMounted(async () => {
   try {
@@ -51,26 +39,29 @@ watch(
 </script>
 
 <template>
-  <div class="post-view">
-    <p v-if="loading" class="feedback">文章页面正在展开……</p>
+  <div class="post-view print-post-view">
+    <p v-if="loading" class="feedback print-feedback">文章页面正在展开……</p>
 
-    <section v-else-if="error" class="paper-card post-shell post-empty-state">
-      <p class="section-label">Not Found</p>
-      <h1>文章没有找到</h1>
-      <p>{{ error }}</p>
-      <div class="home-hero-actions">
+    <section v-else-if="error" class="print-page print-section post-empty-state">
+      <div class="sec-hd rv vis">
+        <span class="sec-hd__n">404</span>
+        <h1 class="sec-hd__t">文章没有找到</h1>
+        <div class="sec-hd__line"></div>
+      </div>
+      <p class="feedback print-feedback">{{ error }}</p>
+      <div class="print-cover__actions">
         <RouterLink to="/posts" class="cover-button primary-link">返回文章列表</RouterLink>
         <RouterLink to="/" class="cover-button">回到首页</RouterLink>
       </div>
     </section>
 
-    <article v-else-if="post" class="paper-card post-shell">
-      <div class="post-topline">
+    <article v-else-if="post" class="print-page print-article-detail">
+      <div class="post-topline print-post-topline">
         <RouterLink to="/posts">← 返回文章</RouterLink>
-        <span>{{ site?.name || "Personal Blog" }}</span>
+        <span>{{ site?.name || "Personal Blog" }} · Digital Edition</span>
       </div>
 
-      <header class="post-hero">
+      <header class="post-hero print-post-hero">
         <p class="section-label">{{ post.category || "Article" }}</p>
         <h1>{{ post.title }}</h1>
         <p v-if="post.excerpt" class="post-subtitle">{{ post.excerpt }}</p>
@@ -82,16 +73,16 @@ watch(
 
         <blockquote v-if="post.hero_quote">{{ post.hero_quote }}</blockquote>
 
-        <div v-if="post.tags?.length" class="post-card-tags detail-tags">
-          <RouterLink v-for="tag in post.tags" :key="tag" :to="`/tags?tag=${encodeURIComponent(tag)}`">
+        <div v-if="post.tags?.length" class="post-card-tags detail-tags print-detail-tags">
+          <RouterLink v-for="tag in post.tags" :key="tag" :to="`/tags?tag=${encodeURIComponent(tag)}`" class="tag tag--code">
             {{ tag }}
           </RouterLink>
         </div>
       </header>
 
-      <section v-if="post.html_content" class="post-body markdown-body" v-html="post.html_content"></section>
+      <section v-if="post.html_content" class="post-body markdown-body print-markdown" v-html="post.html_content"></section>
 
-      <section v-else-if="hasFallbackSections" class="post-body">
+      <section v-else-if="hasFallbackSections" class="post-body print-markdown">
         <div
           v-for="section in articleSections"
           :key="section.heading"
@@ -105,26 +96,26 @@ watch(
       </section>
 
       <p v-else class="feedback post-body">这篇文章暂时还没有正文内容。</p>
+      <span class="pg pg--r">— Article —</span>
     </article>
 
-    <section v-if="relatedPosts.length" class="related-section">
-      <div class="section-head">
-        <div>
-          <p class="section-label">Continue Reading</p>
-          <h2>你也许还会想看</h2>
-        </div>
+    <section v-if="relatedPosts.length" class="related-section print-related-section">
+      <div class="sec-hd rv vis">
+        <span class="sec-hd__n">Next</span>
+        <h2 class="sec-hd__t">你也许还会想看</h2>
+        <div class="sec-hd__line"></div>
       </div>
 
-      <div class="related-grid">
+      <div class="g2e print-related-grid">
         <RouterLink
           v-for="item in relatedPosts"
           :key="item.slug"
           :to="`/posts/${item.slug}`"
-          class="paper-card related-card"
+          class="art print-article-strip"
         >
           <span class="section-label">{{ item.category }}</span>
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.excerpt }}</p>
+          <h3 class="art__t">{{ item.title }}</h3>
+          <p class="art__p">{{ item.excerpt }}</p>
         </RouterLink>
       </div>
     </section>

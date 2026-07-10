@@ -16,7 +16,7 @@ from flask import (
 )
 
 from env_loader import load_env_file
-from store import BlogStore, UPLOADS_DIR, estimate_read_time, render_markdown
+from store import BlogStore, UPLOADS_DIR, estimate_read_time, is_allowed_public_upload_path, render_markdown
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -139,10 +139,12 @@ def create_app():
 
     @app.get("/api/posts/<slug>")
     def post_detail(slug):
-        store.increment_post_click(slug)
         match = store.get_post_by_slug(slug)
         if match is None:
             abort(404)
+
+        store.increment_post_click(slug)
+        match["click_count"] = int(match.get("click_count") or 0) + 1
 
         related_posts = [
             summarize_post(post)
@@ -160,7 +162,12 @@ def create_app():
 
     @app.get("/uploads/<path:path>")
     def uploads(path):
-        return send_from_directory(UPLOADS_DIR, path)
+        if not is_allowed_public_upload_path(path):
+            abort(404)
+
+        response = send_from_directory(UPLOADS_DIR, path)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     @app.route(f"{admin_prefix}/login", methods=["GET", "POST"])
     def admin_login():
