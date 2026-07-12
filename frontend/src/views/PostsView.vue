@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, onMounted, ref, watch } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 
 import { usePosts } from "../composables/usePosts";
+import { useReveal } from "../composables/useReveal";
 
 const VIEW_OPTIONS = [
   { id: "latest", label: "最新文章", english: "Latest" },
@@ -17,6 +18,8 @@ const {
   loadPosts,
 } = usePosts({ errorMessage: "文章目录加载失败，请稍后再试。" });
 
+const route = useRoute();
+const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 const activeView = ref("latest");
 const searchQuery = ref("");
 const selectedTag = ref("全部");
@@ -103,21 +106,43 @@ function shortDate(value) {
   return month && day ? `${month}-${day}` : value;
 }
 
+function applyRouteTag() {
+  const tag = typeof route.query.tag === "string" ? route.query.tag.trim() : "";
+  if (tag) {
+    activeView.value = "tags";
+    selectedTag.value = tag;
+  }
+}
+
+watch([visiblePosts, activeView, loading], () => {
+  refreshReveal();
+});
+
+watch(
+  () => route.query.tag,
+  () => {
+    applyRouteTag();
+  },
+);
+
 onMounted(async () => {
+  applyRouteTag();
   await loadPosts({ sort: "latest" });
+  refreshReveal();
 });
 </script>
 
 <template>
   <div class="content-view print-subpage unified-posts-page">
     <section class="print-page print-section">
-      <div class="sec-hd rv vis">
+      <p class="posts-chapter-label rv">Catalog of Issues</p>
+      <div class="sec-hd rv">
         <span class="sec-hd__n">02</span>
         <h1 class="sec-hd__t">文章 Articles</h1>
         <div class="sec-hd__line"></div>
       </div>
 
-      <div class="article-toolbox">
+      <div class="article-toolbox rv">
         <div class="article-view-switch" role="tablist" aria-label="文章目录视图">
           <button
             v-for="item in VIEW_OPTIONS"
@@ -148,7 +173,7 @@ onMounted(async () => {
         </label>
       </div>
 
-      <div class="article-directory-meta" aria-live="polite">
+      <div class="article-directory-meta rv" aria-live="polite">
         <span>{{ resultLabel }}</span>
         <button
           v-if="searchQuery || selectedTag !== '全部'"
@@ -159,18 +184,25 @@ onMounted(async () => {
         </button>
       </div>
 
-      <p v-if="error" class="feedback print-feedback">{{ error }}</p>
-      <p v-else-if="loading" class="feedback print-feedback">文章目录正在整理中……</p>
-      <p v-else-if="!visiblePosts.length" class="feedback print-feedback">
+      <p v-if="error" class="feedback print-feedback rv">{{ error }}</p>
+      <div v-else-if="loading" class="posts-skeleton" aria-busy="true" aria-label="目录整理中">
+        <div v-for="n in 4" :key="n" class="posts-skeleton__item">
+          <div class="sk-line sk-line--sm"></div>
+          <div class="sk-line sk-line--lg"></div>
+          <div class="sk-line sk-line--md"></div>
+        </div>
+      </div>
+      <p v-else-if="!visiblePosts.length" class="feedback print-feedback rv">
         没有找到符合条件的文章，请调整关键词或筛选条件。
       </p>
 
       <div v-else-if="activeView === 'latest'" class="article-list print-article-list unified-latest-list">
         <RouterLink
-          v-for="post in visiblePosts"
+          v-for="(post, index) in visiblePosts"
           :key="post.slug"
           :to="`/posts/${post.slug}`"
-          class="article-item print-list-item"
+          class="article-item print-list-item rv"
+          :data-reveal-delay="Math.min(index, 8) * 45"
         >
           <div class="article-meta">
             <span>{{ displayDate(post.published_at) }}</span>
@@ -188,7 +220,8 @@ onMounted(async () => {
         <section
           v-for="([year, items], index) in groupedPosts"
           :key="year"
-          class="archive print-year-block"
+          class="archive print-year-block rv"
+          :data-reveal-delay="index * 60"
         >
           <div class="archive__year">
             <span>{{ year }}</span>
@@ -208,7 +241,7 @@ onMounted(async () => {
       </div>
 
       <div v-else class="unified-tags-view">
-        <div class="tag-filter-row print-tag-cloud" role="list" aria-label="标签筛选">
+        <div class="tag-filter-row print-tag-cloud rv" role="list" aria-label="标签筛选">
           <button
             v-for="tag in tags"
             :key="tag"
@@ -223,10 +256,11 @@ onMounted(async () => {
 
         <div class="g2e print-tag-results">
           <RouterLink
-            v-for="post in visiblePosts"
+            v-for="(post, index) in visiblePosts"
             :key="post.slug"
             :to="`/posts/${post.slug}`"
-            class="art print-article-strip"
+            class="art print-article-strip rv"
+            :data-reveal-delay="Math.min(index, 6) * 50"
           >
             <div class="art__cat">{{ post.category || "Article" }}</div>
             <h2 class="art__t art__t--lg">{{ post.title }}</h2>

@@ -35,10 +35,25 @@ const router = createRouter({
       component: NotFoundView,
     },
   ],
-  scrollBehavior() {
+  scrollBehavior(to, from, savedPosition) {
+    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+    if (savedPosition) {
+      return savedPosition;
+    }
+
+    if (to.hash) {
+      return {
+        el: to.hash,
+        top: 72,
+        behavior,
+      };
+    }
+
     return {
       top: 0,
-      behavior: "smooth",
+      behavior,
     };
   },
 });

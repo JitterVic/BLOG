@@ -260,7 +260,7 @@ def render_markdown(markdown_text: str) -> str:
         markdown_text or "",
         extensions=["extra", "fenced_code", "tables", "nl2br"],
     )
-    return rendered
+    return sanitize_html(rendered)
 
 
 def decode_markdown_file(raw_bytes: bytes) -> str:

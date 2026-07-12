@@ -1,6 +1,8 @@
-﻿import os
+import os
+import secrets
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import (
     Flask,
@@ -30,6 +32,17 @@ def normalize_admin_prefix(raw_value: str | None) -> str:
         value = f"/{value}"
     value = value.rstrip("/")
     return value or "/admin"
+
+
+def is_safe_admin_next(target: str | None, admin_prefix: str) -> bool:
+    if not target:
+        return False
+    parsed = urlsplit(target)
+    return (
+        not parsed.scheme
+        and not parsed.netloc
+        and parsed.path.startswith(f"{admin_prefix}/")
+    )
 
 
 def summarize_post(post):
@@ -94,6 +107,13 @@ def build_edit_post(post):
 def create_app():
     app = Flask(__name__)
     app.secret_key = os.getenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.getenv("BLOG_COOKIE_SECURE", "false").strip().lower()
+        in {"1", "true", "yes", "on"},
+        MAX_CONTENT_LENGTH=int(os.getenv("BLOG_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
+    )
     admin_prefix = normalize_admin_prefix(os.getenv("BLOG_ADMIN_PREFIX", "/admin"))
     admin_path = admin_prefix.lstrip("/")
     app.config["ADMIN_PREFIX"] = admin_prefix
@@ -133,8 +153,8 @@ def create_app():
             wants_featured = featured.lower() == "true"
 
         data = store.list_posts(tag=tag, featured=wants_featured, published_only=True, sort=sort)
-        if limit:
-            data = data[:limit]
+        if limit is not None:
+            data = data[: max(1, min(limit, 50))]
         return jsonify([summarize_post(post) for post in data])
 
     @app.get("/api/posts/<slug>")
@@ -174,10 +194,14 @@ def create_app():
         if request.method == "POST":
             password = request.form.get("password", "")
             expected = os.getenv("BLOG_ADMIN_PASSWORD", "admin123456")
-            if password == expected:
+            if secrets.compare_digest(password, expected):
+                session.clear()
                 session["admin_authenticated"] = True
                 flash("已进入管理后台。", "success")
-                return redirect(request.args.get("next") or url_for("admin_dashboard"))
+                next_target = request.args.get("next")
+                if not is_safe_admin_next(next_target, admin_prefix):
+                    next_target = url_for("admin_dashboard")
+                return redirect(next_target)
 
             flash("密码错误，请重试。", "error")
 

@@ -8,21 +8,28 @@ export function usePosts({ errorMessage = DEFAULT_POSTS_ERROR } = {}) {
   const posts = ref([]);
   const error = ref("");
   const loading = ref(false);
+  let requestSequence = 0;
 
   async function loadPosts(tagOrOptions = "", options = {}) {
+    const requestId = ++requestSequence;
     loading.value = true;
     error.value = "";
 
     try {
       const list = await getPosts(tagOrOptions, options);
+      if (requestId !== requestSequence) return [];
       posts.value = list;
       return list;
     } catch (err) {
-      posts.value = [];
-      error.value = errorMessage;
+      if (requestId === requestSequence) {
+        posts.value = [];
+        error.value = errorMessage;
+      }
       return [];
     } finally {
-      loading.value = false;
+      if (requestId === requestSequence) {
+        loading.value = false;
+      }
     }
   }
 

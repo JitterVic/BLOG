@@ -8,6 +8,7 @@ export function usePost({ errorMessage = DEFAULT_POST_ERROR } = {}) {
   const post = ref(null);
   const error = ref("");
   const loading = ref(false);
+  let requestSequence = 0;
 
   const articleSections = computed(() => post.value?.sections || []);
   const hasFallbackSections = computed(
@@ -16,6 +17,7 @@ export function usePost({ errorMessage = DEFAULT_POST_ERROR } = {}) {
   const relatedPosts = computed(() => post.value?.related_posts || []);
 
   async function loadPost(slug) {
+    const requestId = ++requestSequence;
     if (!slug) {
       post.value = null;
       error.value = errorMessage;
@@ -29,13 +31,18 @@ export function usePost({ errorMessage = DEFAULT_POST_ERROR } = {}) {
 
     try {
       const data = await getPost(slug);
+      if (requestId !== requestSequence) return null;
       post.value = data;
       return data;
     } catch (err) {
-      error.value = errorMessage;
+      if (requestId === requestSequence) {
+        error.value = errorMessage;
+      }
       return null;
     } finally {
-      loading.value = false;
+      if (requestId === requestSequence) {
+        loading.value = false;
+      }
     }
   }
 

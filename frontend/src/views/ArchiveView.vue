@@ -39,7 +39,7 @@ onMounted(async () => {
 <template>
   <div class="content-view print-subpage print-archive-page">
     <section class="print-page print-section">
-      <div class="sec-hd rv vis">
+      <div class="sec-hd rv">
         <span class="sec-hd__n">01</span>
         <h1 class="sec-hd__t">归档 Archive</h1>
         <div class="sec-hd__line"></div>

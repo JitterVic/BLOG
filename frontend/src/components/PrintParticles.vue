@@ -7,6 +7,10 @@ const MAX_DEVICE_SCALE = 2;
 const PARTICLE_DENSITY = 10500;
 const MAX_PARTICLES = 165;
 const LINK_DISTANCE = 118;
+const MAGNET_RADIUS = 168;
+const MAGNET_PULL = 0.072;
+const MAGNET_LINE_MAX = 10;
+const MAGNET_LINE_RADIUS = 196;
 
 let context = null;
 let animationFrame = 0;
@@ -14,7 +18,7 @@ let width = 0;
 let height = 0;
 let deviceScale = 1;
 let particles = [];
-let pointer = { x: -9999, y: -9999 };
+let pointer = { x: -9999, y: -9999, active: false };
 
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
@@ -81,14 +85,26 @@ function updateParticle(particle, time) {
   particle.x += particle.vx + Math.sin(time * 0.0004 + particle.phase) * 0.04;
   particle.y += particle.vy + Math.cos(time * 0.00032 + particle.phase) * 0.035;
 
-  const dx = particle.x - pointer.x;
-  const dy = particle.y - pointer.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  if (distance < 150) {
-    const force = ((150 - distance) / 150) * 0.045;
-    particle.x += dx * force;
-    particle.y += dy * force;
+  if (pointer.active) {
+    const dx = pointer.x - particle.x;
+    const dy = pointer.y - particle.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > 0.001 && distance < MAGNET_RADIUS) {
+      // Soft magnetic pull toward the cursor with slight spring damping.
+      const strength = (1 - distance / MAGNET_RADIUS) * MAGNET_PULL;
+      particle.vx += dx * strength * 0.018;
+      particle.vy += dy * strength * 0.018;
+      particle.x += dx * strength;
+      particle.y += dy * strength;
+      particle.vx *= 0.96;
+      particle.vy *= 0.96;
+    }
   }
+
+  // Keep drift velocity bounded so particles do not runaway after pull.
+  particle.vx = Math.max(-0.55, Math.min(0.55, particle.vx));
+  particle.vy = Math.max(-0.55, Math.min(0.55, particle.vy));
 
   if (particle.x < -20) particle.x = width + 20;
   if (particle.x > width + 20) particle.x = -20;
@@ -116,6 +132,52 @@ function drawLinks() {
   }
 }
 
+function drawMagnetLines() {
+  if (!pointer.active) return;
+
+  const nearby = [];
+  for (const particle of particles) {
+    const dx = particle.x - pointer.x;
+    const dy = particle.y - pointer.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < MAGNET_LINE_RADIUS) {
+      nearby.push({ particle, distance, dx, dy });
+    }
+  }
+
+  nearby.sort((a, b) => a.distance - b.distance);
+  const links = nearby.slice(0, MAGNET_LINE_MAX);
+
+  for (const item of links) {
+    const t = 1 - item.distance / MAGNET_LINE_RADIUS;
+    const alpha = 0.12 + t * 0.42;
+    const midX = (pointer.x + item.particle.x) / 2;
+    const midY = (pointer.y + item.particle.y) / 2;
+    // Slight curve so the line feels like elastic pull.
+    const cx = midX + item.dy * 0.08;
+    const cy = midY - item.dx * 0.08;
+
+    context.strokeStyle = `rgba(139, 37, 0, ${alpha})`;
+    context.lineWidth = 0.7 + t * 1.1;
+    context.beginPath();
+    context.moveTo(pointer.x, pointer.y);
+    context.quadraticCurveTo(cx, cy, item.particle.x, item.particle.y);
+    context.stroke();
+
+    // Glow node at particle end.
+    context.fillStyle = `rgba(184, 74, 42, ${0.18 + t * 0.45})`;
+    context.beginPath();
+    context.arc(item.particle.x, item.particle.y, item.particle.r + 1.2 + t * 1.6, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // Cursor core
+  context.fillStyle = "rgba(139, 37, 0, 0.22)";
+  context.beginPath();
+  context.arc(pointer.x, pointer.y, 2.4, 0, Math.PI * 2);
+  context.fill();
+}
+
 function drawParticles(time) {
   for (const particle of particles) {
     updateParticle(particle, time);
@@ -131,6 +193,7 @@ function loop(time) {
   context.clearRect(0, 0, width, height);
   drawAtmosphere(time);
   drawLinks();
+  drawMagnetLines();
   drawParticles(time);
   animationFrame = window.requestAnimationFrame(loop);
 }
@@ -141,11 +204,11 @@ function handleResize() {
 }
 
 function handlePointerMove(event) {
-  pointer = { x: event.clientX, y: event.clientY };
+  pointer = { x: event.clientX, y: event.clientY, active: true };
 }
 
 function handlePointerLeave() {
-  pointer = { x: -9999, y: -9999 };
+  pointer = { x: -9999, y: -9999, active: false };
 }
 
 function stop() {

@@ -30,8 +30,10 @@ const toneClass = computed(() => `tone-${props.post.tone || "amber"}`);
 
     <div class="post-card-footer">
       <span>{{ post.read_time }}</span>
-      <RouterLink :to="`/posts/${post.slug}`">阅读全文</RouterLink>
+      <RouterLink :to="`/posts/${post.slug}`" class="post-card-link">
+        阅读全文
+        <span aria-hidden="true">→</span>
+      </RouterLink>
     </div>
   </article>
 </template>
-

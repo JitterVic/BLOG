@@ -1,8 +1,11 @@
 <script setup>
 import { computed, onMounted } from "vue";
+
+import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 
 const { site, ensureSite, error } = useSite();
+const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 
 const introParagraphs = computed(() => {
   const paragraphs = site.value?.about_intro || [];
@@ -20,22 +23,24 @@ onMounted(async () => {
   } catch (err) {
     // The UI already renders a friendlier message via error.
   }
+  refreshReveal();
 });
 </script>
 
 <template>
   <div class="content-view print-subpage quiet-about-page">
     <section class="print-page print-section quiet-about-issue">
-      <div class="sec-hd rv vis">
+      <div class="sec-hd rv">
         <span class="sec-hd__n">03</span>
         <h1 class="sec-hd__t">关于 About</h1>
         <div class="sec-hd__line"></div>
       </div>
 
-      <p v-if="error" class="feedback print-feedback">{{ error }}</p>
+      <p v-if="error" class="feedback print-feedback rv">{{ error }}</p>
 
-      <div class="quiet-about-layout rv vis">
-        <article class="quiet-about-card quiet-about-card--intro">
+      <p class="about-chapter-label rv">Editor's Edition</p>
+      <div class="quiet-about-layout">
+        <article class="quiet-about-card quiet-about-card--intro rv" data-reveal-delay="40">
           <p class="section-label">Editor’s Note</p>
           <h2>关于这本博客</h2>
           <div class="quiet-about-copy">
@@ -43,9 +48,9 @@ onMounted(async () => {
           </div>
         </article>
 
-        <aside class="quiet-about-card quiet-about-card--contact">
+        <aside class="quiet-about-card quiet-about-card--contact rv" data-reveal-delay="120">
           <p class="section-label">Contact</p>
-          <h2>如果你想交流</h2>
+          <h2 class="about-contact-title">如果你想交流</h2>
           <p>欢迎带着上下文、问题或想法来找我。最好的交流，通常始于一个具体而真诚的问题。</p>
 
           <div v-if="contactLinks.length" class="quiet-contact-list">
