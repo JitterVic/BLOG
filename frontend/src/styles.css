@@ -2822,773 +2822,6 @@ body.calendar-scrollbar-hidden::-webkit-scrollbar {
   }
 }
 
-/* --- Active interaction: calendar flip entry system --- */
-
-/* --- Shared calendar panels and floating cat --- */
-.calendar-home-view,
-.about-calendar-view {
-  min-height: calc(100svh - 96px);
-  display: grid;
-  align-items: center;
-  padding-block: var(--sticky-header-clearance) clamp(48px, 7vw, 96px);
-}
-
-.calendar-stage {
-  position: relative;
-  width: min(1120px, 100%);
-  min-height: var(--calendar-centered-min);
-  margin-inline: auto;
-  display: grid;
-  align-items: center;
-  outline: none;
-  perspective: 1800px;
-  touch-action: pan-y;
-}
-
-.calendar-stage::before {
-  content: "";
-  position: absolute;
-  inset: 8% -2% auto;
-  height: 84%;
-  border-radius: 48px;
-  background: radial-gradient(circle at 50% 0%, rgba(183, 121, 31, 0.08), transparent 58%);
-  pointer-events: none;
-}
-
-.about-calendar-stage {
-  width: min(980px, 100%);
-}
-
-.calendar-stage .calendar-page {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: var(--calendar-centered-min);
-  overflow: hidden;
-  isolation: isolate;
-  transform-style: preserve-3d;
-}
-
-.calendar-page > :not(.calendar-watermark) {
-  position: relative;
-  z-index: 1;
-}
-
-.calendar-watermark {
-  position: absolute;
-  inset: auto -1.5rem -2.5rem auto;
-  z-index: 0;
-  color: rgba(47, 52, 45, 0.05);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(5.8rem, 13vw, 11.5rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 0.85;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.calendar-watermark::before {
-  content: "致知";
-}
-
-.journal-cover-only .calendar-watermark,
-.about-cover-page .calendar-watermark {
-  inset: 50% auto auto 50%;
-  color: rgba(47, 52, 45, 0.042);
-  transform: translate(-50%, -42%);
-}
-
-.latest-calendar-panel .calendar-watermark,
-.about-story-page .calendar-watermark,
-.about-contact-page .calendar-watermark {
-  color: rgba(47, 52, 45, 0.046);
-}
-
-.hot-calendar-panel .calendar-watermark {
-  color: rgba(47, 52, 45, 0.046);
-}
-
-.journal-cover-only,
-.about-cover-page {
-  min-height: var(--calendar-centered-min);
-  padding: var(--calendar-panel-pad);
-  border: 1px solid rgba(200, 189, 168, 0.72);
-  border-radius: 42px;
-  background:
-    radial-gradient(circle at 50% 22%, rgba(183, 121, 31, 0.12), transparent 36%),
-    linear-gradient(135deg, rgba(255, 253, 247, 0.98), rgba(245, 238, 224, 0.88));
-  box-shadow: 0 30px 80px rgba(49, 43, 34, 0.12);
-}
-
-.journal-cover-only {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: clamp(28px, 5vw, 52px);
-  text-align: center;
-}
-
-.about-cover-page {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: clamp(26px, 5vw, 48px);
-  text-align: center;
-}
-
-.home-article-panel,
-.about-story-page,
-.about-contact-page {
-  min-height: var(--calendar-centered-min);
-  border: 1px solid rgba(200, 189, 168, 0.78);
-  border-radius: 38px;
-  box-shadow: 0 28px 70px rgba(49, 43, 34, 0.1);
-}
-
-.home-article-panel {
-  padding: var(--calendar-panel-pad) clamp(34px, 5vw, 58px);
-}
-
-.latest-spacious-section.home-article-panel {
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(183, 121, 31, 0.1), transparent 30%),
-    linear-gradient(135deg, rgba(255, 253, 247, 0.97), rgba(244, 236, 217, 0.8)),
-    repeating-linear-gradient(0deg, transparent 0 33px, rgba(200, 189, 168, 0.15) 34px);
-}
-
-.hot-spacious-section.home-article-panel {
-  background:
-    radial-gradient(circle at 14% 14%, rgba(183, 121, 31, 0.12), transparent 32%),
-    radial-gradient(circle at 88% 12%, rgba(245, 210, 122, 0.24), transparent 28%),
-    linear-gradient(135deg, rgba(255, 253, 247, 0.98), rgba(244, 236, 217, 0.82));
-  color: var(--text);
-}
-
-.about-story-page,
-.about-contact-page {
-  padding: var(--calendar-panel-pad) clamp(42px, 6vw, 72px);
-  background:
-    radial-gradient(circle at 10% 20%, rgba(183, 121, 31, 0.1), transparent 30%),
-    linear-gradient(135deg, rgba(255, 253, 247, 0.98), rgba(244, 236, 217, 0.78));
-}
-
-.about-contact-page {
-  display: grid;
-  align-content: center;
-  gap: clamp(26px, 4vw, 44px);
-}
-
-.calendar-flip-enter-active,
-.calendar-flip-leave-active {
-  transition:
-    opacity 0.36s ease,
-    transform 0.52s cubic-bezier(0.2, 0.88, 0.24, 1),
-    filter 0.36s ease;
-  transform-origin: center top;
-}
-
-.calendar-flip-enter-from {
-  opacity: 0;
-  filter: blur(8px);
-  transform: rotateX(-10deg) translateY(26px) scale(0.985);
-}
-
-.calendar-flip-leave-to {
-  opacity: 0;
-  filter: blur(8px);
-  transform: rotateX(10deg) translateY(-22px) scale(0.985);
-}
-
-.calendar-flip-enter-to,
-.calendar-flip-leave-from {
-  opacity: 1;
-  filter: blur(0);
-  transform: rotateX(0) translateY(0) scale(1);
-}
-
-.calendar-actions {
-  gap: 14px;
-}
-
-.calendar-control,
-.calendar-back-button {
-  cursor: pointer;
-}
-
-.calendar-control {
-  min-width: 164px;
-}
-
-.calendar-panel-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.calendar-panel-actions.compact {
-  justify-content: flex-start;
-}
-
-.calendar-section-head {
-  gap: 20px;
-}
-
-.calendar-section-head.inline {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.calendar-back-button {
-  min-height: 38px;
-  padding: 0 15px;
-  border: 1px solid rgba(148, 118, 73, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 253, 247, 0.72);
-  color: #6f5630;
-  transition: all 0.2s ease;
-}
-
-.calendar-back-button:hover,
-.calendar-back-button:focus-visible {
-  border-color: rgba(148, 118, 73, 0.42);
-  background: rgba(255, 253, 247, 0.94);
-  transform: translateY(-1px);
-}
-
-.hot-calendar-panel .calendar-back-button {
-  border-color: rgba(148, 118, 73, 0.24);
-  background: rgba(255, 253, 247, 0.72);
-  color: #6f5630;
-}
-
-.hot-calendar-panel .calendar-back-button:hover,
-.hot-calendar-panel .calendar-back-button:focus-visible {
-  border-color: rgba(148, 118, 73, 0.42);
-  background: rgba(255, 253, 247, 0.94);
-}
-
-.latest-spacious-section.home-article-panel .spacious-section-head {
-  margin-bottom: clamp(22px, 3vw, 34px);
-}
-
-.latest-spacious-layout {
-  gap: clamp(18px, 3vw, 34px);
-  align-items: stretch;
-}
-
-.latest-lead-card {
-  box-sizing: border-box;
-  min-height: clamp(224px, 24vw, 264px);
-  padding: clamp(24px, 3vw, 34px);
-  justify-content: space-between;
-  border: 1px solid rgba(200, 189, 168, 0.52);
-  box-shadow: inset 0 1px 0 rgba(255, 253, 247, 0.86);
-}
-
-.latest-lead-card h3 {
-  margin: 12px 0 10px;
-  font-size: clamp(1.82rem, 3.1vw, 3rem);
-  line-height: 1.05;
-}
-
-.latest-lead-card p {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: clamp(0.96rem, 1.12vw, 1.06rem);
-  line-height: 1.72;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.latest-spacious-list {
-  box-sizing: border-box;
-  justify-content: center;
-  padding: clamp(10px, 1.6vw, 18px) clamp(16px, 2.5vw, 26px);
-  border: 1px solid rgba(200, 189, 168, 0.62);
-  border-radius: 28px;
-  background: rgba(255, 253, 247, 0.54);
-  box-shadow: inset 0 1px 0 rgba(255, 253, 247, 0.78);
-}
-
-.latest-row-link {
-  padding: clamp(10px, 1.35vw, 16px) 0;
-}
-
-.latest-row-link strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: clamp(1.05rem, 1.55vw, 1.36rem);
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.latest-row-link small {
-  font-size: 0.82rem;
-}
-
-.latest-row-link:last-child {
-  padding-bottom: clamp(12px, 1.5vw, 18px);
-}
-
-.floating-cat {
-  position: fixed;
-  right: clamp(18px, 4vw, 42px);
-  bottom: clamp(20px, 4vw, 42px);
-  z-index: 30;
-  width: 94px;
-  height: 112px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #8b5e24;
-  cursor: pointer;
-  filter: drop-shadow(0 14px 22px rgba(96, 67, 28, 0.16));
-}
-
-.floating-cat:focus-visible {
-  outline: 3px solid rgba(183, 121, 31, 0.28);
-  outline-offset: 8px;
-  border-radius: 28px;
-}
-
-.cat-figure {
-  position: absolute;
-  inset: 0 8px 22px;
-  transform-origin: 50% 100%;
-}
-
-.cat-figure::after {
-  content: "";
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: -4px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(93, 64, 29, 0.14);
-  filter: blur(2px);
-}
-
-.cat-body,
-.cat-head,
-.cat-tail,
-.cat-paw,
-.cat-caption {
-  transition: all 0.24s ease;
-}
-
-.cat-body,
-.cat-head,
-.cat-ear {
-  position: absolute;
-  background: #fff7df;
-  border: 3px solid #8b5e24;
-}
-
-.cat-body {
-  left: 18px;
-  right: 18px;
-  bottom: 4px;
-  height: 54px;
-  border-radius: 48% 48% 42% 42%;
-}
-
-.cat-head {
-  left: 10px;
-  right: 10px;
-  top: 12px;
-  height: 54px;
-  border-radius: 46% 46% 42% 42%;
-}
-
-.cat-ear {
-  top: -9px;
-  width: 22px;
-  height: 24px;
-  border-radius: 6px 12px 4px 12px;
-  transform: rotate(45deg);
-}
-
-.cat-ear-left {
-  left: 8px;
-}
-
-.cat-ear-right {
-  right: 8px;
-}
-
-.cat-eye {
-  position: absolute;
-  top: 22px;
-  width: 9px;
-  height: 5px;
-  border-radius: 999px;
-  background: #65451c;
-  animation: cat-blink 5.8s infinite;
-  transform-origin: center;
-}
-
-.cat-eye-left {
-  left: 24px;
-}
-
-.cat-eye-right {
-  right: 24px;
-}
-
-.cat-nose {
-  position: absolute;
-  left: 50%;
-  top: 32px;
-  width: 8px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d98672;
-  transform: translateX(-50%);
-}
-
-.cat-whiskers {
-  position: absolute;
-  top: 34px;
-  width: 18px;
-  height: 1.5px;
-  background: #8b5e24;
-  box-shadow: 0 6px 0 #8b5e24;
-}
-
-.cat-whiskers-left {
-  left: 2px;
-  transform: rotate(8deg);
-}
-
-.cat-whiskers-right {
-  right: 2px;
-  transform: rotate(-8deg);
-}
-
-.cat-tail {
-  position: absolute;
-  right: 8px;
-  bottom: 24px;
-  width: 28px;
-  height: 44px;
-  border: 4px solid #8b5e24;
-  border-left: 0;
-  border-bottom: 0;
-  border-radius: 0 28px 0 0;
-  transform-origin: 0 100%;
-  animation: cat-tail 4.2s ease-in-out infinite;
-}
-
-.cat-blush {
-  position: absolute;
-  top: 30px;
-  width: 11px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(231, 126, 112, 0.62);
-  opacity: 0;
-  transform: translateY(3px) scale(0.82);
-}
-
-.cat-blush-left {
-  left: 14px;
-}
-
-.cat-blush-right {
-  right: 14px;
-}
-
-.cat-paw {
-  position: absolute;
-  bottom: 24px;
-  width: 14px;
-  height: 16px;
-  border: 3px solid #8b5e24;
-  border-top: 0;
-  border-radius: 0 0 10px 10px;
-  background: #fff7df;
-}
-
-.cat-paw-left {
-  left: 25px;
-  transform: translateY(7px) rotate(-18deg);
-}
-
-.cat-paw-right {
-  right: 25px;
-  transform: translateY(7px) rotate(18deg);
-}
-
-.cat-caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-align: center;
-}
-
-.floating-cat:hover .cat-figure {
-  animation: cat-shy-bob 1.25s ease-in-out infinite;
-}
-
-.floating-cat:hover .cat-head {
-  transform: translateY(3px) scale(0.98);
-}
-
-.floating-cat:hover .cat-eye {
-  animation: none;
-  transform: scaleY(0.28);
-  background: #65451c;
-}
-
-.floating-cat:hover .cat-blush {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-.floating-cat:hover .cat-paw-left {
-  transform: translate(4px, -8px) rotate(-34deg);
-}
-
-.floating-cat:hover .cat-paw-right {
-  transform: translate(-4px, -8px) rotate(34deg);
-}
-
-.floating-cat:hover .cat-tail {
-  animation: cat-shy-tail 0.78s ease-in-out infinite;
-}
-
-.floating-cat:hover .cat-caption {
-  color: #7c4f12;
-  transform: translateY(-3px);
-}
-
-.floating-cat.is-jumping {
-  animation: cat-button-hop 0.82s cubic-bezier(0.2, 0.88, 0.24, 1);
-}
-
-.floating-cat.is-jumping .cat-figure {
-  animation: cat-figure-squash 0.82s cubic-bezier(0.2, 0.88, 0.24, 1);
-}
-
-.floating-cat.is-jumping .cat-tail {
-  animation: cat-click-tail 0.82s ease-in-out;
-}
-
-.floating-cat.is-jumping .cat-caption {
-  transform: translateY(-4px);
-}
-
-@keyframes cat-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  94%, 96% { transform: scaleY(0.1); }
-}
-
-@keyframes cat-tail {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(7deg); }
-}
-
-@keyframes cat-shy-bob {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-4px) rotate(-1.5deg); }
-}
-
-@keyframes cat-shy-tail {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(13deg); }
-}
-
-@keyframes cat-button-hop {
-  0%, 100% { transform: translateY(0); }
-  35% { transform: translateY(-14px); }
-  60% { transform: translateY(3px); }
-}
-
-@keyframes cat-figure-squash {
-  0%, 100% { transform: scale(1); }
-  35% { transform: scale(0.94, 1.06); }
-  62% { transform: scale(1.05, 0.95); }
-}
-
-@keyframes cat-click-tail {
-  0%, 100% { transform: rotate(-8deg); }
-  35% { transform: rotate(22deg); }
-  65% { transform: rotate(-18deg); }
-}
-
-@media (max-width: 860px) {
-  :root {
-    --sticky-header-clearance: clamp(22px, 6vw, 38px);
-    --calendar-centered-min: min(680px, calc(100svh - 128px));
-    --calendar-panel-pad: clamp(32px, 7vw, 52px);
-  }
-
-  .calendar-stage,
-  .about-calendar-stage {
-    width: 100%;
-  }
-
-  .calendar-section-head.inline,
-  .calendar-section-head {
-    align-items: flex-start;
-  }
-
-  .calendar-panel-actions {
-    justify-content: flex-start;
-  }
-
-  .latest-spacious-section.home-article-panel {
-    padding: var(--calendar-panel-pad) clamp(28px, 5vw, 42px);
-  }
-
-  .latest-lead-card {
-    min-height: clamp(250px, 42vw, 340px);
-  }
-}
-
-@media (max-width: 640px) {
-  :root {
-    --sticky-header-clearance: 18px;
-    --calendar-centered-min: auto;
-    --calendar-panel-pad: 34px;
-  }
-
-  .calendar-home-view,
-  .about-calendar-view {
-    min-height: auto;
-    padding-block: 18px 54px;
-  }
-
-  .home-calendar-stage,
-  .about-calendar-stage {
-    min-height: auto;
-  }
-
-  .journal-cover-only,
-  .home-article-panel,
-  .about-cover-page,
-  .about-story-page,
-  .about-contact-page {
-    min-height: 560px;
-    border-radius: 28px;
-  }
-
-  .home-article-panel,
-  .about-story-page,
-  .about-contact-page,
-  .latest-spacious-section.home-article-panel {
-    padding: 34px 24px;
-  }
-
-  .calendar-actions,
-  .calendar-panel-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .calendar-panel-actions .text-link,
-  .calendar-back-button,
-  .calendar-panel-actions .hot-sort-note {
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-  }
-
-  .latest-spacious-list {
-    padding: 8px 18px;
-    border-radius: 22px;
-  }
-
-  .floating-cat {
-    right: 14px;
-    bottom: 16px;
-    width: 78px;
-    height: 94px;
-  }
-
-  .cat-figure {
-    inset: 0 6px 18px;
-  }
-
-  .cat-body {
-    height: 44px;
-  }
-
-  .cat-head {
-    height: 46px;
-  }
-
-  .cat-blush {
-    top: 22px;
-  }
-
-  .cat-paw {
-    bottom: 25px;
-    width: 13px;
-    height: 15px;
-  }
-
-  .cat-paw-left {
-    left: 21px;
-  }
-
-  .cat-paw-right {
-    right: 21px;
-  }
-
-  .cat-caption {
-    font-size: 0.66rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  .calendar-flip-enter-active,
-  .calendar-flip-leave-active,
-  .calendar-back-button,
-  .calendar-page,
-  .floating-cat,
-  .floating-cat:hover .cat-figure,
-  .floating-cat:hover .cat-tail,
-  .floating-cat.is-jumping,
-  .floating-cat.is-jumping .cat-figure,
-  .floating-cat.is-jumping .cat-tail,
-  .cat-eye,
-  .cat-tail {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  .calendar-flip-enter-from,
-  .calendar-flip-leave-to,
-  .calendar-flip-enter-to,
-  .calendar-flip-leave-from,
-  .floating-cat:hover .cat-head,
-  .floating-cat:hover .cat-paw-left,
-  .floating-cat:hover .cat-paw-right,
-  .floating-cat:hover .cat-caption {
-    filter: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-}
-
-
 /* ========================================================================== 
    PRINT JOURNAL THEME — integrated from refence/index.html
    ========================================================================== */
@@ -6417,22 +5650,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   scroll-margin-top: 6.5rem;
 }
 
-.pencil-trail.cursor-effects {
-  display: block;
-  z-index: 1200;
-  opacity: 0 !important;
-  mix-blend-mode: normal;
-  transition: opacity 0.22s ease;
-}
-
-.pencil-trail.cursor-effects.active {
-  opacity: 0.92 !important;
-}
-
-.pencil-trail.cursor-effects canvas {
-  opacity: 0.92;
-}
-
 @media (max-width: 920px) {
   .post-reading-layout {
     width: calc(100% - 2.7rem);
@@ -6494,9 +5711,125 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pencil-trail.cursor-effects {
+/* ==========================================================================
+   PERFORMANCE PASS — fewer layers, no perpetual background canvas
+   ========================================================================== */
+
+/* Replace full-viewport turbulence SVG layers with a cheap static paper grain. */
+body::before {
+  background-image:
+    radial-gradient(circle, rgba(42, 36, 28, 0.16) 0.45px, transparent 0.55px),
+    linear-gradient(90deg, rgba(42, 36, 28, 0.018), transparent 45%, rgba(255, 255, 255, 0.025));
+  background-size: 4px 4px, 100% 100%;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+}
+
+body::after {
+  display: none;
+}
+
+/* The old network particle canvas is no longer mounted; keep stale builds harmless. */
+.print-particles {
+  display: none !important;
+}
+
+/* Blur filters and persistent will-change layers were costly during scroll. */
+.page-fade-enter-active,
+.page-fade-leave-active,
+.rv,
+.rv.vis {
+  filter: none !important;
+  will-change: auto !important;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  filter: none !important;
+}
+
+.rv {
+  transition-duration: 0.52s !important;
+}
+
+.print-nav.site-header.scrolled {
+  backdrop-filter: none !important;
+}
+
+/* Keep the feature poster graphic, but stop decorative perpetual repaints. */
+.feature-poster-mark,
+.feature-orbit {
+  animation: none !important;
+}
+
+.feature-poster-mark {
+  backdrop-filter: none;
+}
+
+.home-latest-feature .print-feature-image {
+  will-change: auto;
+  transform: none;
+}
+
+.home-latest-feature .print-feature-image:hover,
+.home-latest-feature .print-feature-image:focus-visible {
+  transform: translateY(-4px);
+}
+
+.feature-spotlight {
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 238, 191, 0.15), transparent 34%),
+    linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.04) 48%, transparent 62%);
+}
+
+/* Replace per-card turbulence with a small repeating texture. */
+.mimg::after {
+  background-image:
+    repeating-linear-gradient(18deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 5px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.08) 0.45px, transparent 0.6px);
+  background-size: auto, 5px 5px;
+  opacity: 0.42;
+  mix-blend-mode: screen;
+}
+
+/* Idle mascot keeps only blink + tail; richer movement starts on interaction. */
+.mascot-body,
+.mascot-head,
+.mascot-scarf-tail,
+.mascot-ear--left,
+.mascot-ear--right {
+  animation: none !important;
+}
+
+.floating-cat,
+.floating-cat:hover .cat-svg {
+  filter: none !important;
+}
+
+/* Lightweight canvas: one persistent bitmap is faded instead of redrawing history. */
+.pencil-trail.cursor-effects {
   display: block;
-    display: none;
-  }
+  z-index: 1200;
+  opacity: 0 !important;
+  mix-blend-mode: normal;
+  contain: strict;
+  transition: opacity 0.08s linear;
+}
+
+.pencil-trail.cursor-effects.active {
+  opacity: 1 !important;
+}
+
+.pencil-trail.cursor-effects canvas {
+  opacity: 1;
+}
+
+/* Keep the paper texture behind the application stacking context so it cannot veil the cursor ink. */
+body::before {
+  z-index: 0;
+  opacity: 0.1;
+}
+
+.print-shell {
+  z-index: 1;
 }

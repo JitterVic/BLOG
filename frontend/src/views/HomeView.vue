@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import { useReveal } from "../composables/useReveal";
@@ -14,8 +14,6 @@ const latestPosts = ref([]);
 const hotPosts = ref([]);
 const postsError = ref("");
 const postsLoading = ref(false);
-const latestFeatureRef = ref(null);
-let featureMotionFrame = 0;
 
 const leadPost = computed(() => latestPosts.value[0] || null);
 const secondaryPosts = computed(() => latestPosts.value.slice(1));
@@ -36,46 +34,11 @@ function formatClicks(count = 0) {
   return `${count || 0} 次阅读`;
 }
 
-function prefersReducedMotion() {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
-}
-
-function updateFeatureMotion(event) {
-  if (prefersReducedMotion() || event.pointerType === "touch") return;
-  const feature = latestFeatureRef.value;
-  if (!feature) return;
-  const rect = feature.getBoundingClientRect();
-  const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-
-  window.cancelAnimationFrame(featureMotionFrame);
-  featureMotionFrame = window.requestAnimationFrame(() => {
-    feature.style.setProperty("--feature-x", `${(x * 100).toFixed(2)}%`);
-    feature.style.setProperty("--feature-y", `${(y * 100).toFixed(2)}%`);
-    feature.style.setProperty("--feature-tilt-x", `${((0.5 - y) * 2.2).toFixed(2)}deg`);
-    feature.style.setProperty("--feature-tilt-y", `${((x - 0.5) * 2.8).toFixed(2)}deg`);
-  });
-}
-
-function resetFeatureMotion() {
-  const feature = latestFeatureRef.value;
-  if (!feature) return;
-  window.cancelAnimationFrame(featureMotionFrame);
-  feature.style.setProperty("--feature-x", "50%");
-  feature.style.setProperty("--feature-y", "50%");
-  feature.style.setProperty("--feature-tilt-x", "0deg");
-  feature.style.setProperty("--feature-tilt-y", "0deg");
-}
 
 watch([latestPosts, hotPosts, postsLoading], () => {
   refreshReveal();
 });
 
-onBeforeUnmount(() => {
-  if (typeof window !== "undefined") {
-    window.cancelAnimationFrame(featureMotionFrame);
-  }
-});
 
 onMounted(async () => {
   try {
@@ -167,11 +130,8 @@ onMounted(async () => {
       <template v-else>
         <div
           v-if="leadPost"
-          ref="latestFeatureRef"
           class="g2 home-latest-feature"
           data-feature-card="latest"
-          @pointermove="updateFeatureMotion"
-          @pointerleave="resetFeatureMotion"
         >
           <RouterLink
             :to="`/posts/${leadPost.slug}`"

@@ -9,6 +9,7 @@ const { site } = useSite();
 const mobileMenuOpen = ref(false);
 const isScrolled = ref(false);
 const scrollProgress = ref(0);
+let scrollFrame = 0;
 
 const navLinks = [
   { name: "home", to: "/", label: "封面", english: "Cover" },
@@ -35,23 +36,32 @@ function updateScrollState() {
   scrollProgress.value = Math.min(Math.max(y / max, 0), 1);
 }
 
+function scheduleScrollUpdate() {
+  if (scrollFrame) return;
+  scrollFrame = window.requestAnimationFrame(() => {
+    scrollFrame = 0;
+    updateScrollState();
+  });
+}
+
 watch(
   () => route.fullPath,
   () => {
     closeMobileMenu();
-    requestAnimationFrame(updateScrollState);
+    scheduleScrollUpdate();
   },
 );
 
 onMounted(() => {
   updateScrollState();
-  window.addEventListener("scroll", updateScrollState, { passive: true });
-  window.addEventListener("resize", updateScrollState, { passive: true });
+  window.addEventListener("scroll", scheduleScrollUpdate, { passive: true });
+  window.addEventListener("resize", scheduleScrollUpdate, { passive: true });
 });
 
 onUnmounted(() => {
-  window.removeEventListener("scroll", updateScrollState);
-  window.removeEventListener("resize", updateScrollState);
+  window.removeEventListener("scroll", scheduleScrollUpdate);
+  window.removeEventListener("resize", scheduleScrollUpdate);
+  if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
 });
 </script>
 

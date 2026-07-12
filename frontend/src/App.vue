@@ -4,7 +4,6 @@ import { useRoute } from "vue-router";
 
 import CursorEffects from "./components/CursorEffects.vue";
 import FloatingCat from "./components/FloatingCat.vue";
-import PrintParticles from "./components/PrintParticles.vue";
 import SiteHeader from "./components/SiteHeader.vue";
 import { useReveal } from "./composables/useReveal";
 import { useSite } from "./composables/useSite";
@@ -33,7 +32,6 @@ onMounted(async () => {
 
 <template>
   <div class="page-shell print-shell" :class="pageTone">
-    <PrintParticles />
     <CursorEffects />
     <FloatingCat />
     <SiteHeader />
