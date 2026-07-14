@@ -1,4 +1,4 @@
-/* Stable reset kept here after removing the obsolete legacy layer. */
+﻿/* Stable reset kept here after removing the obsolete legacy layer. */
 *,
 *::before,
 *::after {
@@ -1748,14 +1748,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   white-space: nowrap;
 }
 
-.print-nav__tools {
-  justify-self: end;
-  display: inline-flex !important;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 0 0 auto !important;
-}
-
 .print-nav__progress {
   position: absolute;
   left: 0;
@@ -1777,10 +1769,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 
   .print-nav__links {
     display: none !important;
-  }
-
-  .print-nav__tools {
-    grid-column: 2;
   }
 }
 
@@ -1852,28 +1840,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   letter-spacing: 0.22em;
 }
 
-.cat-tail-path {
-  transform-origin: 68px 78px;
-  animation: cat-tail-sway 3.6s ease-in-out infinite;
-}
-
-.cat-eyes {
-  transform-origin: 48px 39px;
-  animation: cat-blink-svg 5.4s infinite;
-}
-
-.cat-ground {
-  transform-origin: 48px 104px;
-}
-
-.floating-cat:hover .cat-head-group {
-  transform: translateY(-1px);
-}
-
-.floating-cat:hover .cat-blush-svg {
-  opacity: 0.85;
-}
-
 .floating-cat:hover .cat-caption {
   color: var(--accent, #8b2500);
 }
@@ -1882,30 +1848,10 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   animation: cat-hop-svg 0.9s cubic-bezier(0.2, 0.88, 0.24, 1);
 }
 
-.floating-cat.is-jumping .cat-tail-path {
-  animation: cat-tail-hop 0.9s ease-in-out;
-}
-
-@keyframes cat-tail-sway {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(16deg); }
-}
-
-@keyframes cat-blink-svg {
-  0%, 42%, 46%, 100% { transform: scaleY(1); }
-  44% { transform: scaleY(0.12); }
-}
-
 @keyframes cat-hop-svg {
   0%, 100% { transform: translateY(0) scale(1, 1); }
   28% { transform: translateY(-16px) scale(0.96, 1.05); }
   55% { transform: translateY(2px) scale(1.04, 0.94); }
-}
-
-@keyframes cat-tail-hop {
-  0%, 100% { transform: rotate(-8deg); }
-  35% { transform: rotate(24deg); }
-  70% { transform: rotate(-14deg); }
 }
 
 @media (max-width: 640px) {
@@ -1923,10 +1869,7 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cat-tail-path,
-  .cat-eyes,
-  .floating-cat.is-jumping .cat-figure,
-  .floating-cat.is-jumping .cat-tail-path {
+  .floating-cat.is-jumping .cat-figure {
     animation: none !important;
   }
 }
@@ -2066,12 +2009,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   height: 2px !important;
 }
 
-/* Hide old tools-only read link styles that break alignment */
-.print-nav .print-nav__tools,
-.print-nav .header-tools {
-  display: none !important;
-}
-
 .print-menu-button {
   display: none;
 }
@@ -2099,37 +2036,16 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   filter: drop-shadow(0 10px 14px rgba(90, 58, 24, 0.22));
 }
 
-.floating-cat:hover .cat-head-group {
-  transform: translateY(-2px) rotate(-2deg);
-  transition: transform 0.28s ease;
-}
-
-.floating-cat:hover .cat-tail-path {
-  animation-duration: 1.2s;
-}
-
-.floating-cat:hover .cat-blush-svg {
-  opacity: 0.95 !important;
-}
-
 .floating-cat:hover .cat-caption {
   color: var(--accent, #8b2500);
   letter-spacing: 0.28em;
-}
-
-.floating-cat:hover .cat-ground {
-  transform: scaleX(1.12);
-  opacity: 0.85;
 }
 
 .floating-cat:active {
   transform: translateY(-1px) scale(0.98);
 }
 
-.cat-head-group,
-.cat-blush-svg,
 .cat-caption,
-.cat-ground,
 .cat-svg {
   transition: transform 0.28s ease, opacity 0.28s ease, filter 0.28s ease, color 0.28s ease, letter-spacing 0.28s ease;
 }
@@ -2458,37 +2374,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   overflow: visible;
 }
 
-.cat-speech {
-  position: absolute;
-  top: 0;
-  right: 72%;
-  z-index: 4;
-  width: max-content;
-  max-width: 10rem;
-  padding: 0.42rem 0.62rem;
-  color: var(--ink, #1c1710);
-  border: 1px solid rgba(77, 54, 29, 0.2);
-  border-radius: 10px 10px 2px 10px;
-  background: rgba(255, 252, 242, 0.94);
-  box-shadow: 0 8px 24px rgba(55, 35, 16, 0.1);
-  font-family: var(--f-mono, monospace);
-  font-size: 0.56rem;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translate(8px, 8px) scale(0.86);
-  transform-origin: 100% 100%;
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.32s var(--ease-spring);
-}
-
-.floating-cat:hover .cat-speech,
-.floating-cat:focus-visible .cat-speech,
-.floating-cat.is-jumping .cat-speech {
-  opacity: 1;
-  transform: translate(0, 0) scale(1);
-}
-
 .floating-cat .cat-caption {
   bottom: 0;
   padding-left: 0.22em;
@@ -2497,133 +2382,12 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   letter-spacing: 0.26em;
 }
 
-.mascot-body {
-  transform-origin: 60px 111px;
-  animation: mascot-breathe 3.8s ease-in-out infinite;
-}
-
-.mascot-head {
-  transform-origin: 60px 70px;
-  animation: mascot-head-idle 4.8s ease-in-out infinite;
-}
-
-.mascot-tail {
-  transform-origin: 83px 91px;
-  animation: mascot-tail-sway 2.9s ease-in-out infinite;
-}
-
-.mascot-scarf-tail {
-  transform-origin: 74px 80px;
-  animation: mascot-scarf-flutter 2.5s ease-in-out infinite;
-}
-
-.mascot-eyes {
-  transform-origin: 60px 44px;
-  animation: mascot-blink 5.6s infinite;
-}
-
-.mascot-pupils {
-  transform: translate(var(--gaze-x), var(--gaze-y));
-  transition: transform 0.12s ease-out;
-}
-
-.mascot-ear {
-  transform-box: fill-box;
-  transform-origin: 50% 90%;
-}
-
-.mascot-ear--left { animation: mascot-ear-left 6s ease-in-out infinite; }
-.mascot-ear--right { animation: mascot-ear-right 6s 0.16s ease-in-out infinite; }
-
-.mascot-paw {
-  transform-box: fill-box;
-  transition: transform 0.3s var(--ease-spring);
-}
-
-.mascot-paw--right {
-  transform-origin: 35% 80%;
-}
-
-.mascot-sparkles {
-  opacity: 0;
-  transform-origin: 60px 55px;
-  transition: opacity 0.25s ease;
-}
-
-.floating-cat:hover .mascot-sparkles,
-.floating-cat:focus-visible .mascot-sparkles,
-.floating-cat.is-waving .mascot-sparkles {
-  opacity: 0.9;
-  animation: mascot-sparkle 1.2s ease-in-out infinite;
-}
-
-.floating-cat.is-waving .mascot-paw--right,
-.floating-cat:hover .mascot-paw--right {
-  animation: mascot-wave 0.48s ease-in-out 2;
-}
-
-.floating-cat:hover .mascot-tail {
-  animation-duration: 0.82s;
-}
-
 .floating-cat.is-jumping {
   animation: mascot-button-jump 0.98s cubic-bezier(0.2, 0.88, 0.24, 1);
 }
 
 .floating-cat.is-jumping .cat-figure {
   animation: mascot-figure-jump 0.98s cubic-bezier(0.2, 0.88, 0.24, 1);
-}
-
-.floating-cat.is-jumping .mascot-tail {
-  animation: mascot-tail-jump 0.98s ease-in-out;
-}
-
-@keyframes mascot-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: translateY(-1px) scale(1.012, 1.02); }
-}
-
-@keyframes mascot-head-idle {
-  0%, 100% { transform: rotate(0deg) translateY(0); }
-  45% { transform: rotate(-1.2deg) translateY(-1px); }
-  55% { transform: rotate(1deg) translateY(-1px); }
-}
-
-@keyframes mascot-tail-sway {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(15deg); }
-}
-
-@keyframes mascot-scarf-flutter {
-  0%, 100% { transform: rotate(-2deg); }
-  50% { transform: rotate(5deg) translateX(1px); }
-}
-
-@keyframes mascot-blink {
-  0%, 43%, 47%, 82%, 86%, 100% { transform: scaleY(1); }
-  45%, 84% { transform: scaleY(0.08); }
-}
-
-@keyframes mascot-ear-left {
-  0%, 78%, 100% { transform: rotate(0deg); }
-  82% { transform: rotate(-8deg); }
-  87% { transform: rotate(3deg); }
-}
-
-@keyframes mascot-ear-right {
-  0%, 78%, 100% { transform: rotate(0deg); }
-  82% { transform: rotate(8deg); }
-  87% { transform: rotate(-3deg); }
-}
-
-@keyframes mascot-wave {
-  0%, 100% { transform: rotate(0deg) translate(0); }
-  50% { transform: rotate(-32deg) translate(-4px, -7px); }
-}
-
-@keyframes mascot-sparkle {
-  0%, 100% { transform: scale(0.84) rotate(-5deg); opacity: 0.45; }
-  50% { transform: scale(1.08) rotate(5deg); opacity: 1; }
 }
 
 @keyframes mascot-button-jump {
@@ -2636,12 +2400,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   0%, 100% { transform: scale(1); }
   24% { transform: scale(0.94, 1.06) rotate(-4deg); }
   58% { transform: scale(1.06, 0.94) rotate(2deg); }
-}
-
-@keyframes mascot-tail-jump {
-  0%, 100% { transform: rotate(-8deg); }
-  35% { transform: rotate(28deg); }
-  68% { transform: rotate(-16deg); }
 }
 
 @media (max-width: 920px) {
@@ -2698,12 +2456,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
     width: 82px;
     height: 94px;
   }
-
-  .cat-speech {
-    right: 64%;
-    max-width: 8rem;
-    font-size: 0.5rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2711,15 +2463,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   .home-latest-feature .print-feature-image:hover,
   .feature-poster-mark,
   .feature-orbit,
-  .mascot-body,
-  .mascot-head,
-  .mascot-tail,
-  .mascot-scarf-tail,
-  .mascot-eyes,
-  .mascot-ear,
-  .mascot-sparkles,
-  .floating-cat.is-waving .mascot-paw--right,
-  .floating-cat:hover .mascot-paw--right,
   .floating-cat.is-jumping,
   .floating-cat.is-jumping .cat-figure {
     animation: none !important;
@@ -2992,15 +2735,6 @@ body::after {
   background-size: auto, 5px 5px;
   opacity: 0.42;
   mix-blend-mode: screen;
-}
-
-/* Idle mascot keeps only blink + tail; richer movement starts on interaction. */
-.mascot-body,
-.mascot-head,
-.mascot-scarf-tail,
-.mascot-ear--left,
-.mascot-ear--right {
-  animation: none !important;
 }
 
 .floating-cat,
