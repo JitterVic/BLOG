@@ -1702,74 +1702,9 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   justify-self: start;
 }
 
-/* 2) Header layout — neutralize legacy flex conflicts */
-.print-nav.site-header {
-  display: block !important;
-  width: 100% !important;
-  max-width: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: linear-gradient(180deg, rgba(244, 239, 230, 0.98) 48%, rgba(244, 239, 230, 0));
-}
-
-.print-nav__inner {
-  width: 100%;
-  min-height: 4.4rem;
-  padding: 0.95rem clamp(1.2rem, 3.5vw, 2.5rem) 1.15rem;
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: clamp(0.8rem, 2.5vw, 2rem);
-  box-sizing: border-box;
-}
-
-.print-nav.site-header.scrolled .print-nav__inner {
-  min-height: 3.6rem;
-  padding-top: 0.55rem;
-  padding-bottom: 0.7rem;
-}
-
-.print-nav__brand {
-  justify-self: start;
-  white-space: nowrap;
-}
-
-.print-nav__links {
-  margin-left: 0 !important;
-  justify-self: end;
-  display: flex !important;
-  flex-wrap: nowrap;
-  align-items: baseline;
-  gap: clamp(0.7rem, 2vw, 1.8rem);
-  min-width: 0;
-}
-
-.print-nav__item {
-  white-space: nowrap;
-}
-
-.print-nav__progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-}
-
+/* Header mobile panel anchor retained from the earlier layout pass. */
 .print-mobile-nav {
   top: 100%;
-}
-
-@media (max-width: 760px) {
-  .print-nav__inner {
-    grid-template-columns: 1fr auto;
-    min-height: 3.6rem;
-    padding: 0.75rem 1.2rem 0.9rem;
-  }
-
-  .print-nav__links {
-    display: none !important;
-  }
 }
 
 /* 3) About contact title stays one line when possible */
