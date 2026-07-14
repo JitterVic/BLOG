@@ -89,7 +89,26 @@ onUnmounted(() => {
             :class="{ active: isActive(item) }"
           >
             <span class="print-nav__num">{{ String(index + 1).padStart(2, "0") }}</span>
-            <span class="print-nav__label">{{ item.label }}</span>
+            <span class="print-nav__label">
+              <span class="print-nav__label-text">{{ item.label }}</span>
+              <svg
+                class="nav-circle"
+                viewBox="0 0 112 48"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  class="nav-circle__stroke nav-circle__stroke--first"
+                  pathLength="1"
+                  d="M8 25C6 11 27 4 57 5c31 1 50 10 47 25-3 14-26 17-54 15C22 43 7 36 8 25Z"
+                />
+                <path
+                  class="nav-circle__stroke nav-circle__stroke--second"
+                  pathLength="1"
+                  d="M11 22C13 8 35 3 64 7c29 4 43 15 36 28-7 12-31 13-57 9C18 40 4 30 11 22Z"
+                />
+              </svg>
+            </span>
           </RouterLink>
 
           <RouterLink to="/posts" class="print-nav__item print-nav__cta" @click="closeMobileMenu">
