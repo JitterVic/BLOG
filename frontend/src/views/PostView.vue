@@ -13,6 +13,7 @@ const articleBodyRef = ref(null);
 const tableOfContents = ref([]);
 const activeHeading = ref("");
 let headingObserver = null;
+let enhancedElements = [];
 
 const {
   post,
@@ -21,6 +22,8 @@ const {
   articleSections,
   hasFallbackSections,
   relatedPosts,
+  previousPost,
+  nextPost,
   loadPost,
 } = usePost({ errorMessage: "这篇文章不存在，或仍是草稿未发布。" });
 
@@ -33,6 +36,70 @@ function disconnectHeadingObserver() {
   headingObserver = null;
 }
 
+function cleanupArticleEnhancements() {
+  enhancedElements.forEach(({ element, type, handler }) => {
+    element.removeEventListener("click", handler);
+    if (type === "button") element.remove();
+  });
+  enhancedElements = [];
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function enhanceArticleBody(body, headings) {
+  cleanupArticleEnhancements();
+
+  body.querySelectorAll("pre").forEach((pre) => {
+    const code = pre.querySelector("code");
+    if (!code || pre.querySelector(".code-copy-button")) return;
+    pre.classList.add("has-copy-button");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "code-copy-button";
+    button.textContent = "COPY";
+    button.setAttribute("aria-label", "复制代码");
+    const handler = async () => {
+      try {
+        await copyText(code.textContent || "");
+        button.textContent = "COPIED";
+      } catch {
+        button.textContent = "FAILED";
+      }
+      window.setTimeout(() => { button.textContent = "COPY"; }, 1200);
+    };
+    button.addEventListener("click", handler);
+    pre.appendChild(button);
+    enhancedElements.push({ element: button, type: "button", handler });
+  });
+
+  headings.forEach((heading) => {
+    if (heading.querySelector(":scope > .heading-anchor")) return;
+    const anchor = document.createElement("a");
+    anchor.className = "heading-anchor";
+    anchor.href = `#${heading.id}`;
+    anchor.textContent = "#";
+    anchor.setAttribute("aria-label", `复制或跳转到章节：${heading.textContent?.trim() || heading.id}`);
+    const handler = () => {
+      history.replaceState(null, "", `#${heading.id}`);
+    };
+    anchor.addEventListener("click", handler);
+    heading.appendChild(anchor);
+    enhancedElements.push({ element: anchor, type: "button", handler });
+  });
+}
 async function buildArticleNavigation() {
   disconnectHeadingObserver();
   tableOfContents.value = [];
@@ -51,6 +118,8 @@ async function buildArticleNavigation() {
       level: heading.tagName === "H3" ? 3 : 2,
     };
   });
+
+  enhanceArticleBody(body, headings);
 
   if (!tableOfContents.value.length) return;
   activeHeading.value = tableOfContents.value[0].id;
@@ -107,6 +176,7 @@ watch(
 
 onBeforeUnmount(() => {
   disconnectHeadingObserver();
+  cleanupArticleEnhancements();
 });
 </script>
 
@@ -142,6 +212,15 @@ onBeforeUnmount(() => {
           <span>{{ post.published_at || "未设置日期" }}</span>
           <span>{{ post.read_time }}</span>
         </div>
+
+        <figure v-if="post.cover_image" class="post-cover rv" data-reveal-delay="180">
+          <img
+            :src="post.cover_image"
+            :alt="post.title"
+            loading="lazy"
+            @error="(event) => event.target.closest('figure').classList.add('is-broken')"
+          >
+        </figure>
 
         <blockquote v-if="post.hero_quote" class="rv" data-reveal-delay="200">
           {{ post.hero_quote }}
@@ -208,7 +287,26 @@ onBeforeUnmount(() => {
 
         <p v-else class="feedback post-body rv">这篇文章暂时还没有正文内容。</p>
       </div>
-      <span class="pg pg--r">— Article —</span>
+
+      <nav v-if="previousPost || nextPost" class="post-sequence-nav rv" aria-label="上一篇和下一篇">
+        <RouterLink
+          v-if="previousPost"
+          :to="`/posts/${previousPost.slug}`"
+          class="post-sequence-link post-sequence-link--previous"
+        >
+          <span>← Previous</span>
+          <strong>{{ previousPost.title }}</strong>
+        </RouterLink>
+        <span v-else class="post-sequence-placeholder"></span>
+        <RouterLink
+          v-if="nextPost"
+          :to="`/posts/${nextPost.slug}`"
+          class="post-sequence-link post-sequence-link--next"
+        >
+          <span>Next →</span>
+          <strong>{{ nextPost.title }}</strong>
+        </RouterLink>
+      </nav>      <span class="pg pg--r">— Article —</span>
     </article>
 
     <section v-if="relatedPosts.length" class="related-section print-related-section">

@@ -338,6 +338,7 @@ class BlogStore:
                 tone TEXT DEFAULT 'amber',
                 tags TEXT NOT NULL DEFAULT '[]',
                 hero_quote TEXT DEFAULT '',
+                cover_image TEXT NOT NULL DEFAULT '',
                 click_count INTEGER NOT NULL DEFAULT 0,
                 sections TEXT NOT NULL DEFAULT '[]',
                 markdown_content TEXT DEFAULT '',
@@ -353,6 +354,8 @@ class BlogStore:
         }
         if "click_count" not in post_columns:
             connection.execute("ALTER TABLE posts ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0")
+        if "cover_image" not in post_columns:
+            connection.execute("ALTER TABLE posts ADD COLUMN cover_image TEXT NOT NULL DEFAULT ''")
 
 
     def _seed_site_profile(self, connection: sqlite3.Connection) -> None:
@@ -485,6 +488,7 @@ class BlogStore:
         featured: bool | None = None,
         published_only: bool = True,
         sort: str = "latest",
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM posts"
         conditions = []
@@ -495,6 +499,17 @@ class BlogStore:
         if featured is not None:
             conditions.append("featured = ?")
             params.append(1 if featured else 0)
+        if search and search.strip():
+            needle = search.strip().lower()
+            escaped = needle.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            pattern = f"%{escaped}%"
+            conditions.append(
+                r"(LOWER(title) LIKE ? ESCAPE '\'"
+                r" OR LOWER(excerpt) LIKE ? ESCAPE '\'"
+                r" OR LOWER(tags) LIKE ? ESCAPE '\'"
+                r" OR LOWER(markdown_content) LIKE ? ESCAPE '\')"
+            )
+            params.extend([pattern, pattern, pattern, pattern])
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -652,6 +667,9 @@ class BlogStore:
         category = form_data.get("category", "").strip()
         tone = form_data.get("tone", "amber").strip() or "amber"
         hero_quote = form_data.get("hero_quote", "").strip()
+        cover_image = form_data.get("cover_image", "").strip()
+        if cover_image and not _is_safe_image_url(cover_image):
+            raise ValueError("封面图片地址无效：请使用上传得到的 /uploads/ 地址或 http(s) 图片链接。")
         sections = json.dumps([], ensure_ascii=False)
         tags_json = json.dumps(tags, ensure_ascii=False)
         now = datetime.now().isoformat(timespec="seconds")
@@ -663,8 +681,8 @@ class BlogStore:
                     UPDATE posts
                     SET slug = ?, title = ?, excerpt = ?, published_at = ?, updated_at = ?,
                         read_time = ?, category = ?, featured = ?, tone = ?, tags = ?,
-                        hero_quote = ?, sections = ?, markdown_content = ?, html_content = ?,
-                        status = ?
+                        hero_quote = ?, cover_image = ?, sections = ?, markdown_content = ?,
+                        html_content = ?, status = ?
                     WHERE id = ?
                     """,
                     (
@@ -679,6 +697,7 @@ class BlogStore:
                         tone,
                         tags_json,
                         hero_quote,
+                        cover_image,
                         sections,
                         markdown_content,
                         html_content,
@@ -693,8 +712,8 @@ class BlogStore:
                     INSERT INTO posts (
                         slug, title, excerpt, published_at, created_at, updated_at,
                         read_time, category, featured, tone, tags, hero_quote,
-                        sections, markdown_content, html_content, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cover_image, sections, markdown_content, html_content, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         slug,
@@ -709,6 +728,7 @@ class BlogStore:
                         tone,
                         tags_json,
                         hero_quote,
+                        cover_image,
                         sections,
                         markdown_content,
                         html_content,

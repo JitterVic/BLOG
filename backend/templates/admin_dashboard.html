@@ -778,6 +778,11 @@
                       <span>Quote</span>
                       <input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="Short line shown below the title" />
                     </label>
+
+                    <label class="field-wide">
+                      <span>Cover Image</span>
+                      <input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" />
+                    </label>
                   </div>
                 </section>
 
@@ -932,6 +937,7 @@
           <div class="result-copy">上传成功，可以直接复制下面两段中的任意一种使用。</div>
           <div class="copy-row"><code>${url}</code><button type="button" data-copy="${url}">复制 URL</button></div>
           <div class="copy-row"><code>${markdownSnippet}</code><button type="button" data-copy="${markdownSnippet.replace(/"/g, '&quot;')}">复制 Markdown</button></div>
+          <div class="copy-row"><code>${url}</code><button type="button" data-set-cover="${url}">设为封面</button></div>
         `;
       }
 
@@ -1013,6 +1019,16 @@
       });
 
       mediaResult?.addEventListener("click", async (event) => {
+        const coverButton = event.target.closest("[data-set-cover]");
+        if (coverButton) {
+          const coverInput = document.getElementById("cover_image");
+          if (coverInput) {
+            coverInput.value = coverButton.getAttribute("data-set-cover") || "";
+            coverButton.textContent = "已设为封面";
+            setTimeout(() => (coverButton.textContent = "设为封面"), 1200);
+          }
+          return;
+        }
         const button = event.target.closest("[data-copy]");
         if (!button) return;
         const text = button.getAttribute("data-copy") || "";

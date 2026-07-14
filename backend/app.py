@@ -58,6 +58,7 @@ def summarize_post(post):
         "tone": post["tone"],
         "tags": post["tags"],
         "hero_quote": post["hero_quote"],
+        "cover_image": post.get("cover_image") or "",
         "click_count": int(post.get("click_count") or 0),
         "status": post.get("status", "published"),
     }
@@ -92,6 +93,7 @@ def build_edit_post(post):
             "tone": "amber",
             "tags_text": "",
             "hero_quote": "",
+            "cover_image": "",
             "markdown_content": "",
             "html_content": "",
             "status": "draft",
@@ -147,15 +149,40 @@ def create_app():
         featured = request.args.get("featured")
         limit = request.args.get("limit", type=int)
         sort = request.args.get("sort", "latest")
+        q = (request.args.get("q") or "").strip()
+        page = request.args.get("page", type=int)
 
         wants_featured = None
         if featured is not None:
             wants_featured = featured.lower() == "true"
 
-        data = store.list_posts(tag=tag, featured=wants_featured, published_only=True, sort=sort)
-        if limit is not None:
-            data = data[: max(1, min(limit, 50))]
-        return jsonify([summarize_post(post) for post in data])
+        data = store.list_posts(
+            tag=tag,
+            featured=wants_featured,
+            published_only=True,
+            sort=sort,
+            search=q or None,
+        )
+
+        if page is None:
+            if limit is not None:
+                data = data[: max(1, min(limit, 50))]
+            return jsonify([summarize_post(post) for post in data])
+
+        page = max(1, page)
+        per_page = max(1, min(limit or 10, 50))
+        total = len(data)
+        start = (page - 1) * per_page
+        items = data[start : start + per_page]
+        return jsonify(
+            {
+                "items": [summarize_post(post) for post in items],
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "has_more": start + per_page < total,
+            }
+        )
 
     @app.get("/api/posts/<slug>")
     def post_detail(slug):
@@ -166,20 +193,50 @@ def create_app():
         store.increment_post_click(slug)
         match["click_count"] = int(match.get("click_count") or 0) + 1
 
-        related_posts = [
-            summarize_post(post)
-            for post in store.list_posts(published_only=True)
-            if post["slug"] != slug
-        ][:2]
+        published_posts = store.list_posts(published_only=True)
+        current_index = next(
+            (index for index, post in enumerate(published_posts) if post["slug"] == slug),
+            -1,
+        )
+        previous_post = (
+            summarize_post(published_posts[current_index + 1])
+            if 0 <= current_index < len(published_posts) - 1
+            else None
+        )
+        next_post = (
+            summarize_post(published_posts[current_index - 1])
+            if current_index > 0
+            else None
+        )
+
+        current_tags = {tag.lower() for tag in match.get("tags", [])}
+        current_category = (match.get("category") or "").strip().lower()
+
+        def related_score(candidate):
+            candidate_tags = {tag.lower() for tag in candidate.get("tags", [])}
+            shared_tags = len(current_tags & candidate_tags)
+            same_category = int(
+                bool(current_category)
+                and (candidate.get("category") or "").strip().lower() == current_category
+            )
+            return shared_tags * 3 + same_category * 2
+
+        related_candidates = [post for post in published_posts if post["slug"] != slug]
+        related_candidates.sort(
+            key=lambda post: (related_score(post), post.get("published_at", "")),
+            reverse=True,
+        )
+        related_posts = [summarize_post(post) for post in related_candidates[:2]]
 
         return jsonify(
             {
                 **match,
                 "featured": bool(match["featured"]),
                 "related_posts": related_posts,
+                "previous_post": previous_post,
+                "next_post": next_post,
             }
         )
-
     @app.get("/uploads/<path:path>")
     def uploads(path):
         if not is_allowed_public_upload_path(path):

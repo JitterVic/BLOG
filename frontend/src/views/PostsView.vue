@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
+import { useSite } from "../composables/useSite";
 
 const VIEW_OPTIONS = [
   { id: "latest", label: "最新文章", english: "Latest" },
@@ -11,51 +12,44 @@ const VIEW_OPTIONS = [
   { id: "tags", label: "标签筛选", english: "Tags" },
 ];
 
+const PAGE_SIZE = 10;
+
 const {
   posts,
   error,
   loading,
+  loadingMore,
+  loadMoreError,
+  total,
+  hasMore,
   loadPosts,
+  loadMore,
 } = usePosts({ errorMessage: "文章目录加载失败，请稍后再试。" });
 
 const route = useRoute();
+const router = useRouter();
+const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 const activeView = ref("latest");
 const searchQuery = ref("");
 const selectedTag = ref("全部");
+let applyingRouteState = false;
+let querySyncTimer = 0;
+let reloadTimer = 0;
+let lastFetchedKey = "";
 
 const normalizedQuery = computed(() => searchQuery.value.trim().toLowerCase());
 const tags = computed(() => {
-  const values = new Set();
-  for (const post of posts.value) {
-    for (const tag of post.tags || []) values.add(tag);
-  }
-  return ["全部", ...Array.from(values).sort((a, b) => a.localeCompare(b, "zh-CN"))];
-});
-
-const searchMatchedPosts = computed(() => {
-  if (!normalizedQuery.value) return posts.value;
-
-  return posts.value.filter((post) => {
-    const searchable = [
-      post.title,
-      post.excerpt,
-      ...(post.tags || []),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return searchable.includes(normalizedQuery.value);
-  });
+  const siteTags = [...(site.value?.tags || [])].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  return ["全部", ...siteTags];
 });
 
 const visiblePosts = computed(() => {
   if (activeView.value !== "tags" || selectedTag.value === "全部") {
-    return searchMatchedPosts.value;
+    return posts.value;
   }
 
-  return searchMatchedPosts.value.filter((post) => post.tags?.includes(selectedTag.value));
+  return posts.value.filter((post) => post.tags?.includes(selectedTag.value));
 });
 
 const groupedPosts = computed(() => {
@@ -72,10 +66,11 @@ const resultLabel = computed(() => {
   if (activeView.value === "tags" && selectedTag.value !== "全部") {
     return `${selectedTag.value} · ${visiblePosts.value.length} 篇`;
   }
+  const count = activeView.value === "latest" ? total.value : visiblePosts.value.length;
   if (normalizedQuery.value) {
-    return `搜索结果 · ${visiblePosts.value.length} 篇`;
+    return `搜索结果 · ${count} 篇`;
   }
-  return `共 ${visiblePosts.value.length} 篇文章`;
+  return `共 ${count} 篇文章`;
 });
 
 function setView(view) {
@@ -84,6 +79,7 @@ function setView(view) {
 }
 
 function selectTag(tag) {
+  activeView.value = "tags";
   selectedTag.value = tag;
 }
 
@@ -96,6 +92,50 @@ function clearAllFilters() {
   selectedTag.value = "全部";
 }
 
+function buildRouteQuery() {
+  const query = {};
+  if (activeView.value !== "latest") query.view = activeView.value;
+  if (searchQuery.value.trim()) query.q = searchQuery.value.trim();
+  if (activeView.value === "tags" && selectedTag.value !== "全部") query.tag = selectedTag.value;
+  return query;
+}
+
+function scheduleRouteSync() {
+  if (applyingRouteState) return;
+  if (querySyncTimer) window.clearTimeout(querySyncTimer);
+  querySyncTimer = window.setTimeout(() => {
+    querySyncTimer = 0;
+    router.replace({ name: "posts", query: buildRouteQuery() });
+  }, 180);
+}
+
+function listParams() {
+  const params = { sort: "latest" };
+  const q = searchQuery.value.trim();
+  if (q) params.q = q;
+  if (activeView.value === "latest") {
+    params.page = 1;
+    params.limit = PAGE_SIZE;
+  }
+  return params;
+}
+
+function fetchList({ force = false } = {}) {
+  const params = listParams();
+  const key = JSON.stringify(params);
+  if (!force && key === lastFetchedKey) return;
+  lastFetchedKey = key;
+  loadPosts(params);
+}
+
+function scheduleReload() {
+  if (reloadTimer) window.clearTimeout(reloadTimer);
+  reloadTimer = window.setTimeout(() => {
+    reloadTimer = 0;
+    fetchList();
+  }, 250);
+}
+
 function displayDate(value) {
   return value || "未设置日期";
 }
@@ -106,12 +146,22 @@ function shortDate(value) {
   return month && day ? `${month}-${day}` : value;
 }
 
-function applyRouteTag() {
+async function applyRouteState() {
+  applyingRouteState = true;
+  const requestedView = typeof route.query.view === "string" ? route.query.view : "";
   const tag = typeof route.query.tag === "string" ? route.query.tag.trim() : "";
-  if (tag) {
-    activeView.value = "tags";
-    selectedTag.value = tag;
-  }
+  const query = typeof route.query.q === "string" ? route.query.q : "";
+  const validView = VIEW_OPTIONS.some((item) => item.id === requestedView)
+    ? requestedView
+    : tag
+      ? "tags"
+      : "latest";
+
+  activeView.value = validView;
+  searchQuery.value = query;
+  selectedTag.value = validView === "tags" && tag ? tag : "全部";
+  await nextTick();
+  applyingRouteState = false;
 }
 
 watch([visiblePosts, activeView, loading], () => {
@@ -119,16 +169,40 @@ watch([visiblePosts, activeView, loading], () => {
 });
 
 watch(
-  () => route.query.tag,
+  () => route.query,
   () => {
-    applyRouteTag();
+    applyRouteState();
   },
+  { deep: true },
 );
 
+watch([activeView, selectedTag, searchQuery], () => {
+  scheduleRouteSync();
+});
+
+// Typing is debounced; a discrete view switch reloads immediately.
+watch(normalizedQuery, () => {
+  scheduleReload();
+});
+
+watch(activeView, () => {
+  if (reloadTimer) {
+    window.clearTimeout(reloadTimer);
+    reloadTimer = 0;
+  }
+  fetchList();
+});
+
 onMounted(async () => {
-  applyRouteTag();
-  await loadPosts({ sort: "latest" });
+  ensureSite().catch(() => {});
+  await applyRouteState();
+  fetchList({ force: true });
   refreshReveal();
+});
+
+onBeforeUnmount(() => {
+  if (querySyncTimer) window.clearTimeout(querySyncTimer);
+  if (reloadTimer) window.clearTimeout(reloadTimer);
 });
 </script>
 
@@ -202,8 +276,17 @@ onMounted(async () => {
           :key="post.slug"
           :to="`/posts/${post.slug}`"
           class="article-item print-list-item rv"
+          :class="{ 'article-item--has-cover': !!post.cover_image }"
           :data-reveal-delay="Math.min(index, 8) * 45"
         >
+          <img
+            v-if="post.cover_image"
+            class="article-item__thumb"
+            :src="post.cover_image"
+            alt=""
+            loading="lazy"
+            @error="(event) => event.target.classList.add('is-broken')"
+          >
           <div class="article-meta">
             <span>{{ displayDate(post.published_at) }}</span>
             <span>{{ post.read_time }}</span>
@@ -241,7 +324,7 @@ onMounted(async () => {
       </div>
 
       <div v-else class="unified-tags-view">
-        <div class="tag-filter-row print-tag-cloud rv" role="list" aria-label="标签筛选">
+        <aside class="tag-filter-row print-tag-cloud rv" aria-label="标签筛选">
           <button
             v-for="tag in tags"
             :key="tag"
@@ -252,7 +335,7 @@ onMounted(async () => {
           >
             {{ tag }}
           </button>
-        </div>
+        </aside>
 
         <div class="g2e print-tag-results">
           <RouterLink
@@ -271,6 +354,16 @@ onMounted(async () => {
             </div>
           </RouterLink>
         </div>
+      </div>
+
+      <div
+        v-if="activeView === 'latest' && !loading && !error && hasMore"
+        class="home-section-footer"
+      >
+        <button type="button" class="cover-button" :disabled="loadingMore" @click="loadMore">
+          {{ loadingMore ? "加载中……" : "加载更多" }}
+        </button>
+        <p v-if="loadMoreError" class="feedback print-feedback" role="alert">{{ loadMoreError }}</p>
       </div>
 
       <span class="pg pg--r">— Article Index —</span>

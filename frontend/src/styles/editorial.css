@@ -3280,3 +3280,275 @@ body::before {
     animation: none !important;
   }
 }
+
+/* Article utilities: code copy, heading anchors, previous/next navigation */
+.print-markdown pre.has-copy-button {
+  padding-top: 2.8rem;
+}
+
+.code-copy-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  z-index: 2;
+  min-width: 4.4rem;
+  padding: 0.35rem 0.55rem;
+  color: rgba(232, 223, 208, 0.72);
+  border: 1px solid rgba(232, 223, 208, 0.18);
+  background: rgba(18, 16, 14, 0.48);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.code-copy-button:hover,
+.code-copy-button:focus-visible {
+  color: var(--paper);
+  border-color: rgba(232, 223, 208, 0.48);
+  background: rgba(139, 37, 0, 0.72);
+  outline: none;
+}
+
+.print-markdown h2,
+.print-markdown h3 {
+  position: relative;
+}
+
+.heading-anchor {
+  position: absolute;
+  right: 100%;
+  top: 0.05em;
+  padding-right: 0.45rem;
+  color: var(--accent);
+  border: 0 !important;
+  font-family: var(--f-mono);
+  font-size: 0.55em;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.print-markdown h2:hover > .heading-anchor,
+.print-markdown h3:hover > .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 0.75;
+  transform: translateX(0);
+  outline: none;
+}
+
+.post-sequence-nav {
+  width: min(1040px, calc(100% - 5rem));
+  margin: 1rem auto 2rem;
+  padding-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border-top: 3px double var(--rule);
+  background: var(--rule-light);
+}
+
+.post-sequence-link,
+.post-sequence-placeholder {
+  min-height: 9rem;
+  padding: 1.5rem;
+  background: var(--paper);
+}
+
+.post-sequence-link {
+  display: grid;
+  align-content: center;
+  gap: 0.7rem;
+  transition: color 0.24s ease, background 0.24s ease;
+}
+
+.post-sequence-link > span {
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.post-sequence-link > strong {
+  max-width: 24ch;
+  font-family: var(--f-display);
+  font-size: clamp(1.1rem, 2vw, 1.55rem);
+  line-height: 1.25;
+}
+
+.post-sequence-link--next {
+  justify-items: end;
+  text-align: right;
+}
+
+.post-sequence-link:hover,
+.post-sequence-link:focus-visible {
+  color: var(--paper);
+  background: var(--ink);
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .heading-anchor {
+    position: static;
+    margin-left: 0.35rem;
+    padding: 0;
+    opacity: 0.45;
+    transform: none;
+  }
+
+  .post-sequence-nav {
+    width: calc(100% - 2.7rem);
+    grid-template-columns: 1fr;
+  }
+
+  .post-sequence-placeholder {
+    display: none;
+  }
+
+  .post-sequence-link {
+    min-height: 7.5rem;
+  }
+}
+
+/* Posts directory URL-synced archive and tag layouts */
+.unified-archive-view .print-year-block {
+  padding-top: 0;
+}
+
+.unified-archive-view .archive__li {
+  min-height: 3.4rem;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.unified-archive-view .archive__title {
+  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+}
+
+.unified-tags-view {
+  margin: 0 2.5rem 3rem;
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.unified-tags-view .print-tag-cloud {
+  position: sticky;
+  top: 6rem;
+  margin: 0;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.unified-tags-view .tag-filter-button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.unified-tags-view .print-tag-results {
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .unified-tags-view {
+    margin-right: 1.35rem;
+    margin-left: 1.35rem;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .unified-tags-view .print-tag-cloud {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .unified-tags-view .tag-filter-button {
+    width: auto;
+    flex: 0 0 auto;
+  }
+}
+
+/* ============================================================
+   COVER IMAGES — feature card, detail hero, list thumbnails
+   (cover_image is optional; without it these rules are inert)
+   ============================================================ */
+
+.mimg__img {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mimg__img.is-broken {
+  display: none;
+}
+
+/* Stronger scrim keeps the light feature text legible over photos. */
+.mimg--has-image::before {
+  background: linear-gradient(180deg, rgba(23, 20, 17, 0.32), rgba(23, 20, 17, 0.62));
+}
+
+.post-cover {
+  margin: 1.6rem 0 0;
+}
+
+.post-cover.is-broken {
+  display: none;
+}
+
+.post-cover img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border: 1px solid var(--rule-light);
+}
+
+.article-item--has-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  column-gap: 1.1rem;
+  align-items: start;
+}
+
+.article-item--has-cover > :not(.article-item__thumb) {
+  grid-column: 1;
+}
+
+.article-item__thumb {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--rule-light);
+}
+
+.article-item__thumb.is-broken {
+  display: none;
+}
+
+/* A broken thumbnail collapses the card back to the plain layout. */
+.article-item--has-cover:has(.article-item__thumb.is-broken) {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .article-item--has-cover {
+    grid-template-columns: minmax(0, 1fr) 96px;
+  }
+}

@@ -136,8 +136,17 @@ onMounted(async () => {
           <RouterLink
             :to="`/posts/${leadPost.slug}`"
             class="mimg print-feature-image rv"
+            :class="{ 'mimg--has-image': !!leadPost.cover_image }"
             data-reveal-delay="40"
           >
+            <img
+              v-if="leadPost.cover_image"
+              class="mimg__img"
+              :src="leadPost.cover_image"
+              alt=""
+              loading="lazy"
+              @error="(event) => event.target.classList.add('is-broken')"
+            >
             <div class="feature-spotlight" aria-hidden="true"></div>
             <div class="feature-poster-mark" aria-hidden="true">
               <span>NEW</span>
