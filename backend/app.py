@@ -156,24 +156,30 @@ def create_app():
         if featured is not None:
             wants_featured = featured.lower() == "true"
 
-        data = store.list_posts(
-            tag=tag,
-            featured=wants_featured,
-            published_only=True,
-            sort=sort,
-            search=q or None,
-        )
+        list_kwargs = {
+            "tag": tag,
+            "featured": wants_featured,
+            "published_only": True,
+            "sort": sort,
+            "search": q or None,
+        }
 
         if page is None:
             if limit is not None:
-                data = data[: max(1, min(limit, 50))]
+                list_kwargs["limit"] = max(1, min(limit, 50))
+            data = store.list_posts(**list_kwargs)
             return jsonify([summarize_post(post) for post in data])
 
         page = max(1, page)
         per_page = max(1, min(limit or 10, 50))
-        total = len(data)
         start = (page - 1) * per_page
-        items = data[start : start + per_page]
+        total = store.count_posts(
+            tag=tag,
+            featured=wants_featured,
+            published_only=True,
+            search=q or None,
+        )
+        items = store.list_posts(**list_kwargs, limit=per_page, offset=start)
         return jsonify(
             {
                 "items": [summarize_post(post) for post in items],
@@ -193,22 +199,11 @@ def create_app():
         store.increment_post_click(slug)
         match["click_count"] = int(match.get("click_count") or 0) + 1
 
-        published_posts = store.list_posts(published_only=True)
-        current_index = next(
-            (index for index, post in enumerate(published_posts) if post["slug"] == slug),
-            -1,
-        )
-        previous_post = (
-            summarize_post(published_posts[current_index + 1])
-            if 0 <= current_index < len(published_posts) - 1
-            else None
-        )
-        next_post = (
-            summarize_post(published_posts[current_index - 1])
-            if current_index > 0
-            else None
-        )
+        previous_match, next_match = store.get_adjacent_posts(match)
+        previous_post = summarize_post(previous_match) if previous_match else None
+        next_post = summarize_post(next_match) if next_match else None
 
+        published_posts = store.list_posts(published_only=True)
         current_tags = {tag.lower() for tag in match.get("tags", [])}
         current_category = (match.get("category") or "").strip().lower()
 
@@ -237,6 +232,7 @@ def create_app():
                 "next_post": next_post,
             }
         )
+
     @app.get("/uploads/<path:path>")
     def uploads(path):
         if not is_allowed_public_upload_path(path):

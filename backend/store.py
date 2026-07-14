@@ -42,6 +42,10 @@ def slugify(value: str) -> str:
     return value.strip("-") or f"post-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+
 def estimate_read_time(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", text).strip()
     if not cleaned:
@@ -345,6 +349,9 @@ class BlogStore:
                 html_content TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft'
             );
+
+            CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
+            ON posts (status, published_at DESC, updated_at DESC, id DESC);
             """
         )
 
@@ -356,6 +363,12 @@ class BlogStore:
             connection.execute("ALTER TABLE posts ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0")
         if "cover_image" not in post_columns:
             connection.execute("ALTER TABLE posts ADD COLUMN cover_image TEXT NOT NULL DEFAULT ''")
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
+            ON posts (status, published_at DESC, updated_at DESC, id DESC)
+            """
+        )
 
 
     def _seed_site_profile(self, connection: sqlite3.Connection) -> None:
@@ -435,10 +448,11 @@ class BlogStore:
             if field in data:
                 data[field] = json.loads(data[field] or "[]")
         if "html_content" in data:
-            if data.get("markdown_content"):
-                data["html_content"] = render_markdown(data.get("markdown_content", ""))
-            else:
-                data["html_content"] = data.get("html_content", "")
+            data["html_content"] = data.get("html_content") or (
+                render_markdown(data.get("markdown_content", ""))
+                if data.get("markdown_content")
+                else ""
+            )
         return data
 
     def _avatar_url(self, avatar_path: str) -> str:
@@ -481,16 +495,14 @@ class BlogStore:
         payload["featured_post"] = featured_post
         return payload
 
-    def list_posts(
+    def _build_post_filters(
         self,
         *,
         tag: str | None = None,
         featured: bool | None = None,
         published_only: bool = True,
-        sort: str = "latest",
         search: str | None = None,
-    ) -> list[dict[str, Any]]:
-        query = "SELECT * FROM posts"
+    ) -> tuple[str, list[Any]]:
         conditions = []
         params: list[Any] = []
 
@@ -500,9 +512,7 @@ class BlogStore:
             conditions.append("featured = ?")
             params.append(1 if featured else 0)
         if search and search.strip():
-            needle = search.strip().lower()
-            escaped = needle.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-            pattern = f"%{escaped}%"
+            pattern = f"%{_escape_like(search.strip().lower())}%"
             conditions.append(
                 r"(LOWER(title) LIKE ? ESCAPE '\'"
                 r" OR LOWER(excerpt) LIKE ? ESCAPE '\'"
@@ -510,26 +520,103 @@ class BlogStore:
                 r" OR LOWER(markdown_content) LIKE ? ESCAPE '\')"
             )
             params.extend([pattern, pattern, pattern, pattern])
+        if tag and tag.strip():
+            serialized_tag = json.dumps(tag.strip().lower(), ensure_ascii=False)
+            conditions.append(r"LOWER(tags) LIKE ? ESCAPE '\'")
+            params.append(f"%{_escape_like(serialized_tag)}%")
 
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+        where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
+        return where_sql, params
+
+    @staticmethod
+    def _post_order_clause(sort: str = "latest") -> str:
         if sort == "hot":
-            query += " ORDER BY click_count DESC, published_at DESC, updated_at DESC"
-        else:
-            query += " ORDER BY published_at DESC, updated_at DESC"
+            return " ORDER BY click_count DESC, published_at DESC, updated_at DESC, id DESC"
+        return " ORDER BY published_at DESC, updated_at DESC, id DESC"
+
+    def count_posts(
+        self,
+        *,
+        tag: str | None = None,
+        featured: bool | None = None,
+        published_only: bool = True,
+        search: str | None = None,
+    ) -> int:
+        where_sql, params = self._build_post_filters(
+            tag=tag,
+            featured=featured,
+            published_only=published_only,
+            search=search,
+        )
+        with self.connect() as connection:
+            row = connection.execute(f"SELECT COUNT(*) FROM posts{where_sql}", params).fetchone()
+        return int(row[0] if row else 0)
+
+    def list_posts(
+        self,
+        *,
+        tag: str | None = None,
+        featured: bool | None = None,
+        published_only: bool = True,
+        sort: str = "latest",
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
+        where_sql, params = self._build_post_filters(
+            tag=tag,
+            featured=featured,
+            published_only=published_only,
+            search=search,
+        )
+        query = f"SELECT * FROM posts{where_sql}{self._post_order_clause(sort)}"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(max(0, int(limit)))
+            if offset is not None:
+                query += " OFFSET ?"
+                params.append(max(0, int(offset)))
+        elif offset is not None:
+            query += " LIMIT -1 OFFSET ?"
+            params.append(max(0, int(offset)))
 
         with self.connect() as connection:
             rows = connection.execute(query, params).fetchall()
+        return [self._row_to_dict(row) for row in rows]
 
-        posts = [self._row_to_dict(row) for row in rows]
-        if tag:
-            lowered = tag.lower()
-            posts = [
-                post
-                for post in posts
-                if lowered in {item.lower() for item in post.get("tags", [])}
-            ]
-        return posts
+    def get_adjacent_posts(
+        self,
+        post: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        current = (
+            post.get("published_at") or "",
+            post.get("updated_at") or "",
+            int(post.get("id") or 0),
+        )
+
+        with self.connect() as connection:
+            previous_row = connection.execute(
+                """
+                SELECT * FROM posts
+                WHERE status = 'published'
+                  AND (published_at, updated_at, id) < (?, ?, ?)
+                ORDER BY published_at DESC, updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                current,
+            ).fetchone()
+            next_row = connection.execute(
+                """
+                SELECT * FROM posts
+                WHERE status = 'published'
+                  AND (published_at, updated_at, id) > (?, ?, ?)
+                ORDER BY published_at ASC, updated_at ASC, id ASC
+                LIMIT 1
+                """,
+                current,
+            ).fetchone()
+
+        return self._row_to_dict(previous_row), self._row_to_dict(next_row)
 
     def get_post_by_slug(self, slug: str, *, include_drafts: bool = False) -> dict[str, Any] | None:
         query = "SELECT * FROM posts WHERE slug = ?"
