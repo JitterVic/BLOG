@@ -169,9 +169,13 @@ onBeforeUnmount(() => {
           <path d="m84 30 5-9-11 5Z" fill="#d99487" opacity="0.7" />
           <path d="M31 42c0-18 12-27 29-27s29 9 29 27c1 19-11 32-29 32S30 61 31 42Z" fill="#f8edcf" stroke="#4b3827" stroke-width="2.6" />
 
-          <g class="editor-cat__eyes" fill="none" stroke="#3e3024" stroke-width="2.2" stroke-linecap="round">
-            <path d="M41 44c3 2 7 2 10 0" />
-            <path d="M69 44c3 2 7 2 10 0" />
+          <g class="editor-cat__eyes">
+            <ellipse cx="46" cy="44" rx="4.7" ry="3.8" fill="#fff7dd" stroke="#3e3024" stroke-width="1.7" />
+            <ellipse cx="74" cy="44" rx="4.7" ry="3.8" fill="#fff7dd" stroke="#3e3024" stroke-width="1.7" />
+            <circle cx="46" cy="44.3" r="1.9" fill="#3e3024" />
+            <circle cx="74" cy="44.3" r="1.9" fill="#3e3024" />
+            <circle cx="44.7" cy="43.1" r="0.55" fill="#fffdf3" />
+            <circle cx="72.7" cy="43.1" r="0.55" fill="#fffdf3" />
           </g>
           <g v-if="route.name === 'post'" class="editor-cat__glasses" fill="none" stroke="#7c2f1c" stroke-width="1.5">
             <circle cx="46" cy="43" r="7" />
