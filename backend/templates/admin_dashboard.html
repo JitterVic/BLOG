@@ -417,6 +417,62 @@
         background: rgba(255, 251, 240, 0.58);
       }
 
+      .front-preview {
+        display: grid;
+        gap: 0.85rem;
+        padding: 1rem;
+        border: 1px solid var(--rule-light);
+        background: rgba(255, 251, 240, 0.58);
+      }
+
+      .front-preview__label {
+        margin: 0;
+        color: var(--ink-faded);
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .front-preview__shell {
+        display: grid;
+        grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+        gap: 1rem;
+        align-items: stretch;
+      }
+
+      .front-preview__cover {
+        min-height: 170px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border: 1px solid var(--rule-light);
+        color: var(--ink-faded);
+        background: linear-gradient(135deg, rgba(139, 37, 0, 0.08), rgba(42, 36, 28, 0.04));
+        font-size: 0.72rem;
+        text-align: center;
+      }
+
+      .front-preview__cover img { width: 100%; height: 100%; min-height: 170px; object-fit: cover; }
+      .front-preview__body { display: grid; align-content: center; gap: 0.55rem; }
+      .front-preview__meta { display: flex; gap: 0.55rem; flex-wrap: wrap; color: var(--ink-faded); font-size: 0.68rem; }
+      .front-preview__body h5 { margin: 0; font-family: var(--f-display); font-size: clamp(1.35rem, 2.2vw, 2rem); line-height: 1; }
+      .front-preview__excerpt { margin: 0; color: var(--ink-light); line-height: 1.72; }
+      .front-preview__quote { margin: 0; padding-left: 0.75rem; border-left: 2px solid var(--accent); color: var(--ink-mid); font-size: 0.86rem; }
+      .front-preview__tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+      .front-preview__tags span,
+      .post-link__tags span {
+        display: inline-flex;
+        min-height: 1.35rem;
+        align-items: center;
+        padding: 0 0.45rem;
+        border: 1px solid var(--rule-light);
+        color: var(--accent);
+        background: rgba(139, 37, 0, 0.055);
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
       .markdown-body {
         color: var(--ink-mid);
         font-family: var(--f-display);
@@ -517,6 +573,15 @@
       .post-link:hover { color: var(--accent); background: rgba(255, 251, 240, 0.9); }
       .post-link strong { font-family: var(--f-display); font-size: 1.05rem; line-height: 1.18; }
       .post-link span { color: var(--ink-light); font-size: 0.72rem; }
+      .post-link .post-link__tags span { color: var(--accent); font-size: 0.58rem; }
+      .post-link .post-link__actions span { color: var(--ink-faded); font-size: 0.66rem; }
+      .admin-post-tools { display: grid; grid-template-columns: minmax(0, 1fr) 9rem; gap: 0.55rem; margin-bottom: 0.75rem; }
+      .admin-post-count { margin: 0 0 0.75rem; color: var(--ink-light); font-size: 0.72rem; }
+      .post-link.is-hidden { display: none; }
+      .post-link__meta,
+      .post-link__actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+      .post-link__tags { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+      .post-link__actions { color: var(--ink-faded) !important; font-size: 0.66rem !important; }
 
       .empty-state { padding: 1rem; color: var(--ink-light); background: rgba(244, 239, 230, 0.9); }
 
@@ -530,6 +595,7 @@
       @media (max-width: 1180px) {
         .layout,
         .split-area,
+        .front-preview__shell,
         .profile-shell { grid-template-columns: 1fr; }
         .side-column { position: static; }
         .issue-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -540,6 +606,7 @@
         .topbar { grid-template-columns: 1fr; align-items: start; }
         .topbar-actions { justify-content: flex-start; }
         .issue-strip,
+        .admin-post-tools,
         .form-grid { grid-template-columns: 1fr; }
         .card-head { grid-template-columns: 1fr; }
         .field-wide { grid-column: auto; }
@@ -699,7 +766,7 @@
             <div class="card-head">
               <div>
                 <h2>文章发行室</h2>
-                <p>对应前台文章列表、详情页 hero、封面图、标签和「最近 / 热门」信息流。</p>
+                <p>对应前台文章列表、详情页 hero、封面图、标签和「最近 / 热门」信息流；最近按发布日期，热门按阅读量。</p>
               </div>
               <span class="eyebrow">Markdown Workflow</span>
             </div>
@@ -711,7 +778,7 @@
                 <section class="form-section">
                   <div>
                     <h4>文章元信息</h4>
-                    <p>这些字段会出现在首页精选卡、文章索引、详情页页头和相关推荐里。</p>
+                    <p>这些字段会出现在首页最近/热门卡片、文章索引、详情页页头和相关推荐里。</p>
                   </div>
                   <div class="form-grid">
                     <label class="field">
@@ -744,13 +811,6 @@
                       <input type="text" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" />
                     </label>
 
-                    <label class="field checkbox-field">
-                      <span>首页精选</span>
-                      <label class="checkline">
-                        <input type="checkbox" name="featured" {% if edit_post.featured %}checked{% endif %} />
-                        <span>设为首页精选文章</span>
-                      </label>
-                    </label>
 
                     <label class="field-wide">
                       <span>摘要</span>
@@ -772,7 +832,7 @@
                 <section class="form-section">
                   <div>
                     <h4>正文与预览</h4>
-                    <p>导入 Markdown、刷新预览，再选择保存草稿或发布到前台。</p>
+                    <p>导入 Markdown、刷新预览，并核对前台卡片与详情页头部会展示的信息。</p>
                   </div>
 
                   <div class="toolbar">
@@ -786,7 +846,21 @@
                     {% endif %}
                   </div>
 
-                  <p class="helper">预览会同步计算阅读时间和自动摘要；发布后前台搜索、分页、上下篇都会立即更新。</p>
+                  <p class="helper">预览会同步计算阅读时间和自动摘要；发布后前台搜索、分页、上下篇、相关推荐和热门排序都会立即更新。</p>
+
+                  <div class="front-preview" aria-label="前台文章展示核对">
+                    <p class="front-preview__label">Frontend Fields Check</p>
+                    <div class="front-preview__shell">
+                      <div class="front-preview__cover" id="front-preview-cover">无封面图时，前台显示文字卡片。</div>
+                      <div class="front-preview__body">
+                        <div class="front-preview__meta" id="front-preview-meta"></div>
+                        <h5 id="front-preview-title">未命名文章</h5>
+                        <p class="front-preview__excerpt" id="front-preview-excerpt">这篇文章暂时还没有摘要。</p>
+                        <p class="front-preview__quote" id="front-preview-quote" hidden></p>
+                        <div class="front-preview__tags" id="front-preview-tags"></div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="split-area">
                     <label class="field-wide">
@@ -863,19 +937,51 @@
             <div class="card-head">
               <div>
                 <h3>全部稿件</h3>
-                <p>点击稿件继续编辑；状态与前台发布可见性一致。</p>
+                <p>点击稿件继续编辑；可按标题、栏目、标签和状态核对当前前台可见性。</p>
               </div>
               <span class="eyebrow">Posts</span>
             </div>
 
+            {% if admin_posts %}
+              <div class="admin-post-tools" aria-label="后台稿件筛选">
+                <input type="search" id="admin-post-search" placeholder="搜索标题、slug、栏目或标签" autocomplete="off" />
+                <select id="admin-post-status" aria-label="按发布状态筛选">
+                  <option value="">全部状态</option>
+                  <option value="published">已发布</option>
+                  <option value="draft">草稿</option>
+                </select>
+              </div>
+              <p class="admin-post-count" id="admin-post-count">共 {{ admin_posts|length }} 篇稿件</p>
+            {% endif %}
+
             <div class="post-list">
               {% if admin_posts %}
                 {% for item in admin_posts %}
-                  <a class="post-link" href="{{ url_for('admin_dashboard', post_id=item.id) }}">
+                  <a
+                    class="post-link"
+                    href="{{ url_for('admin_dashboard', post_id=item.id) }}"
+                    data-post-item
+                    data-status="{{ item.status }}"
+                    data-search="{{ (item.title ~ ' ' ~ item.slug ~ ' ' ~ (item.category or '') ~ ' ' ~ (item.tags|join(' ')))|lower }}"
+                  >
                     <strong>{{ item.title }}</strong>
-                    <span>
+                    <span class="post-link__meta">
                       <em class="status-badge {{ item.status }}">{{ '已发布' if item.status == 'published' else '草稿' }}</em>
-                      · {{ item.category or 'Article' }} · {{ item.published_at or item.updated_at }}
+                      <span>{{ item.category or 'Article' }}</span>
+                      <span>{{ item.published_at or '未设置发布日期' }}</span>
+                      <span>{{ item.read_time or '1 min' }}</span>
+                      <span>{{ item.click_count or 0 }} 次阅读</span>
+                    </span>
+                    {% if item.tags %}
+                      <span class="post-link__tags">
+                        {% for tag in item.tags[:4] %}<span>#{{ tag }}</span>{% endfor %}
+                      </span>
+                    {% endif %}
+                    <span class="post-link__actions">
+                      <span>最近更新：{{ item.updated_at }}</span>
+                      {% if item.status == 'published' and item.slug %}
+                        <span>前台：/posts/{{ item.slug }}</span>
+                      {% endif %}
                     </span>
                   </a>
                 {% endfor %}
@@ -902,11 +1008,98 @@
       const slugInput = document.getElementById("slug");
       const excerptInput = document.getElementById("excerpt");
       const readTimeInput = document.getElementById("read_time");
+      const categoryInput = document.querySelector('[name="category"]');
+      const publishedAtInput = document.querySelector('[name="published_at"]');
+      const tagsInput = document.querySelector('[name="tags"]');
+      const heroQuoteInput = document.querySelector('[name="hero_quote"]');
+      const coverImageInput = document.getElementById("cover_image");
+      const frontPreviewCover = document.getElementById("front-preview-cover");
+      const frontPreviewMeta = document.getElementById("front-preview-meta");
+      const frontPreviewTitle = document.getElementById("front-preview-title");
+      const frontPreviewExcerpt = document.getElementById("front-preview-excerpt");
+      const frontPreviewQuote = document.getElementById("front-preview-quote");
+      const frontPreviewTags = document.getElementById("front-preview-tags");
+      const adminPostSearch = document.getElementById("admin-post-search");
+      const adminPostStatus = document.getElementById("admin-post-status");
+      const adminPostCount = document.getElementById("admin-post-count");
+      const adminPostItems = Array.from(document.querySelectorAll("[data-post-item]"));
       let latestImageMarkdown = "";
 
+      function escapeHtml(value = "") {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        }[char]));
+      }
+
+      function splitTags(value = "") {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
       function setPreviewMessage(message, isError = false) {
+        if (!previewMeta) return;
         previewMeta.textContent = message;
         previewMeta.style.color = isError ? "#991b1b" : "#64748b";
+      }
+
+      function updateFrontPreview() {
+        if (!frontPreviewTitle) return;
+
+        const title = titleInput?.value.trim() || "未命名文章";
+        const category = categoryInput?.value.trim() || "Article";
+        const publishedAt = publishedAtInput?.value.trim() || "未设置日期";
+        const readTime = readTimeInput?.value.trim() || "1 min";
+        const excerpt = excerptInput?.value.trim() || "这篇文章暂时还没有摘要。";
+        const quote = heroQuoteInput?.value.trim() || "";
+        const coverImage = coverImageInput?.value.trim() || "";
+        const tags = splitTags(tagsInput?.value || "");
+
+        frontPreviewTitle.textContent = title;
+        frontPreviewExcerpt.textContent = excerpt;
+        frontPreviewMeta.innerHTML = [category, readTime, publishedAt]
+          .map((item) => `<span>${escapeHtml(item)}</span>`)
+          .join("");
+
+        frontPreviewQuote.textContent = quote;
+        frontPreviewQuote.hidden = !quote;
+
+        frontPreviewTags.hidden = tags.length === 0;
+        frontPreviewTags.innerHTML = tags
+          .map((tag) => `<span>#${escapeHtml(tag)}</span>`)
+          .join("");
+
+        if (coverImage) {
+          frontPreviewCover.innerHTML = `<img src="${escapeHtml(coverImage)}" alt="${escapeHtml(title)}" />`;
+        } else {
+          frontPreviewCover.textContent = "无封面图时，前台显示文字卡片。";
+        }
+      }
+
+      function updateAdminPostFilter() {
+        if (!adminPostItems.length) return;
+        const query = (adminPostSearch?.value || "").trim().toLowerCase();
+        const status = adminPostStatus?.value || "";
+        let visible = 0;
+
+        adminPostItems.forEach((item) => {
+          const matchesQuery = !query || (item.dataset.search || "").includes(query);
+          const matchesStatus = !status || item.dataset.status === status;
+          const shouldShow = matchesQuery && matchesStatus;
+          item.classList.toggle("is-hidden", !shouldShow);
+          if (shouldShow) visible += 1;
+        });
+
+        if (adminPostCount) {
+          adminPostCount.textContent = (query || status)
+            ? `显示 ${visible} / ${adminPostItems.length} 篇稿件`
+            : `共 ${adminPostItems.length} 篇稿件`;
+        }
       }
 
       function renderMediaResult({ url = "", message = "", isError = false } = {}) {
@@ -914,19 +1107,21 @@
         mediaResult.classList.add(isError ? "is-error" : "is-success");
 
         if (!url) {
-          mediaResult.innerHTML = `<div class="result-copy">${message || "操作未完成。"}</div>`;
+          mediaResult.innerHTML = `<div class="result-copy">${escapeHtml(message || "操作未完成。")}</div>`;
           latestImageMarkdown = "";
           return;
         }
 
         const markdownSnippet = `![](${url})`;
+        const safeUrl = escapeHtml(url);
+        const safeMarkdown = escapeHtml(markdownSnippet);
         latestImageMarkdown = markdownSnippet;
         mediaResult.innerHTML = `
-          <img src="${url}" alt="uploaded preview" class="result-preview" />
+          <img src="${safeUrl}" alt="uploaded preview" class="result-preview" />
           <div class="result-copy">上传成功，可以直接复制下面两段中的任意一种使用。</div>
-          <div class="copy-row"><code>${url}</code><button type="button" data-copy="${url}">复制 URL</button></div>
-          <div class="copy-row"><code>${markdownSnippet}</code><button type="button" data-copy="${markdownSnippet.replace(/"/g, '&quot;')}">复制 Markdown</button></div>
-          <div class="copy-row"><code>${url}</code><button type="button" data-set-cover="${url}">设为封面</button></div>
+          <div class="copy-row"><code>${safeUrl}</code><button type="button" data-copy="${safeUrl}">复制 URL</button></div>
+          <div class="copy-row"><code>${safeMarkdown}</code><button type="button" data-copy="${safeMarkdown}">复制 Markdown</button></div>
+          <div class="copy-row"><code>${safeUrl}</code><button type="button" data-set-cover="${safeUrl}">设为封面</button></div>
         `;
       }
 
@@ -952,6 +1147,7 @@
           setPreviewMessage(`预计阅读时间：${data.read_time} ｜ 自动摘要：${data.excerpt || "无"}`);
           if (!excerptInput.value && data.excerpt) excerptInput.value = data.excerpt;
           if (!readTimeInput.value && data.read_time) readTimeInput.value = data.read_time;
+          updateFrontPreview();
         } catch (error) {
           setPreviewMessage(error.message || "预览失败，请稍后再试。", true);
         }
@@ -978,6 +1174,7 @@
           slugInput.value = data.slug || slugInput.value;
           excerptInput.value = data.excerpt || excerptInput.value;
           readTimeInput.value = data.read_time || readTimeInput.value;
+          updateFrontPreview();
         } catch (error) {
           setPreviewMessage(error.message || "导入失败，请检查文件格式。", true);
         } finally {
@@ -1010,10 +1207,10 @@
       mediaResult?.addEventListener("click", async (event) => {
         const coverButton = event.target.closest("[data-set-cover]");
         if (coverButton) {
-          const coverInput = document.getElementById("cover_image");
-          if (coverInput) {
-            coverInput.value = coverButton.getAttribute("data-set-cover") || "";
+          if (coverImageInput) {
+            coverImageInput.value = coverButton.getAttribute("data-set-cover") || "";
             coverButton.textContent = "已设为封面";
+            updateFrontPreview();
             setTimeout(() => (coverButton.textContent = "设为封面"), 1200);
           }
           return;
@@ -1041,7 +1238,14 @@
         markdownInput.focus();
         renderMediaResult({ message: "图片 Markdown 已插入正文末尾。", url: latestImageMarkdown.match(/\((.*)\)/)?.[1] || "" });
       });
+
+      [titleInput, categoryInput, publishedAtInput, readTimeInput, excerptInput, tagsInput, heroQuoteInput, coverImageInput]
+        .forEach((input) => input?.addEventListener("input", updateFrontPreview));
+      adminPostSearch?.addEventListener("input", updateAdminPostFilter);
+      adminPostStatus?.addEventListener("change", updateAdminPostFilter);
+
+      updateFrontPreview();
+      updateAdminPostFilter();
     </script>
   </body>
 </html>
-

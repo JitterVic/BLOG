@@ -46,21 +46,52 @@ def is_safe_admin_next(target: str | None, admin_prefix: str) -> bool:
 
 
 def summarize_post(post):
+    """Public list payload used by the current Vue frontend."""
     return {
-        "id": post["id"],
         "slug": post["slug"],
         "title": post["title"],
         "excerpt": post["excerpt"],
         "published_at": post["published_at"],
         "read_time": post["read_time"],
         "category": post["category"],
-        "featured": bool(post["featured"]),
-        "tone": post["tone"],
+        "tags": post["tags"],
+        "cover_image": post.get("cover_image") or "",
+        "click_count": int(post.get("click_count") or 0),
+    }
+
+
+def summarize_related_post(post):
+    return {
+        "slug": post["slug"],
+        "title": post["title"],
+        "excerpt": post["excerpt"],
+        "category": post["category"],
+    }
+
+
+def summarize_adjacent_post(post):
+    return {
+        "slug": post["slug"],
+        "title": post["title"],
+    }
+
+
+def build_post_detail_payload(post, *, related_posts, previous_post, next_post):
+    return {
+        "slug": post["slug"],
+        "title": post["title"],
+        "excerpt": post["excerpt"],
+        "published_at": post["published_at"],
+        "read_time": post["read_time"],
+        "category": post["category"],
         "tags": post["tags"],
         "hero_quote": post["hero_quote"],
         "cover_image": post.get("cover_image") or "",
-        "click_count": int(post.get("click_count") or 0),
-        "status": post.get("status", "published"),
+        "html_content": post.get("html_content") or "",
+        "sections": post.get("sections") or [],
+        "related_posts": related_posts,
+        "previous_post": previous_post,
+        "next_post": next_post,
     }
 
 
@@ -146,19 +177,13 @@ def create_app():
     @app.get("/api/posts")
     def posts():
         tag = request.args.get("tag")
-        featured = request.args.get("featured")
         limit = request.args.get("limit", type=int)
         sort = request.args.get("sort", "latest")
         q = (request.args.get("q") or "").strip()
         page = request.args.get("page", type=int)
 
-        wants_featured = None
-        if featured is not None:
-            wants_featured = featured.lower() == "true"
-
         list_kwargs = {
             "tag": tag,
-            "featured": wants_featured,
             "published_only": True,
             "sort": sort,
             "search": q or None,
@@ -175,7 +200,6 @@ def create_app():
         start = (page - 1) * per_page
         total = store.count_posts(
             tag=tag,
-            featured=wants_featured,
             published_only=True,
             search=q or None,
         )
@@ -200,8 +224,8 @@ def create_app():
         match["click_count"] = int(match.get("click_count") or 0) + 1
 
         previous_match, next_match = store.get_adjacent_posts(match)
-        previous_post = summarize_post(previous_match) if previous_match else None
-        next_post = summarize_post(next_match) if next_match else None
+        previous_post = summarize_adjacent_post(previous_match) if previous_match else None
+        next_post = summarize_adjacent_post(next_match) if next_match else None
 
         published_posts = store.list_posts(published_only=True)
         current_tags = {tag.lower() for tag in match.get("tags", [])}
@@ -221,16 +245,15 @@ def create_app():
             key=lambda post: (related_score(post), post.get("published_at", "")),
             reverse=True,
         )
-        related_posts = [summarize_post(post) for post in related_candidates[:2]]
+        related_posts = [summarize_related_post(post) for post in related_candidates[:2]]
 
         return jsonify(
-            {
-                **match,
-                "featured": bool(match["featured"]),
-                "related_posts": related_posts,
-                "previous_post": previous_post,
-                "next_post": next_post,
-            }
+            build_post_detail_payload(
+                match,
+                related_posts=related_posts,
+                previous_post=previous_post,
+                next_post=next_post,
+            )
         )
 
     @app.get("/uploads/<path:path>")

@@ -488,11 +488,10 @@ class BlogStore:
         profile = self.get_site_profile()
         posts = self.list_posts(published_only=True)
         tags = sorted({tag for post in posts for tag in post.get("tags", [])})
-        featured_post = next((post for post in posts if post.get("featured")), None)
 
-        payload = {**SITE_CONFIG, **profile}
+        payload = {key: value for key, value in SITE_CONFIG.items() if key != "featured_slug"}
+        payload.update(profile)
         payload["tags"] = tags
-        payload["featured_post"] = featured_post
         return payload
 
     def _build_post_filters(
@@ -749,10 +748,12 @@ class BlogStore:
             published_at = date.today().isoformat()
 
         tags = [item.strip() for item in form_data.get("tags", "").split(",") if item.strip()]
-        featured = 1 if form_data.get("featured") == "on" else 0
+        # These legacy columns remain for database compatibility, but the current
+        # frontend no longer has article-level featured/tone behavior.
+        featured = 0
         read_time = form_data.get("read_time", "").strip() or estimate_read_time(markdown_content)
         category = form_data.get("category", "").strip()
-        tone = form_data.get("tone", "amber").strip() or "amber"
+        tone = "amber"
         hero_quote = form_data.get("hero_quote", "").strip()
         cover_image = form_data.get("cover_image", "").strip()
         if cover_image and not _is_safe_image_url(cover_image):
