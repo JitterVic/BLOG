@@ -631,3 +631,72 @@
       @media (max-width: 1180px) {
         .dashboard-layout { grid-template-columns: 1fr; }
       }
+
+
+/* Dedicated writing studio */
+.admin-page--write { padding-bottom: 6.5rem; }
+.write-studio { width: 100%; }
+.write-form { display: grid; gap: 1rem; }
+.metadata-drawer { border: 1px solid var(--rule-light); border-top: 3px double var(--rule); background: rgba(244, 239, 230, 0.92); }
+.metadata-drawer > summary { min-height: 4.5rem; padding: 0.9rem 1.1rem; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.9rem; cursor: pointer; list-style: none; }
+.metadata-drawer > summary::-webkit-details-marker { display: none; }
+.metadata-drawer > summary span,
+.metadata-drawer > summary small { color: var(--ink-faded); font-family: var(--f-mono); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.metadata-drawer > summary strong { font-family: var(--f-display); font-size: 1.2rem; }
+.metadata-drawer[open] > summary { border-bottom: 1px solid var(--rule-light); }
+.metadata-drawer__content { padding: 1rem; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: 1rem; }
+.metadata-fields,
+.media-station { padding: 1rem; border: 1px solid var(--rule-light); background: rgba(255, 251, 240, 0.45); }
+.metadata-drawer .front-preview { margin: 0; }
+.media-station { display: grid; align-content: start; gap: 0.8rem; }
+.media-station h3 { margin: 0.25rem 0; font-family: var(--f-display); font-size: 1.45rem; }
+.writing-workspace { min-height: calc(100vh - 15rem); display: grid; grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr); overflow: hidden; border: 1px solid var(--rule); background: rgba(244, 239, 230, 0.9); }
+.writing-pane { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.writing-pane--preview { grid-template-rows: auto minmax(0, 1fr); background: rgba(255, 251, 240, 0.58); }
+.writing-pane__head { min-height: 4.3rem; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--rule-light); }
+.writing-pane__head > div { display: grid; gap: 0.18rem; }
+.writing-pane__head span,
+.writing-pane__head small { color: var(--ink-faded); font-family: var(--f-mono); font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.writing-pane__head strong { font-family: var(--f-display); font-size: 1.18rem; }
+.markdown-toolbar { padding: 0.55rem 0.65rem; display: flex; flex-wrap: wrap; gap: 0.35rem; border-bottom: 1px solid var(--rule-light); background: rgba(235, 229, 216, 0.7); }
+.markdown-toolbar button { min-width: 2.35rem; min-height: 2.15rem; padding: 0 0.58rem; color: var(--ink-mid); border: 1px solid var(--rule-light); background: rgba(255, 251, 240, 0.72); cursor: pointer; font-family: var(--f-mono); font-size: 0.66rem; }
+.markdown-toolbar button:hover,
+.markdown-toolbar button:focus-visible { color: var(--paper); background: var(--ink); outline: none; }
+.studio-textarea { width: 100%; min-height: 64vh; height: 100%; padding: 1.15rem; resize: none; border: 0; background: rgba(255, 251, 240, 0.38); font-size: 0.9rem; line-height: 1.75; outline: none; }
+.studio-textarea:focus { box-shadow: inset 3px 0 0 var(--accent); }
+.writing-drop-hint { margin: 0; padding: 0.6rem 0.9rem; color: var(--ink-faded); border-top: 1px solid var(--rule-light); font-family: var(--f-mono); font-size: 0.55rem; letter-spacing: 0.04em; }
+.workspace-divider { position: relative; cursor: col-resize; background: var(--paper-dark); border-right: 1px solid var(--rule-light); border-left: 1px solid var(--rule-light); touch-action: none; }
+.workspace-divider span { position: absolute; top: 50%; left: 50%; width: 2px; height: 4rem; background: var(--accent); transform: translate(-50%, -50%); opacity: 0.55; }
+.workspace-divider:hover,
+.workspace-divider:focus-visible,
+.workspace-divider.is-dragging { background: rgba(139, 37, 0, 0.13); outline: none; }
+.studio-preview { max-height: calc(100vh - 13rem); padding: clamp(1.2rem, 3vw, 2.4rem); overflow: auto; border: 0; background: transparent; }
+.studio-preview pre { position: relative; padding: 1rem; overflow: auto; background: #eee7db; border-left: 3px solid var(--accent); }
+.studio-preview pre code.hljs { padding: 0; background: transparent; }
+.write-action-bar { position: fixed; right: 0; bottom: 0; left: 0; z-index: 80; min-height: 4.7rem; padding: 0.75rem max(1rem, calc((100vw - 1480px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--paper); background: rgba(28, 23, 16, 0.96); border-top: 1px solid rgba(244, 239, 230, 0.22); box-shadow: 0 -12px 34px rgba(28, 23, 16, 0.18); backdrop-filter: blur(10px); }
+.write-save-state { display: flex; align-items: center; gap: 0.55rem; font-family: var(--f-mono); font-size: 0.62rem; letter-spacing: 0.05em; }
+.status-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #9a8f7f; box-shadow: 0 0 0 4px rgba(244, 239, 230, 0.08); }
+.write-save-state.is-working .status-dot { background: #d7a833; }
+.write-save-state.is-saved .status-dot { background: #4d9b66; }
+.write-save-state.is-error .status-dot { background: #d65b4a; }
+.write-action-bar__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.55rem; }
+.write-action-bar button,
+.write-action-bar a { min-height: 2.55rem; padding: 0 0.85rem; display: inline-flex; align-items: center; justify-content: center; color: var(--paper); border: 1px solid rgba(244, 239, 230, 0.32); background: transparent; cursor: pointer; font-size: 0.68rem; font-weight: 700; }
+.write-action-bar .primary { color: var(--ink); border-color: var(--paper); background: var(--paper); }
+.write-action-bar .danger-button { color: #ffd4cd; border-color: rgba(255, 139, 119, 0.45); }
+
+@media (max-width: 980px) {
+  .metadata-drawer__content { grid-template-columns: 1fr; }
+  .writing-workspace { min-height: auto; grid-template-columns: 1fr !important; }
+  .workspace-divider { display: none; }
+  .studio-textarea { min-height: 56vh; }
+  .studio-preview { max-height: none; min-height: 45vh; }
+}
+
+@media (max-width: 760px) {
+  .metadata-drawer > summary { grid-template-columns: 1fr; gap: 0.25rem; }
+  .write-action-bar { align-items: stretch; flex-direction: column; }
+  .write-action-bar__buttons { justify-content: stretch; }
+  .write-action-bar button,
+  .write-action-bar a { flex: 1 1 auto; }
+}
