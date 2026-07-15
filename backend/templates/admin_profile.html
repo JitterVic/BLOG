@@ -1,0 +1,120 @@
+{% extends "admin_base.html" %}
+{% set admin_page = "profile" %}
+
+{% block title %}封面资料 · 至知 Journal{% endblock %}
+{% block page_title %}封面资料{% endblock %}
+{% block page_description %}维护首页身份、联系卡片、关于页简介、更新日历与头像。{% endblock %}
+
+{% block content %}
+  <main class="page-single">
+    <section class="card profile-card" id="profile-card">
+            <div class="card-head">
+              <div>
+                <h2>封面 / 关于资料</h2>
+                <p>对应前台「封面」的 masthead、联系卡片，以及「关于」页的简介和更新日历。</p>
+              </div>
+              <span class="eyebrow">Cover + About</span>
+            </div>
+
+            <form method="post" action="{{ url_for('admin_profile') }}" enctype="multipart/form-data">
+              <div class="profile-shell">
+                <div class="form-stack">
+                  <section class="form-section">
+                    <div>
+                      <h4>站点身份</h4>
+                      <p>同步前台封面标题、角色、地点与首页导语。</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>站点名称</span>
+                        <input type="text" name="name" value="{{ profile_form.name }}" placeholder="e.g. Study Without End" required />
+                      </label>
+
+                      <label class="field">
+                        <span>角色身份</span>
+                        <input type="text" name="role" value="{{ profile_form.role }}" placeholder="全栈开发者 / 终身学习者" />
+                      </label>
+
+                      <label class="field">
+                        <span>所在位置</span>
+                        <input type="text" name="location" value="{{ profile_form.location }}" placeholder="e.g. China / Loves Tech" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>封面主标题</span>
+                        <input type="text" name="headline" value="{{ profile_form.headline }}" placeholder="首页主标题，例如：记录成长的点点滴滴" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>封面导语</span>
+                        <textarea class="small-textarea" name="summary" placeholder="首页简介，一两句话说明你是谁、在做什么。">{{ profile_form.summary }}</textarea>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="form-section">
+                    <div>
+                      <h4>联系卡片</h4>
+                      <p>与前台首页 / 页脚的 Email、GitHub 卡片保持一致。</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Email</span>
+                        <input type="email" name="email" value="{{ profile_form.email }}" placeholder="yourname@example.com" />
+                      </label>
+
+                      <label class="field">
+                        <span>GitHub 显示文本</span>
+                        <input type="text" name="github_label" value="{{ profile_form.github_label }}" placeholder="github.com/yourname" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>GitHub 链接</span>
+                        <input type="url" name="github_url" value="{{ profile_form.github_url }}" placeholder="https://github.com/yourname" />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="form-section">
+                    <div>
+                      <h4>关于页内容</h4>
+                      <p>简介一行一段；更新日历使用 <code>Date | Event</code>，对应前台时间线。</p>
+                    </div>
+                    <div class="form-grid">
+                      <label class="field-wide">
+                        <span>关于页题记</span>
+                        <input type="text" name="hero_note" value="{{ profile_form.hero_note }}" placeholder="Short sentence shown on the about page" />
+                      </label>
+
+                      <label class="field-wide">
+                        <span>关于页简介</span>
+                        <textarea name="about_intro" placeholder="One paragraph per line">{{ profile_form.about_intro_text }}</textarea>
+                      </label>
+
+                      <label class="field-wide">
+                        <span>更新日历</span>
+                        <textarea class="small-textarea" name="update_calendar" placeholder="2026-03-21 | Homepage redesign">{{ profile_form.update_calendar_text }}</textarea>
+                      </label>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="avatar-panel">
+                  <span class="fieldset-label">头像上传</span>
+                  {% if profile.avatar_url %}
+                    <img src="{{ profile.avatar_url }}" alt="avatar" class="avatar-preview" />
+                  {% else %}
+                    <div class="avatar-fallback">{{ (profile_form.name or 'A')[:1] }}</div>
+                  {% endif %}
+                  <input type="file" name="avatar" accept="image/*" />
+                  <p class="helper">支持常见图片格式和中文文件名，保存后前台头像立即同步。</p>
+                </div>
+              </div>
+
+              <div class="toolbar">
+                <button type="submit" class="primary">保存封面资料</button>
+              </div>
+            </form>
+          </section>
+  </main>
+{% endblock %}

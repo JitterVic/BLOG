@@ -289,21 +289,41 @@ def create_app():
         flash("你已退出后台。", "success")
         return redirect(url_for("admin_login"))
 
+    def build_admin_context(**extra):
+        stats = store.stats()
+        stats["admin_prefix"] = admin_prefix
+        return {"stats": stats, **extra}
+
     @app.get(admin_prefix)
     @admin_required
     def admin_dashboard():
-        selected_post_id = request.args.get("post_id", type=int)
-        edit_post = build_edit_post(store.get_post_by_id(selected_post_id) if selected_post_id else None)
-        profile = store.get_site_profile()
-        stats = store.stats()
-        stats["admin_prefix"] = admin_prefix
         return render_template(
             "admin_dashboard.html",
-            profile_form=build_profile_form(profile),
-            profile=profile,
-            admin_posts=store.list_admin_posts(),
-            edit_post=edit_post,
-            stats=stats,
+            **build_admin_context(admin_posts=store.list_admin_posts()),
+        )
+
+    @app.get(f"{admin_prefix}/write", defaults={"post_id": None})
+    @app.get(f"{admin_prefix}/write/<int:post_id>")
+    @admin_required
+    def admin_write(post_id):
+        post = store.get_post_by_id(post_id) if post_id else None
+        if post_id and post is None:
+            abort(404)
+        return render_template(
+            "admin_write.html",
+            **build_admin_context(edit_post=build_edit_post(post)),
+        )
+
+    @app.get(f"{admin_prefix}/profile")
+    @admin_required
+    def admin_profile_page():
+        profile = store.get_site_profile()
+        return render_template(
+            "admin_profile.html",
+            **build_admin_context(
+                profile_form=build_profile_form(profile),
+                profile=profile,
+            ),
         )
 
     @app.post(f"{admin_prefix}/profile")
@@ -315,7 +335,7 @@ def create_app():
             flash(str(exc), "error")
         else:
             flash("个人资料已更新。", "success")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_profile_page"))
 
     @app.post(f"{admin_prefix}/posts/save")
     @admin_required
@@ -326,10 +346,13 @@ def create_app():
             saved_id = store.save_post(request.form, post_id=post_id, action=action)
         except ValueError as exc:
             flash(str(exc), "error")
-            return redirect(url_for("admin_dashboard", post_id=post_id) if post_id else url_for("admin_dashboard"))
+            if post_id:
+                return redirect(url_for("admin_write", post_id=post_id))
+            return redirect(url_for("admin_write"))
 
-        flash("文章已保存为草稿/已下架。" if action == "draft" else "文章已发布。", "success")
-        return redirect(url_for("admin_dashboard", post_id=saved_id))
+        message = "文章已保存为草稿/已下架。" if action == "draft" else "文章已发布。"
+        flash(message, "success")
+        return redirect(url_for("admin_write", post_id=saved_id))
 
     @app.post(f"{admin_prefix}/posts/<int:post_id>/delete")
     @admin_required
