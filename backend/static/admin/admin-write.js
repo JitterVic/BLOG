@@ -310,3 +310,225 @@ postForm?.addEventListener("submit", () => setStatus("\u6b63\u5728\u4fdd\u5b58\u
 highlightPreview();
 updateFrontPreview();
 schedulePreview();
+
+
+const postIdInput = document.getElementById("post-id");
+const recoveryBanner = document.getElementById("draft-recovery-banner");
+const recoveryTime = document.getElementById("draft-recovery-time");
+const restoreLocalDraftButton = document.getElementById("restore-local-draft");
+const discardLocalDraftButton = document.getElementById("discard-local-draft");
+let localSaveTimer = null;
+let serverSaveTimer = null;
+let dirty = false;
+let isSubmitting = false;
+
+function currentPostId() {
+  return String(postIdInput?.value || postForm?.dataset.postId || "").trim();
+}
+
+function localDraftKey() {
+  return `draft:${currentPostId() || "new"}`;
+}
+
+function collectDraftFields() {
+  if (!postForm) return {};
+  const fields = {};
+  const formData = new FormData(postForm);
+  formData.forEach((value, key) => {
+    if (typeof value === "string") fields[key] = value;
+  });
+  return fields;
+}
+
+function readLocalDraft(key = localDraftKey()) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null");
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function saveLocalDraft({ announce = true } = {}) {
+  if (!postForm) return null;
+  const payload = {
+    savedAt: Date.now(),
+    serverUpdatedAt: postForm.dataset.serverUpdatedAt || "",
+    fields: collectDraftFields(),
+  };
+  localStorage.setItem(localDraftKey(), JSON.stringify(payload));
+  if (announce) setStatus("\u672c\u5730\u8349\u7a3f\u5df2\u4fdd\u5b58", "saved");
+  return payload;
+}
+
+function migrateLocalDraftKey(oldKey) {
+  const nextKey = localDraftKey();
+  if (oldKey === nextKey) return;
+  const payload = localStorage.getItem(oldKey);
+  if (payload) localStorage.setItem(nextKey, payload);
+  localStorage.removeItem(oldKey);
+}
+
+function formatClock(value = Date.now()) {
+  return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function persistDraftToServer() {
+  if (!postForm || isSubmitting) return;
+  const status = postForm.dataset.postStatus || "draft";
+  if (status === "published") {
+    setStatus("\u5df2\u53d1\u5e03\u6587\u7ae0\uff1a\u4ec5\u672c\u5730\u81ea\u52a8\u4fdd\u5b58", "saved");
+    return;
+  }
+  if (!titleInput?.value.trim()) {
+    setStatus("\u586b\u5199\u6807\u9898\u540e\u5c06\u81ea\u52a8\u4fdd\u5b58\u5230\u670d\u52a1\u5668", "working");
+    return;
+  }
+
+  const oldKey = localDraftKey();
+  try {
+    setStatus("\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026", "working");
+    const data = await fetchJson(document.body.dataset.autosaveUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ post_id: currentPostId() || null, fields: collectDraftFields() }),
+    });
+    if (!currentPostId() && data.id) {
+      postIdInput.value = String(data.id);
+      postForm.dataset.postId = String(data.id);
+      postForm.dataset.postStatus = "draft";
+      const basePath = window.location.pathname.replace(/\/write(?:\/\d+)?$/, "/write");
+      history.replaceState(null, "", `${basePath}/${data.id}`);
+      document.title = "\u7f16\u8f91\u6587\u7ae0 \u00b7 \u81f3\u77e5 Journal";
+      const pageHeading = document.querySelector(".topbar-copy h1");
+      if (pageHeading) pageHeading.textContent = "\u7f16\u8f91\u6587\u7ae0";
+      migrateLocalDraftKey(oldKey);
+    }
+    postForm.dataset.serverUpdatedAt = data.updated_at || "";
+    dirty = false;
+    saveLocalDraft({ announce: false });
+    setStatus(`\u5df2\u81ea\u52a8\u4fdd\u5b58 ${formatClock()}`, "saved");
+  } catch (error) {
+    setStatus(error.message || "\u81ea\u52a8\u4fdd\u5b58\u5931\u8d25", "error");
+  }
+}
+
+function scheduleDraftPersistence() {
+  if (!postForm || isSubmitting) return;
+  dirty = true;
+  window.clearTimeout(localSaveTimer);
+  window.clearTimeout(serverSaveTimer);
+  localSaveTimer = window.setTimeout(() => saveLocalDraft(), 350);
+  serverSaveTimer = window.setTimeout(persistDraftToServer, 2200);
+}
+
+function restoreDraft(payload) {
+  if (!payload?.fields || !postForm) return;
+  Object.entries(payload.fields).forEach(([name, value]) => {
+    if (name === "post_id") return;
+    const field = postForm.elements.namedItem(name);
+    if (!field || typeof value !== "string") return;
+    field.value = value;
+  });
+  recoveryBanner.hidden = true;
+  dirty = true;
+  updateFrontPreview();
+  dispatchEditorInput();
+  scheduleDraftPersistence();
+  setStatus("\u5df2\u6062\u590d\u672c\u5730\u8349\u7a3f", "working");
+}
+
+function offerLocalDraftRecovery() {
+  const payload = readLocalDraft();
+  if (!payload?.savedAt || !recoveryBanner) return;
+  const serverTime = Date.parse(postForm?.dataset.serverUpdatedAt || "") || 0;
+  const shouldOffer = !currentPostId() || payload.savedAt > serverTime;
+  if (!shouldOffer) return;
+  recoveryTime.textContent = `\u672c\u5730\u4fdd\u5b58\u4e8e ${new Date(payload.savedAt).toLocaleString("zh-CN")}`;
+  recoveryBanner.hidden = false;
+  restoreLocalDraftButton.onclick = () => restoreDraft(payload);
+  discardLocalDraftButton.onclick = () => {
+    localStorage.removeItem(localDraftKey());
+    recoveryBanner.hidden = true;
+    setStatus("\u5df2\u4e22\u5f03\u672c\u5730\u8349\u7a3f", "saved");
+  };
+}
+
+function safeImageAlt(file) {
+  return (file.name || "image").replace(/\.[^.]+$/, "").replace(/[\[\]()]/g, "-") || "image";
+}
+
+function insertAtCursor(text) {
+  if (!markdownInput) return;
+  const start = markdownInput.selectionStart;
+  const end = markdownInput.selectionEnd;
+  markdownInput.setRangeText(text, start, end, "end");
+  markdownInput.focus();
+  dispatchEditorInput();
+}
+
+async function uploadAndInsertImage(file) {
+  if (!file?.type?.startsWith("image/")) return;
+  const token = `uploading-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const placeholder = `![\u4e0a\u4f20\u4e2d\uff1a${safeImageAlt(file)}](uploading://${token})`;
+  insertAtCursor(placeholder);
+  setStatus(`\u6b63\u5728\u4e0a\u4f20 ${file.name || "image"}\u2026\u2026`, "working");
+  const formData = new FormData();
+  formData.append("image", file);
+  try {
+    const data = await fetchJson(document.body.dataset.uploadUrl, { method: "POST", body: formData });
+    const markdown = `![${safeImageAlt(file)}](${data.url})`;
+    if (markdownInput.value.includes(placeholder)) {
+      markdownInput.value = markdownInput.value.replace(placeholder, markdown);
+      dispatchEditorInput();
+    } else {
+      insertAtCursor(`\n\n${markdown}`);
+    }
+    latestImageMarkdown = markdown;
+    renderMediaResult({ url: data.url });
+    setStatus("\u56fe\u7247\u5df2\u4e0a\u4f20\u5e76\u63d2\u5165\u6b63\u6587", "saved");
+  } catch (error) {
+    markdownInput.value = markdownInput.value.replace(placeholder, `![\u4e0a\u4f20\u5931\u8d25\uff1a${safeImageAlt(file)}]()`);
+    dispatchEditorInput();
+    setStatus(error.message || "\u56fe\u7247\u4e0a\u4f20\u5931\u8d25", "error");
+  }
+}
+
+markdownInput?.addEventListener("paste", (event) => {
+  const images = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
+  if (!images.length) return;
+  event.preventDefault();
+  images.forEach((file) => uploadAndInsertImage(file));
+});
+
+workspace?.addEventListener("dragover", (event) => {
+  if (!event.dataTransfer?.types?.includes("Files")) return;
+  event.preventDefault();
+  workspace.classList.add("is-dragover");
+});
+workspace?.addEventListener("dragleave", (event) => {
+  if (!workspace.contains(event.relatedTarget)) workspace.classList.remove("is-dragover");
+});
+workspace?.addEventListener("drop", (event) => {
+  const files = Array.from(event.dataTransfer?.files || []);
+  if (!files.length) return;
+  event.preventDefault();
+  workspace.classList.remove("is-dragover");
+  files.filter((file) => file.type.startsWith("image/")).forEach((file) => uploadAndInsertImage(file));
+});
+
+postForm?.addEventListener("input", scheduleDraftPersistence);
+postForm?.addEventListener("submit", () => {
+  isSubmitting = true;
+  dirty = false;
+  window.clearTimeout(localSaveTimer);
+  window.clearTimeout(serverSaveTimer);
+  saveLocalDraft({ announce: false });
+});
+window.addEventListener("beforeunload", (event) => {
+  if (!dirty || isSubmitting) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+offerLocalDraftRecovery();

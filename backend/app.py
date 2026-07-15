@@ -365,6 +365,46 @@ def create_app():
             flash("文章已删除。", "success")
         return redirect(url_for("admin_dashboard"))
 
+    @app.post(f"{admin_prefix}/api/autosave")
+    @admin_required
+    def admin_autosave():
+        payload = request.get_json(silent=True) or {}
+        raw_post_id = payload.get("post_id")
+        try:
+            post_id = int(raw_post_id) if raw_post_id else None
+        except (TypeError, ValueError):
+            return jsonify({"message": "稿件 ID 无效。"}), 400
+
+        if post_id:
+            existing = store.get_post_by_id(post_id)
+            if existing is None:
+                return jsonify({"message": "稿件不存在。"}), 404
+            if existing.get("status") != "draft":
+                return jsonify({"message": "已发布文章仅保存在本地，不会自动覆盖线上内容。"}), 409
+
+        form_data = payload.get("fields") or {}
+        if not isinstance(form_data, dict):
+            return jsonify({"message": "自动保存数据格式无效。"}), 400
+        if not str(form_data.get("title") or "").strip():
+            return jsonify({"message": "填写标题后才会自动保存到服务器。"}), 400
+
+        try:
+            saved_id = store.save_post(form_data, post_id=post_id, action="draft")
+        except ValueError as exc:
+            return jsonify({"message": str(exc)}), 400
+
+        saved_post = store.get_post_by_id(saved_id)
+        return jsonify(
+            {
+                "id": saved_id,
+                "slug": saved_post.get("slug", ""),
+                "status": saved_post.get("status", "draft"),
+                "updated_at": saved_post.get("updated_at", ""),
+                "read_time": saved_post.get("read_time", ""),
+                "excerpt": saved_post.get("excerpt", ""),
+            }
+        )
+
     @app.post(f"{admin_prefix}/api/preview-markdown")
     @admin_required
     def admin_preview_markdown():

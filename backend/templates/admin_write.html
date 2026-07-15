@@ -22,6 +22,17 @@
     >
       <input type="hidden" id="post-id" name="post_id" value="{{ edit_post.id }}" />
 
+      <div id="draft-recovery-banner" class="draft-recovery-banner" hidden>
+        <div>
+          <strong>发现更新的本地草稿</strong>
+          <span id="draft-recovery-time"></span>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="restore-local-draft" class="primary">恢复草稿</button>
+          <button type="button" id="discard-local-draft">丢弃本地版本</button>
+        </div>
+      </div>
+
       <details class="metadata-drawer" open>
         <summary>
           <span>01 / Metadata</span>
