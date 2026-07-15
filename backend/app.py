@@ -120,8 +120,6 @@ def build_edit_post(post):
             "published_at": "",
             "read_time": "",
             "category": "",
-            "featured": False,
-            "tone": "amber",
             "tags_text": "",
             "hero_quote": "",
             "cover_image": "",
@@ -132,7 +130,6 @@ def build_edit_post(post):
 
     return {
         **post,
-        "featured": bool(post.get("featured")),
         "tags_text": ", ".join(post.get("tags", [])),
     }
 

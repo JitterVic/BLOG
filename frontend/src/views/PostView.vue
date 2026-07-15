@@ -85,7 +85,7 @@ function updateReadingProgress() {
 function openLightbox(image) {
   lightboxImage.value = {
     src: image.currentSrc || image.src,
-    alt: image.alt || "????",
+    alt: image.alt || "文章图片",
   };
   const dialog = lightboxDialogRef.value;
   if (!dialog) return;
@@ -134,7 +134,7 @@ function enhanceArticleBody(body, headings) {
     image.loading = "lazy";
     image.tabIndex = 0;
     image.setAttribute("role", "button");
-    image.setAttribute("aria-label", `?????${image.alt || "????"}`);
+    image.setAttribute("aria-label", `放大图片：${image.alt || "文章插图"}`);
     const openHandler = () => openLightbox(image);
     const keyHandler = (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
@@ -414,12 +414,12 @@ onBeforeUnmount(() => {
     <dialog
       ref="lightboxDialogRef"
       class="article-lightbox"
-      aria-label="??????"
+      aria-label="文章图片预览"
       @click="handleLightboxBackdrop"
       @cancel.prevent="closeLightbox"
     >
-      <button type="button" class="article-lightbox__close" aria-label="??????" @click="closeLightbox">
-        CLOSE ?
+      <button type="button" class="article-lightbox__close" aria-label="关闭图片预览" @click="closeLightbox">
+        CLOSE ×
       </button>
       <figure>
         <img :src="lightboxImage.src" :alt="lightboxImage.alt">

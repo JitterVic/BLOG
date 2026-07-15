@@ -12,12 +12,12 @@ const route = useRoute();
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: true });
 
-const pageTone = computed(() => {
+const pageTheme = computed(() => {
   const name = route.name;
-  if (name === "home") return "tone-home";
-  if (name === "posts" || name === "post") return "tone-articles";
-  if (name === "about") return "tone-about";
-  return "tone-default";
+  if (name === "home") return "page-theme-home";
+  if (name === "posts" || name === "post") return "page-theme-articles";
+  if (name === "about") return "page-theme-about";
+  return "page-theme-default";
 });
 
 onMounted(async () => {
@@ -31,7 +31,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page-shell print-shell" :class="pageTone">
+  <div class="page-shell print-shell" :class="pageTheme">
     <CursorEffects />
     <FloatingCat />
     <SiteHeader />
