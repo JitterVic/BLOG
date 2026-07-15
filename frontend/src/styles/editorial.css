@@ -2838,7 +2838,65 @@ body::before {
   }
 }
 
-/* Article utilities: code copy, heading anchors, previous/next navigation */
+/* Article utilities: syntax highlighting, code copy, heading anchors, previous/next navigation */
+.print-markdown pre {
+  color: #352f28;
+  background: #eee7db;
+  box-shadow: inset 4px 0 0 rgba(139, 37, 0, 0.72);
+}
+
+.print-markdown pre code.hljs {
+  display: block;
+  padding: 0;
+  color: #352f28;
+  background: transparent;
+}
+
+.print-markdown .hljs-comment,
+.print-markdown .hljs-quote {
+  color: #81786b;
+  font-style: italic;
+}
+
+.print-markdown .hljs-keyword,
+.print-markdown .hljs-selector-tag,
+.print-markdown .hljs-literal,
+.print-markdown .hljs-section,
+.print-markdown .hljs-link {
+  color: #8b2500;
+}
+
+.print-markdown .hljs-string,
+.print-markdown .hljs-title,
+.print-markdown .hljs-name,
+.print-markdown .hljs-type,
+.print-markdown .hljs-attribute,
+.print-markdown .hljs-symbol,
+.print-markdown .hljs-bullet,
+.print-markdown .hljs-addition,
+.print-markdown .hljs-variable,
+.print-markdown .hljs-template-tag,
+.print-markdown .hljs-template-variable {
+  color: #526334;
+}
+
+.print-markdown .hljs-number,
+.print-markdown .hljs-meta,
+.print-markdown .hljs-built_in,
+.print-markdown .hljs-builtin-name,
+.print-markdown .hljs-params {
+  color: #795548;
+}
+
+.print-markdown .hljs-deletion {
+  color: #a42828;
+  background: rgba(164, 40, 40, 0.08);
+}
+
+.print-markdown .hljs-addition {
+  background: rgba(82, 99, 52, 0.08);
+}
+
 .print-markdown pre.has-copy-button {
   padding-top: 2.8rem;
 }
@@ -2850,9 +2908,9 @@ body::before {
   z-index: 2;
   min-width: 4.4rem;
   padding: 0.35rem 0.55rem;
-  color: rgba(232, 223, 208, 0.72);
-  border: 1px solid rgba(232, 223, 208, 0.18);
-  background: rgba(18, 16, 14, 0.48);
+  color: rgba(42, 36, 28, 0.68);
+  border: 1px solid rgba(42, 36, 28, 0.2);
+  background: rgba(244, 239, 230, 0.86);
   cursor: pointer;
   font-family: var(--f-mono);
   font-size: 0.5rem;
@@ -2863,8 +2921,8 @@ body::before {
 .code-copy-button:hover,
 .code-copy-button:focus-visible {
   color: var(--paper);
-  border-color: rgba(232, 223, 208, 0.48);
-  background: rgba(139, 37, 0, 0.72);
+  border-color: var(--accent);
+  background: var(--accent);
   outline: none;
 }
 

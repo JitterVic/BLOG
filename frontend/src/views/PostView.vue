@@ -1,10 +1,28 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import hljs from "highlight.js/lib/core";
+import bash from "highlight.js/lib/languages/bash";
+import css from "highlight.js/lib/languages/css";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import python from "highlight.js/lib/languages/python";
+import sql from "highlight.js/lib/languages/sql";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
 
 import { usePost } from "../composables/usePost";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
+
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("python", python);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("xml", xml);
 
 const route = useRoute();
 const { site, ensureSite } = useSite();
@@ -65,6 +83,7 @@ function enhanceArticleBody(body, headings) {
   body.querySelectorAll("pre").forEach((pre) => {
     const code = pre.querySelector("code");
     if (!code || pre.querySelector(".code-copy-button")) return;
+    hljs.highlightElement(code);
     pre.classList.add("has-copy-button");
     const button = document.createElement("button");
     button.type = "button";
