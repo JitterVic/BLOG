@@ -29,6 +29,7 @@ const uploadImageButton = document.getElementById("upload-image-button");
 const insertImageButton = document.getElementById("insert-image-button");
 const mediaResult = document.getElementById("media-result");
 const toolbar = document.querySelector(".markdown-toolbar");
+const importWarning = document.getElementById("import-warning");
 
 let previewTimer = null;
 let previewGeneration = 0;
@@ -234,8 +235,16 @@ workspaceDivider?.addEventListener("keydown", (event) => {
   applyWorkspaceRatio(current + (event.key === 'ArrowLeft' ? -2 : 2));
 });
 
-markdownFileInput?.addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
+function showImportWarning(markdownContent = "") {
+  if (!importWarning) return;
+  const references = markdownContent.match(/!\[[^\]]*\]\((?:\.{1,2}\/)[^)]+\)/g) || [];
+  importWarning.hidden = references.length === 0;
+  importWarning.textContent = references.length
+    ? `\u68c0\u6d4b\u5230 ${references.length} \u5f20\u672c\u5730\u56fe\u7247\u5f15\u7528\uff0c\u8bf7\u4e0a\u4f20\u66ff\u6362\u3002`
+    : "";
+}
+
+async function importMarkdownFile(file) {
   if (!file) return;
   const formData = new FormData();
   formData.append("markdown_file", file);
@@ -243,18 +252,29 @@ markdownFileInput?.addEventListener("change", async (event) => {
     setStatus("\u6b63\u5728\u5bfc\u5165 Markdown\u2026\u2026", "working");
     const data = await fetchJson(document.body.dataset.importUrl, { method: "POST", body: formData });
     markdownInput.value = data.markdown_content || "";
-    titleInput.value = data.title || titleInput.value;
-    slugInput.value = data.slug || slugInput.value;
-    excerptInput.value = data.excerpt || excerptInput.value;
-    readTimeInput.value = data.read_time || readTimeInput.value;
+    titleInput.value = data.title || "";
+    slugInput.value = data.slug || "";
+    categoryInput.value = data.category || "";
+    publishedAtInput.value = data.published_at || "";
+    tagsInput.value = data.tags_text || (Array.isArray(data.tags) ? data.tags.join(", ") : "");
+    excerptInput.value = data.excerpt || "";
+    readTimeInput.value = data.read_time || "";
+    heroQuoteInput.value = data.hero_quote || "";
+    coverImageInput.value = data.cover_image || "";
+    showImportWarning(markdownInput.value);
     dispatchEditorInput();
     updateFrontPreview();
-    setStatus("Markdown \u5df2\u5bfc\u5165", "saved");
+    scheduleDraftPersistence();
+    setStatus("Markdown \u5df2\u5bfc\u5165\uff0c\u5143\u4fe1\u606f\u5df2\u56de\u586b", "saved");
   } catch (error) {
     setStatus(error.message || "\u5bfc\u5165\u5931\u8d25", "error");
-  } finally {
-    event.target.value = "";
   }
+}
+
+markdownFileInput?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  await importMarkdownFile(file);
+  event.target.value = "";
 });
 
 function renderMediaResult({ url = "", message = "", isError = false } = {}) {
@@ -514,6 +534,11 @@ workspace?.addEventListener("drop", (event) => {
   if (!files.length) return;
   event.preventDefault();
   workspace.classList.remove("is-dragover");
+  const markdownFile = files.find((file) => /\.(?:md|markdown)$/i.test(file.name || ""));
+  if (markdownFile) {
+    importMarkdownFile(markdownFile);
+    return;
+  }
   files.filter((file) => file.type.startsWith("image/")).forEach((file) => uploadAndInsertImage(file));
 });
 

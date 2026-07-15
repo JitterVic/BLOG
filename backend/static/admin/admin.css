@@ -714,3 +714,6 @@
 @media (max-width: 760px) {
   .draft-recovery-banner { align-items: stretch; flex-direction: column; }
 }
+
+.import-warning { padding: 0.78rem 1rem; color: #6b4500; border: 1px solid rgba(177, 112, 0, 0.34); background: #fff0b8; font-size: 0.72rem; font-weight: 700; }
+.import-warning[hidden] { display: none; }

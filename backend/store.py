@@ -68,6 +68,67 @@ def sections_to_markdown(sections: list[dict[str, Any]]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+FRONT_MATTER_KEYS = {
+    "title",
+    "slug",
+    "tags",
+    "category",
+    "date",
+    "cover",
+    "excerpt",
+    "hero_quote",
+}
+
+
+def _strip_front_matter_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1].strip()
+    return value
+
+
+def _parse_front_matter_tags(value: str) -> list[str]:
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    return [
+        tag
+        for item in value.split(",")
+        if (tag := _strip_front_matter_quotes(item))
+    ]
+
+
+def parse_markdown_front_matter(content: str) -> tuple[dict[str, Any], str]:
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}, content
+
+    closing_index = next(
+        (index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"),
+        None,
+    )
+    if closing_index is None:
+        return {}, content
+
+    metadata: dict[str, Any] = {}
+    for line in lines[1:closing_index]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or ":" not in stripped:
+            continue
+        key, raw_value = stripped.split(":", 1)
+        key = key.strip().lower()
+        if key not in FRONT_MATTER_KEYS:
+            continue
+        if key == "tags":
+            metadata[key] = _parse_front_matter_tags(raw_value)
+        else:
+            metadata[key] = _strip_front_matter_quotes(raw_value)
+
+    body = "\n".join(lines[closing_index + 1:]).lstrip("\n")
+    return metadata, body
+
+
 ALLOWED_HTML_TAGS = {
     "a",
     "blockquote",
@@ -845,7 +906,7 @@ class BlogStore:
         folder: str,
         *,
         allowed_extensions: set[str] | None = None,
-        label: str = "??",
+        label: str = "文件",
     ) -> str:
         original_filename = (file_storage.filename or "file").strip()
         if allowed_extensions:
@@ -864,18 +925,31 @@ class BlogStore:
     def import_markdown(self, file_storage) -> dict[str, Any]:
         validate_extension(file_storage.filename or "", ALLOWED_MARKDOWN_EXTENSIONS, "Markdown 文件")
         content = decode_markdown_file(file_storage.read())
-        guessed_title = ""
-        for line in content.splitlines():
-            if line.startswith("# "):
-                guessed_title = line[2:].strip()
-                break
+        metadata, markdown_content = parse_markdown_front_matter(content)
+
+        guessed_title = str(metadata.get("title") or "").strip()
+        if not guessed_title:
+            for line in markdown_content.splitlines():
+                if line.startswith("# "):
+                    guessed_title = line[2:].strip()
+                    break
+
+        tags = metadata.get("tags") if isinstance(metadata.get("tags"), list) else []
+        excerpt = str(metadata.get("excerpt") or "").strip() or self.build_excerpt(markdown_content)
+        requested_slug = str(metadata.get("slug") or "").strip()
         return {
             "title": guessed_title,
-            "slug": slugify(guessed_title) if guessed_title else "",
-            "markdown_content": content,
-            "html_content": render_markdown(content),
-            "excerpt": self.build_excerpt(content),
-            "read_time": estimate_read_time(content),
+            "slug": requested_slug or (slugify(guessed_title) if guessed_title else ""),
+            "tags": tags,
+            "tags_text": ", ".join(tags),
+            "category": str(metadata.get("category") or "").strip(),
+            "published_at": str(metadata.get("date") or "").strip(),
+            "cover_image": str(metadata.get("cover") or "").strip(),
+            "excerpt": excerpt,
+            "hero_quote": str(metadata.get("hero_quote") or "").strip(),
+            "markdown_content": markdown_content,
+            "html_content": render_markdown(markdown_content),
+            "read_time": estimate_read_time(markdown_content),
         }
 
     def upload_media(self, file_storage) -> dict[str, str]:
