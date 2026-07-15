@@ -28,9 +28,13 @@ const route = useRoute();
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 const articleBodyRef = ref(null);
+const lightboxDialogRef = ref(null);
+const lightboxImage = ref({ src: "", alt: "" });
+const readingProgress = ref(0);
 const tableOfContents = ref([]);
 const activeHeading = ref("");
 let headingObserver = null;
+let progressFrame = null;
 let enhancedElements = [];
 
 const {
@@ -55,11 +59,49 @@ function disconnectHeadingObserver() {
 }
 
 function cleanupArticleEnhancements() {
-  enhancedElements.forEach(({ element, type, handler }) => {
-    element.removeEventListener("click", handler);
+  enhancedElements.forEach(({ element, event = "click", type, handler }) => {
+    element.removeEventListener(event, handler);
     if (type === "button") element.remove();
   });
   enhancedElements = [];
+}
+
+function updateReadingProgress() {
+  if (progressFrame) return;
+  progressFrame = window.requestAnimationFrame(() => {
+    progressFrame = null;
+    const body = articleBodyRef.value;
+    if (!body) {
+      readingProgress.value = 0;
+      return;
+    }
+    const bodyTop = body.getBoundingClientRect().top + window.scrollY;
+    const readableHeight = Math.max(body.offsetHeight - window.innerHeight, 1);
+    const current = window.scrollY - bodyTop;
+    readingProgress.value = Math.min(1, Math.max(0, current / readableHeight));
+  });
+}
+
+function openLightbox(image) {
+  lightboxImage.value = {
+    src: image.currentSrc || image.src,
+    alt: image.alt || "????",
+  };
+  const dialog = lightboxDialogRef.value;
+  if (!dialog) return;
+  if (typeof dialog.showModal === "function") dialog.showModal();
+  else dialog.setAttribute("open", "");
+}
+
+function closeLightbox() {
+  const dialog = lightboxDialogRef.value;
+  if (!dialog) return;
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+}
+
+function handleLightboxBackdrop(event) {
+  if (event.target === lightboxDialogRef.value) closeLightbox();
 }
 
 async function copyText(text) {
@@ -79,6 +121,31 @@ async function copyText(text) {
 
 function enhanceArticleBody(body, headings) {
   cleanupArticleEnhancements();
+
+  body.querySelectorAll("a[href]").forEach((anchor) => {
+    const url = new URL(anchor.href, window.location.href);
+    if (["http:", "https:"].includes(url.protocol) && url.origin !== window.location.origin) {
+      anchor.target = "_blank";
+      anchor.rel = "noopener";
+    }
+  });
+
+  body.querySelectorAll("img").forEach((image) => {
+    image.loading = "lazy";
+    image.tabIndex = 0;
+    image.setAttribute("role", "button");
+    image.setAttribute("aria-label", `?????${image.alt || "????"}`);
+    const openHandler = () => openLightbox(image);
+    const keyHandler = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openLightbox(image);
+    };
+    image.addEventListener("click", openHandler);
+    image.addEventListener("keydown", keyHandler);
+    enhancedElements.push({ element: image, event: "click", handler: openHandler });
+    enhancedElements.push({ element: image, event: "keydown", handler: keyHandler });
+  });
 
   body.querySelectorAll("pre").forEach((pre) => {
     const code = pre.querySelector("code");
@@ -139,6 +206,7 @@ async function buildArticleNavigation() {
   });
 
   enhanceArticleBody(body, headings);
+  updateReadingProgress();
 
   if (!tableOfContents.value.length) return;
   activeHeading.value = tableOfContents.value[0].id;
@@ -171,6 +239,9 @@ watch([post, loading, relatedPosts], () => {
 });
 
 onMounted(async () => {
+  window.addEventListener("scroll", updateReadingProgress, { passive: true });
+  window.addEventListener("resize", updateReadingProgress);
+
   try {
     await ensureSite();
   } catch (err) {
@@ -186,6 +257,8 @@ watch(
   () => route.params.slug,
   async (slug) => {
     if (slug) {
+      closeLightbox();
+      readingProgress.value = 0;
       await loadPost(slug);
       await buildArticleNavigation();
       refreshReveal();
@@ -194,6 +267,10 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  window.removeEventListener("scroll", updateReadingProgress);
+  window.removeEventListener("resize", updateReadingProgress);
+  if (progressFrame) window.cancelAnimationFrame(progressFrame);
+  closeLightbox();
   disconnectHeadingObserver();
   cleanupArticleEnhancements();
 });
@@ -201,6 +278,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="post-view print-post-view">
+    <div
+      v-if="post"
+      class="article-reading-progress"
+      :style="{ transform: `scaleX(${readingProgress})` }"
+      aria-hidden="true"
+    ></div>
     <p v-if="loading" class="feedback print-feedback rv">文章页面正在展开……</p>
 
     <section v-else-if="error" class="print-page print-section post-empty-state">
@@ -327,6 +410,22 @@ onBeforeUnmount(() => {
         </RouterLink>
       </nav>      <span class="pg pg--r">— Article —</span>
     </article>
+
+    <dialog
+      ref="lightboxDialogRef"
+      class="article-lightbox"
+      aria-label="??????"
+      @click="handleLightboxBackdrop"
+      @cancel.prevent="closeLightbox"
+    >
+      <button type="button" class="article-lightbox__close" aria-label="??????" @click="closeLightbox">
+        CLOSE ?
+      </button>
+      <figure>
+        <img :src="lightboxImage.src" :alt="lightboxImage.alt">
+        <figcaption v-if="lightboxImage.alt">{{ lightboxImage.alt }}</figcaption>
+      </figure>
+    </dialog>
 
     <section v-if="relatedPosts.length" class="related-section print-related-section">
       <div class="sec-hd rv">
