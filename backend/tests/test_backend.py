@@ -407,3 +407,32 @@ def test_env_int_falls_back_on_invalid_values(monkeypatch):
     with pytest.warns(RuntimeWarning):
         assert env_loader.env_int("BLOG_PORT", 5000) == 5000
 
+
+def test_list_posts_omits_body_columns(app_bundle, client):
+    _application, store = app_bundle
+    store.save_post(
+        {
+            "title": "Compact list body",
+            "slug": "compact-list-body",
+            "markdown_content": "# Compact\n\nLong body should not appear in list query rows.",
+            "published_at": "2099-03-01",
+        },
+        action="published",
+    )
+    listed = store.list_posts(published_only=True)
+    match = next(item for item in listed if item["slug"] == "compact-list-body")
+    assert "markdown_content" not in match
+    assert "html_content" not in match
+    assert match["title"] == "Compact list body"
+
+    payload = client.get("/api/posts").get_json()
+    item = next(entry for entry in payload if entry["slug"] == "compact-list-body")
+    assert set(item.keys()) >= {"slug", "title", "excerpt", "cover_image", "click_count"}
+    assert "html_content" not in item
+    assert "markdown_content" not in item
+
+    admin_rows = store.list_admin_posts()
+    assert len(admin_rows) <= 200
+    admin_match = next(item for item in admin_rows if item["slug"] == "compact-list-body")
+    assert "markdown_content" not in admin_match
+

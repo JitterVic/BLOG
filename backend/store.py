@@ -62,6 +62,15 @@ JSON_FIELDS = {
     "sections",
 }
 
+# Compact columns for list/related responses. Keep detail queries on SELECT *
+# so markdown/html only load when a single post is opened.
+LIST_POST_COLUMNS = (
+    "id, slug, title, excerpt, published_at, created_at, updated_at, "
+    "read_time, category, featured, tone, tags, hero_quote, cover_image, "
+    "status, click_count"
+)
+ADMIN_LIST_LIMIT = 200
+
 
 def slugify(value: str) -> str:
     value = value.strip().lower()
@@ -591,6 +600,8 @@ class BlogStore:
                 if data.get("markdown_content")
                 else ""
             )
+        # List queries intentionally omit body columns; keep keys absent rather
+        # than inventing empty markdown/html fields.
         return data
 
     def _avatar_url(self, avatar_path: str) -> str:
@@ -716,7 +727,7 @@ class BlogStore:
             published_only=published_only,
             search=search,
         )
-        query = f"SELECT * FROM posts{where_sql}{self._post_order_clause(sort)}"
+        query = f"SELECT {LIST_POST_COLUMNS} FROM posts{where_sql}{self._post_order_clause(sort)}"
         if limit is not None:
             query += " LIMIT ?"
             params.append(max(0, int(limit)))
@@ -778,18 +789,30 @@ class BlogStore:
     def increment_post_click(self, slug: str) -> int:
         """Increase public view count once. Returns the updated click_count (or current if missing)."""
         with self.connect() as connection:
-            connection.execute(
-                """
-                UPDATE posts
-                SET click_count = COALESCE(click_count, 0) + 1
-                WHERE slug = ? AND status = 'published'
-                """,
-                (slug,),
-            )
-            row = connection.execute(
-                "SELECT click_count FROM posts WHERE slug = ? AND status = 'published'",
-                (slug,),
-            ).fetchone()
+            # SQLite 3.35+ supports RETURNING; fall back for older builds.
+            try:
+                row = connection.execute(
+                    """
+                    UPDATE posts
+                    SET click_count = COALESCE(click_count, 0) + 1
+                    WHERE slug = ? AND status = 'published'
+                    RETURNING click_count
+                    """,
+                    (slug,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                connection.execute(
+                    """
+                    UPDATE posts
+                    SET click_count = COALESCE(click_count, 0) + 1
+                    WHERE slug = ? AND status = 'published'
+                    """,
+                    (slug,),
+                )
+                row = connection.execute(
+                    "SELECT click_count FROM posts WHERE slug = ? AND status = 'published'",
+                    (slug,),
+                ).fetchone()
             connection.commit()
         return int(row["click_count"] if row else 0)
 
@@ -844,10 +867,17 @@ class BlogStore:
             row = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
         return self._row_to_dict(row)
 
-    def list_admin_posts(self) -> list[dict[str, Any]]:
+    def list_admin_posts(self, *, limit: int = ADMIN_LIST_LIMIT) -> list[dict[str, Any]]:
+        capped = max(1, min(int(limit or ADMIN_LIST_LIMIT), ADMIN_LIST_LIMIT))
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM posts ORDER BY updated_at DESC, created_at DESC"
+                f"""
+                SELECT {LIST_POST_COLUMNS}
+                FROM posts
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT ?
+                """,
+                (capped,),
             ).fetchall()
         return [self._row_to_dict(row) for row in rows]
 

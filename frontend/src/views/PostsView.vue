@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
+import { displayDate, shortDate } from "../composables/useFormat";
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
@@ -185,15 +186,6 @@ function scheduleReload() {
   }, 250);
 }
 
-function displayDate(value) {
-  return value || "未设置日期";
-}
-
-function shortDate(value) {
-  if (!value) return "--.--";
-  const [, month, day] = value.split("-");
-  return month && day ? `${month}-${day}` : value;
-}
 
 async function applyRouteState() {
   applyingRouteState = true;
@@ -351,6 +343,8 @@ onBeforeUnmount(() => {
             class="article-item__thumb"
             :src="post.cover_image"
             alt=""
+            width="132"
+            height="99"
             loading="lazy"
             decoding="async"
             @error="(event) => event.target.classList.add('is-broken')"

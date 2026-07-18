@@ -1,38 +1,32 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import AboutView from "../views/AboutView.vue";
-import HomeView from "../views/HomeView.vue";
-import NotFoundView from "../views/NotFoundView.vue";
-import PostView from "../views/PostView.vue";
-import PostsView from "../views/PostsView.vue";
-
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: "/",
       name: "home",
-      component: HomeView,
+      component: () => import("../views/HomeView.vue"),
     },
     {
       path: "/posts",
       name: "posts",
-      component: PostsView,
+      component: () => import("../views/PostsView.vue"),
     },
     {
       path: "/about",
       name: "about",
-      component: AboutView,
+      component: () => import("../views/AboutView.vue"),
     },
     {
       path: "/posts/:slug",
       name: "post",
-      component: PostView,
+      component: () => import("../views/PostView.vue"),
     },
     {
       path: "/:pathMatch(.*)*",
       name: "not-found",
-      component: NotFoundView,
+      component: () => import("../views/NotFoundView.vue"),
     },
   ],
   scrollBehavior(to, from, savedPosition) {

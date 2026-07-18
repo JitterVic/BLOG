@@ -353,6 +353,8 @@ onBeforeUnmount(() => {
           <img
             :src="post.cover_image"
             :alt="post.title"
+            width="1200"
+            height="525"
             loading="lazy"
             decoding="async"
             @error="(event) => event.target.closest('figure').classList.add('is-broken')"

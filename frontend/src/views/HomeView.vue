@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
+import { displayDate, formatClicks } from "../composables/useFormat";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
@@ -29,13 +30,6 @@ const issueNumber = computed(() => {
   return String(now.getMonth() + 1).padStart(2, "0");
 });
 
-function displayDate(value) {
-  return value || "未设置日期";
-}
-
-function formatClicks(count = 0) {
-  return `${count || 0} 次阅读`;
-}
 
 
 watch([latestPosts, hotPosts, postsLoading], () => {
@@ -172,7 +166,10 @@ onBeforeUnmount(() => postsController?.abort());
               class="mimg__img"
               :src="leadPost.cover_image"
               alt=""
-              loading="lazy"
+              width="960"
+              height="640"
+              loading="eager"
+              fetchpriority="high"
               decoding="async"
               @error="(event) => event.target.classList.add('is-broken')"
             >
