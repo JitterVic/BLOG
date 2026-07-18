@@ -97,7 +97,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .print-subpage.content-view,.print-post-view.post-view{padding-top:5rem}.print-subpage .print-page,.print-post-view .print-page,.print-related-section{width:100%}.print-subpage__meta{margin:-.6rem 1.35rem 1.5rem;flex-direction:column;gap:.2rem}.print-feedback{margin:0 1.35rem 1.8rem}.print-article-list{padding:0 1.35rem 2.5rem}.print-list-item.article-item{min-height:auto;padding:1.6rem .3rem}.print-tag-cloud{margin:0 1.35rem 2rem}.print-post-topline{padding:1rem 1.35rem;flex-direction:column;align-items:flex-start}.print-post-hero{padding:3rem 1.35rem 2.2rem}.print-post-hero h1{font-size:clamp(2.7rem,14vw,4.7rem)}.print-markdown{width:calc(100% - 2.7rem)}.print-markdown pre{margin:2rem -1.35rem}.pg{bottom:1rem}.pg--l{left:1.35rem}.pg--r{right:1.35rem}.floating-cat{width:76px;height:92px;right:12px;bottom:12px;opacity:.86}}
 @media(prefers-reduced-motion:reduce){.rv,.rv.vis,.print-scroll-cue,.cursor,.print-nav__num,.print-article-tile,.print-article-strip,.print-hot-card,.print-list-item{animation:none!important;transition:none!important;transform:none!important}}
 
-
 /* --- Focused information architecture pass: homepage, unified article index, quiet about --- */
 .focused-cover {
   min-height: 100svh;
@@ -562,7 +561,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   }
 }
 
-
 /* ==========================================================================
    MOTION + LAYOUT POLISH — reveal, route transitions, interactive depth
    ========================================================================== */
@@ -711,11 +709,7 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   color: var(--accent-light, #b84a2a);
 }
 
-.home-index-row,
-.home-hot-row,
-.print-list-item,
-.print-article-strip,
-.print-article-tile {
+.home-index-row, .home-hot-row, .print-list-item, .print-article-strip{
   position: relative;
 }
 
@@ -843,29 +837,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 }
 
 /* Post card polish (legacy / related uses) */
-.post-card {
-  transition:
-    transform 0.28s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
-    box-shadow 0.28s ease,
-    border-color 0.28s ease;
-}
-
-.post-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 18px 40px rgba(42, 36, 28, 0.1);
-}
-
-.post-card-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--accent);
-  transition: gap 0.22s ease;
-}
-
-.post-card-link:hover {
-  gap: 0.55rem;
-}
 
 /* Mobile nav open state */
 .print-nav.menu-open {
@@ -918,13 +889,7 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 }
 
 /* Soft focus rings for keyboard users */
-.cover-button:focus-visible,
-.header-cta:focus-visible,
-.print-nav__item:focus-visible,
-.article-view-button:focus-visible,
-.tag-filter-button:focus-visible,
-.home-index-row:focus-visible,
-.home-hot-row:focus-visible {
+.cover-button:focus-visible, .print-nav__item:focus-visible, .article-view-button:focus-visible, .tag-filter-button:focus-visible, .home-index-row:focus-visible, .home-hot-row:focus-visible{
   outline: 2px solid rgba(139, 37, 0, 0.35);
   outline-offset: 3px;
 }
@@ -978,7 +943,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
     transform: none !important;
   }
 }
-
 
 /* ==========================================================================
    ROUND 2 POLISH — skeleton, cover hierarchy, view switcher, motion polish
@@ -1230,7 +1194,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   }
 }
 
-
 /* ==========================================================================
    FOOTER + PAGE TONES + SECTION NUMBERING — user feedback pass
    ========================================================================== */
@@ -1380,20 +1343,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
 
 .page-theme-about .print-main {
   --page-tint: rgba(78, 98, 82, 0.035);
-}
-
-.page-theme-home .print-particles {
-  opacity: 0.9;
-}
-
-.page-theme-articles .print-particles {
-  opacity: 0.62;
-  filter: saturate(0.82);
-}
-
-.page-theme-about .print-particles {
-  opacity: 0.5;
-  filter: saturate(0.7) sepia(0.08);
 }
 
 /* Home: dramatic cover paper */
@@ -1624,7 +1573,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   }
 }
 
-
 /* ==========================================================================
    HOTFIX — lead copy, header bar, about title, SVG cat
    ========================================================================== */
@@ -1737,7 +1685,6 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
     padding-top: 0.4rem;
   }
 }
-
 
 /* ==========================================================================
    NAV ONE-ROW + CAT HOVER + TRAIL VISIBILITY
@@ -2507,9 +2454,6 @@ body::after {
 }
 
 /* The old network particle canvas is no longer mounted; keep stale builds harmless. */
-.print-particles {
-  display: none !important;
-}
 
 /* Blur filters and persistent will-change layers were costly during scroll. */
 .page-fade-enter-active,
