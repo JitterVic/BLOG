@@ -1,53 +1,91 @@
-{% extends "admin_base.html" %}
+﻿{% extends "admin_base.html" %}
 {% set admin_page = "dashboard" %}
 
 {% block page_title %}编辑台{% endblock %}
 {% block page_description %}把发行状态与全部稿件集中在一页；写作和站点资料已拆到独立工作区。{% endblock %}
 
 {% block content %}
-  <div class="layout dashboard-layout">
-    <div class="main-column">
-          <section class="card">
-            <div class="card-head">
-              <div>
-                <h3>全部稿件</h3>
-                <p>点击稿件继续编辑；可按标题、栏目、标签和状态核对当前前台可见性。</p>
-              </div>
-              <span class="eyebrow">Posts</span>
-            </div>
+  <main class="admin-main dashboard-main">
+    <section class="dashboard-overview" aria-labelledby="dashboard-overview-title">
+      <div class="dashboard-overview__copy">
+        <span class="eyebrow">Editorial Desk / Posts</span>
+        <h2 id="dashboard-overview-title">发行总览</h2>
+        <p>先确认稿件状态，再进入写作台继续编辑。草稿不会出现在公开文章目录中。</p>
+      </div>
+      <div class="dashboard-overview__actions">
+        <a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a>
+        <a class="button button--quiet" href="{{ url_for('admin_profile_page') }}">维护封面资料</a>
+      </div>
+      <div class="dashboard-stats" aria-label="文章统计">
+        <div class="dashboard-stat">
+          <span>文章总数</span>
+          <strong>{{ stats.post_count }}</strong>
+          <small>全部稿件</small>
+        </div>
+        <div class="dashboard-stat dashboard-stat--published">
+          <span>已发布</span>
+          <strong>{{ stats.published_count }}</strong>
+          <small>当前对外可见</small>
+        </div>
+        <div class="dashboard-stat dashboard-stat--draft">
+          <span>草稿</span>
+          <strong>{{ stats.draft_count }}</strong>
+          <small>仅后台可见</small>
+        </div>
+      </div>
+    </section>
 
-            {% if admin_posts %}
-              <div class="admin-post-tools" aria-label="后台稿件筛选">
+    <div class="layout dashboard-layout">
+      <div class="main-column">
+        <section class="card dashboard-posts" aria-labelledby="posts-title">
+          <div class="card-head">
+            <div>
+              <h3 id="posts-title">全部稿件</h3>
+              <p>按标题、slug、栏目、标签或状态查找文章；编辑和删除操作保持分离。</p>
+            </div>
+            <span class="eyebrow">Posts</span>
+          </div>
+
+          {% if admin_posts %}
+            <div class="admin-post-tools" aria-label="后台稿件筛选">
+              <label class="filter-control">
+                <span>查找稿件</span>
                 <input type="search" id="admin-post-search" placeholder="搜索标题、slug、栏目或标签" autocomplete="off" />
+              </label>
+              <label class="filter-control">
+                <span>发布状态</span>
                 <select id="admin-post-status" aria-label="按发布状态筛选">
                   <option value="">全部状态</option>
                   <option value="published">已发布</option>
                   <option value="draft">草稿</option>
                 </select>
-              </div>
-              <p class="admin-post-count" id="admin-post-count">共 {{ admin_posts|length }} 篇稿件</p>
-            {% endif %}
+              </label>
+            </div>
+            <p class="admin-post-count" id="admin-post-count" role="status" aria-live="polite">共 {{ admin_posts|length }} 篇稿件</p>
+          {% endif %}
 
-            <div class="post-list">
-              {% if admin_posts %}
-                {% for item in admin_posts %}
-                  <a
-                    class="post-link"
-                    href="{{ url_for('admin_write', post_id=item.id) }}"
-                    data-post-item
-                    data-status="{{ item.status }}"
-                    data-search="{{ (item.title ~ ' ' ~ item.slug ~ ' ' ~ (item.category or '') ~ ' ' ~ (item.tags|join(' ')))|lower }}"
-                  >
-                    <strong>{{ item.title }}</strong>
-                    <span class="post-link__meta">
+          <div class="post-list" id="admin-post-list">
+            {% if admin_posts %}
+              {% for item in admin_posts %}
+                <article
+                  class="post-item"
+                  data-post-item
+                  data-status="{{ item.status }}"
+                  data-search="{{ (item.title ~ ' ' ~ item.slug ~ ' ' ~ (item.category or '') ~ ' ' ~ (item.tags|join(' ')))|lower }}"
+                >
+                  <a class="post-link__main" href="{{ url_for('admin_write', post_id=item.id) }}">
+                    <div class="post-link__title-line">
+                      <strong>{{ item.title }}</strong>
                       <em class="status-badge {{ item.status }}">{{ '已发布' if item.status == 'published' else '草稿' }}</em>
+                    </div>
+                    <span class="post-link__meta">
                       <span>{{ item.category or 'Article' }}</span>
                       <span>{{ item.published_at or '未设置发布日期' }}</span>
                       <span>{{ item.read_time or '1 min' }}</span>
                       <span>{{ item.click_count or 0 }} 次阅读</span>
                     </span>
                     {% if item.tags %}
-                      <span class="post-link__tags">
+                      <span class="post-link__tags" aria-label="文章标签">
                         {% for tag in item.tags[:4] %}<span>#{{ tag }}</span>{% endfor %}
                       </span>
                     {% endif %}
@@ -58,42 +96,72 @@
                       {% endif %}
                     </span>
                   </a>
-                {% endfor %}
-              {% else %}
-                <div class="empty-state">还没有文章，先新建一篇试试。</div>
-              {% endif %}
-            </div>
-          </section>
-    </div>
-    <aside class="side-column">
-      <section class="card">
-        <div class="dashboard-lede">
-          <strong>写作区已经独立成页</strong>
-          新建、编辑、预览、媒体上传都从写作台完成；这里保持为安静的发行总览。
-          <div class="dashboard-actions">
-            <a class="primary" href="{{ url_for('admin_write') }}">开始新文章</a>
-            <a href="{{ url_for('admin_profile_page') }}">维护封面资料</a>
-          </div>
-        </div>
-      </section>
-          <section class="card">
-            <div class="card-head">
-              <div>
-                <h3>发行状态</h3>
-                <p>方便你核对当前后台入口和数据存储位置。</p>
+                  <div class="post-item__actions" aria-label="{{ item.title }} 操作">
+                    <a class="post-action" href="{{ url_for('admin_write', post_id=item.id) }}">编辑</a>
+                    {% if item.status == 'published' and item.slug %}
+                      <a class="post-action" href="/posts/{{ item.slug }}" target="_blank" rel="noreferrer">查看</a>
+                    {% endif %}
+                    <form
+                      method="post"
+                      action="{{ url_for('admin_delete_post', post_id=item.id) }}"
+                      data-confirm-form
+                      data-confirm="确定删除《{{ item.title|e }}》吗？此操作不可撤销。"
+                    >
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                      <button type="submit" class="post-action post-action--danger" data-loading-label="删除中…">删除</button>
+                    </form>
+                  </div>
+                </article>
+              {% endfor %}
+              <div class="filter-empty" id="admin-post-filter-empty" hidden>
+                <strong>没有匹配的稿件</strong>
+                <span>试试清空搜索词或切换发布状态。</span>
               </div>
-              <span class="eyebrow">System</span>
-            </div>
+            {% else %}
+              <div class="empty-state empty-state--large">
+                <span class="empty-state__mark">01</span>
+                <div>
+                  <strong>还没有文章</strong>
+                  <p>从一篇草稿开始，把想法写进你的 Journal。</p>
+                </div>
+                <a class="button button--primary" href="{{ url_for('admin_write') }}">新建第一篇文章</a>
+              </div>
+            {% endif %}
+          </div>
+        </section>
+      </div>
 
-            <ul class="meta-list">
-              <li><span>数据库路径</span><strong><code>{{ stats.db_path }}</code></strong></li>
-              <li><span>文章总数</span><strong>{{ stats.post_count }}</strong></li>
-              <li><span>已发布</span><strong>{{ stats.published_count }}</strong></li>
-              <li><span>草稿数量</span><strong>{{ stats.draft_count }}</strong></li>
-              <li><span>上传目录</span><strong><code>{{ stats.upload_dir }}</code></strong></li>
-              <li><span>后台入口</span><strong><code>{{ stats.admin_prefix }}</code></strong></li>
-            </ul>
-          </section>
-    </aside>
-  </div>
+      <aside class="side-column">
+        <section class="card">
+          <div class="dashboard-lede">
+            <span class="eyebrow">Workflow</span>
+            <strong>写作区已经独立成页</strong>
+            <p>新建、编辑、预览、媒体上传都从写作台完成；这里保持为安静的发行总览。</p>
+            <div class="dashboard-actions">
+              <a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a>
+              <a class="button button--quiet" href="{{ url_for('admin_profile_page') }}">维护封面资料</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="system-status-title">
+          <div class="card-head">
+            <div>
+              <h3 id="system-status-title">发行状态</h3>
+              <p>方便你核对当前后台入口和数据存储位置。</p>
+            </div>
+            <span class="eyebrow">System</span>
+          </div>
+          <ul class="meta-list">
+            <li><span>数据库路径</span><strong><code>{{ stats.db_path }}</code></strong></li>
+            <li><span>文章总数</span><strong>{{ stats.post_count }}</strong></li>
+            <li><span>已发布</span><strong>{{ stats.published_count }}</strong></li>
+            <li><span>草稿数量</span><strong>{{ stats.draft_count }}</strong></li>
+            <li><span>上传目录</span><strong><code>{{ stats.upload_dir }}</code></strong></li>
+            <li><span>后台入口</span><strong><code>{{ stats.admin_prefix }}</code></strong></li>
+          </ul>
+        </section>
+      </aside>
+    </div>
+  </main>
 {% endblock %}

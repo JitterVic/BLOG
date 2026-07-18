@@ -30,8 +30,10 @@ const insertImageButton = document.getElementById("insert-image-button");
 const mediaResult = document.getElementById("media-result");
 const toolbar = document.querySelector(".markdown-toolbar");
 const importWarning = document.getElementById("import-warning");
+const retryAutosaveButton = document.getElementById("retry-autosave");
 
 let previewTimer = null;
+let previewController = null;
 let previewGeneration = 0;
 let previewComputed = { excerpt: "", readTime: "1 min" };
 let latestImageMarkdown = "";
@@ -50,20 +52,37 @@ function splitTags(value = "") {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-function setStatus(message, state = "working") {
-  if (autosaveStatus) autosaveStatus.textContent = message;
+const SAVE_STATE_LABELS = {
+  pristine: "\u672a\u4fee\u6539",
+  local: "\u672c\u5730\u5df2\u4fdd\u5b58",
+  syncing: "\u6b63\u5728\u540c\u6b65",
+  server: "\u670d\u52a1\u5668\u5df2\u4fdd\u5b58",
+  error: "\u540c\u6b65\u5931\u8d25",
+};
+const SAVE_STATE_CLASSES = ["is-pristine", "is-local", "is-syncing", "is-server", "is-error", "is-working", "is-saved"];
+
+function setSaveState(state, detail = "") {
+  if (autosaveStatus) autosaveStatus.textContent = detail || SAVE_STATE_LABELS[state] || state;
   if (!saveState) return;
-  saveState.classList.remove("is-working", "is-saved", "is-error");
-  if (state) saveState.classList.add(`is-${state}`);
+  saveState.classList.remove(...SAVE_STATE_CLASSES);
+  const className = state === "working" ? "is-syncing" : state === "saved" ? "is-server" : `is-${state}`;
+  saveState.classList.add(className);
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const headers = new Headers(options.headers || {});
+  const method = (options.method || "GET").toUpperCase();
+  const csrfToken = document.body?.dataset.csrfToken;
+  if (method !== "GET" && csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  const response = await fetch(url, { ...options, headers });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || `\u8bf7\u6c42\u5931\u8d25\uff1a${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || `\u8bf7\u6c42\u5931\u8d25\uff1a${response.status}`);
+    error.code = data.code || "request_failed";
+    throw error;
+  }
   return data;
 }
-
 function highlightPreview() {
   if (!window.hljs || !previewTarget) return;
   previewTarget.querySelectorAll("pre code").forEach((code) => window.hljs.highlightElement(code));
@@ -96,23 +115,28 @@ function updateFrontPreview() {
 
 async function requestPreview(generation) {
   if (!markdownInput || !previewTarget) return;
+  if (previewController) previewController.abort();
+  const controller = new AbortController();
+  previewController = controller;
   try {
     if (previewMeta) previewMeta.textContent = "\u6b63\u5728\u6e32\u67d3\u2026\u2026";
     const data = await fetchJson(document.body.dataset.previewUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({ markdown_content: markdownInput.value }),
     });
-    if (generation !== previewGeneration) return;
+    if (generation !== previewGeneration || controller.signal.aborted) return;
     previewTarget.innerHTML = data.html || `<p>\u6682\u65e0\u9884\u89c8\u5185\u5bb9</p>`;
     previewComputed = { excerpt: data.excerpt || "", readTime: data.read_time || "1 min" };
     if (previewMeta) previewMeta.textContent = `${data.read_time} \u00b7 ${data.excerpt || "\u65e0\u81ea\u52a8\u6458\u8981"}`;
     highlightPreview();
     updateFrontPreview();
   } catch (error) {
-    if (generation !== previewGeneration) return;
+    if (controller.signal.aborted || generation !== previewGeneration) return;
     if (previewMeta) previewMeta.textContent = error.message || "\u9884\u89c8\u5931\u8d25";
-    setStatus(error.message || "\u9884\u89c8\u5931\u8d25", "error");
+  } finally {
+    if (previewController === controller) previewController = null;
   }
 }
 
@@ -246,10 +270,13 @@ function showImportWarning(markdownContent = "") {
 
 async function importMarkdownFile(file) {
   if (!file) return;
+  if (markdownInput?.value.trim() && !window.confirm("\u7f16\u8f91\u5668\u4e2d\u5df2\u6709\u6b63\u6587\uff0c\u5bfc\u5165 Markdown \u4f1a\u8986\u76d6\u73b0\u6709\u5185\u5bb9\u3002\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f")) {
+    return;
+  }
   const formData = new FormData();
   formData.append("markdown_file", file);
   try {
-    setStatus("\u6b63\u5728\u5bfc\u5165 Markdown\u2026\u2026", "working");
+    setSaveState("syncing", "\u6b63\u5728\u5bfc\u5165 Markdown\u2026\u2026");
     const data = await fetchJson(document.body.dataset.importUrl, { method: "POST", body: formData });
     markdownInput.value = data.markdown_content || "";
     titleInput.value = data.title || "";
@@ -264,10 +291,12 @@ async function importMarkdownFile(file) {
     showImportWarning(markdownInput.value);
     dispatchEditorInput();
     updateFrontPreview();
+    saveLocalDraft({ announce: false });
     scheduleDraftPersistence();
-    setStatus("Markdown \u5df2\u5bfc\u5165\uff0c\u5143\u4fe1\u606f\u5df2\u56de\u586b", "saved");
+    setSaveState("local");
   } catch (error) {
-    setStatus(error.message || "\u5bfc\u5165\u5931\u8d25", "error");
+    setSaveState("error", error.message || "\u5bfc\u5165\u5931\u8d25");
+    showRetryAutosave(false);
   }
 }
 
@@ -319,13 +348,13 @@ insertImageButton?.addEventListener("click", () => {
 const metadataInputs = [titleInput, categoryInput, publishedAtInput, readTimeInput, excerptInput, tagsInput, heroQuoteInput, coverImageInput];
 metadataInputs.forEach((input) => input?.addEventListener("input", () => {
   updateFrontPreview();
-  setStatus("\u6709\u672a\u4fdd\u5b58\u4fee\u6539", "working");
+  setSaveState("local");
 }));
 markdownInput?.addEventListener("input", () => {
   schedulePreview();
-  setStatus("\u6b63\u5728\u7f16\u8f91\u2026\u2026", "working");
+  setSaveState("local");
 });
-postForm?.addEventListener("submit", () => setStatus("\u6b63\u5728\u4fdd\u5b58\u2026\u2026", "working"));
+postForm?.addEventListener("submit", () => setSaveState("syncing", "\u6b63\u5728\u4fdd\u5b58\u2026\u2026"));
 
 highlightPreview();
 updateFrontPreview();
@@ -341,6 +370,12 @@ let localSaveTimer = null;
 let serverSaveTimer = null;
 let dirty = false;
 let isSubmitting = false;
+let draftRevision = 0;
+let serverSaveInFlight = false;
+let serverSaveController = null;
+let serverSaveQueued = false;
+let autosaveBlocked = false;
+let autosaveConflict = false;
 
 function currentPostId() {
   return String(postIdInput?.value || postForm?.dataset.postId || "").trim();
@@ -377,7 +412,7 @@ function saveLocalDraft({ announce = true } = {}) {
     fields: collectDraftFields(),
   };
   localStorage.setItem(localDraftKey(), JSON.stringify(payload));
-  if (announce) setStatus("\u672c\u5730\u8349\u7a3f\u5df2\u4fdd\u5b58", "saved");
+  if (announce) setSaveState("local");
   return payload;
 }
 
@@ -393,25 +428,46 @@ function formatClock(value = Date.now()) {
   return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
+function showRetryAutosave(visible, conflict = false) {
+  if (!retryAutosaveButton) return;
+  retryAutosaveButton.hidden = !visible;
+  retryAutosaveButton.dataset.mode = conflict ? "reload" : "retry";
+  retryAutosaveButton.textContent = conflict ? "\u91cd\u65b0\u52a0\u8f7d\u9875\u9762" : "\u91cd\u8bd5\u540c\u6b65";
+}
+
 async function persistDraftToServer() {
-  if (!postForm || isSubmitting) return;
+  if (!postForm || isSubmitting || autosaveBlocked) return;
+  if (serverSaveInFlight) {
+    serverSaveQueued = true;
+    return;
+  }
   const status = postForm.dataset.postStatus || "draft";
   if (status === "published") {
-    setStatus("\u5df2\u53d1\u5e03\u6587\u7ae0\uff1a\u4ec5\u672c\u5730\u81ea\u52a8\u4fdd\u5b58", "saved");
+    setSaveState("local", "\u5df2\u53d1\u5e03\u6587\u7ae0\uff1a\u4ec5\u672c\u5730\u81ea\u52a8\u4fdd\u5b58");
     return;
   }
   if (!titleInput?.value.trim()) {
-    setStatus("\u586b\u5199\u6807\u9898\u540e\u5c06\u81ea\u52a8\u4fdd\u5b58\u5230\u670d\u52a1\u5668", "working");
+    setSaveState("local", "\u586b\u5199\u6807\u9898\u540e\u5c06\u81ea\u52a8\u4fdd\u5b58\u5230\u670d\u52a1\u5668");
     return;
   }
 
   const oldKey = localDraftKey();
+  const requestRevision = draftRevision;
+  const requestFields = collectDraftFields();
+  serverSaveInFlight = true;
+  serverSaveController = new AbortController();
+  showRetryAutosave(false);
   try {
-    setStatus("\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026", "working");
+    setSaveState("syncing", "\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026");
     const data = await fetchJson(document.body.dataset.autosaveUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: currentPostId() || null, fields: collectDraftFields() }),
+      signal: serverSaveController.signal,
+      body: JSON.stringify({
+        post_id: currentPostId() || null,
+        updated_at: postForm.dataset.serverUpdatedAt || null,
+        fields: requestFields,
+      }),
     });
     if (!currentPostId() && data.id) {
       postIdInput.value = String(data.id);
@@ -425,17 +481,55 @@ async function persistDraftToServer() {
       migrateLocalDraftKey(oldKey);
     }
     postForm.dataset.serverUpdatedAt = data.updated_at || "";
-    dirty = false;
-    saveLocalDraft({ announce: false });
-    setStatus(`\u5df2\u81ea\u52a8\u4fdd\u5b58 ${formatClock()}`, "saved");
+    if (draftRevision === requestRevision) {
+      dirty = false;
+      saveLocalDraft({ announce: false });
+      showRetryAutosave(false);
+      setSaveState("server", `\u5df2\u81ea\u52a8\u4fdd\u5b58 ${formatClock()}`);
+    } else {
+      dirty = true;
+      serverSaveQueued = true;
+      setSaveState("local", "\u5df2\u4fdd\u5b58\u4e0a\u4e00\u7248\uff0c\u6b63\u5728\u7b49\u5f85\u6700\u65b0\u4fee\u6539\u540c\u6b65");
+    }
   } catch (error) {
-    setStatus(error.message || "\u81ea\u52a8\u4fdd\u5b58\u5931\u8d25", "error");
+    if (error.name === "AbortError" && isSubmitting) return;
+    if (error.code === "version_conflict") {
+      autosaveBlocked = true;
+      autosaveConflict = true;
+      serverSaveQueued = false;
+      showRetryAutosave(true, true);
+      setSaveState("error", "\u670d\u52a1\u5668\u5df2\u6709\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u540e\u518d\u7ee7\u7eed\u7f16\u8f91");
+    } else {
+      autosaveConflict = false;
+      showRetryAutosave(true, false);
+      setSaveState("error", error.message || "\u81ea\u52a8\u4fdd\u5b58\u5931\u8d25");
+    }
+  } finally {
+    serverSaveInFlight = false;
+    serverSaveController = null;
+    if (serverSaveQueued && !isSubmitting) {
+      serverSaveQueued = false;
+      window.clearTimeout(serverSaveTimer);
+      serverSaveTimer = window.setTimeout(persistDraftToServer, 250);
+    }
   }
 }
+
+retryAutosaveButton?.addEventListener("click", () => {
+  if (autosaveConflict) {
+    window.location.reload();
+    return;
+  }
+  autosaveBlocked = false;
+  showRetryAutosave(false);
+  setSaveState("syncing", "\u6b63\u5728\u91cd\u8bd5\u540c\u6b65\u2026\u2026");
+  persistDraftToServer();
+});
 
 function scheduleDraftPersistence() {
   if (!postForm || isSubmitting) return;
   dirty = true;
+  draftRevision += 1;
   window.clearTimeout(localSaveTimer);
   window.clearTimeout(serverSaveTimer);
   localSaveTimer = window.setTimeout(() => saveLocalDraft(), 350);
@@ -455,7 +549,7 @@ function restoreDraft(payload) {
   updateFrontPreview();
   dispatchEditorInput();
   scheduleDraftPersistence();
-  setStatus("\u5df2\u6062\u590d\u672c\u5730\u8349\u7a3f", "working");
+  setSaveState("local", "\u5df2\u6062\u590d\u672c\u5730\u8349\u7a3f");
 }
 
 function offerLocalDraftRecovery() {
@@ -470,7 +564,7 @@ function offerLocalDraftRecovery() {
   discardLocalDraftButton.onclick = () => {
     localStorage.removeItem(localDraftKey());
     recoveryBanner.hidden = true;
-    setStatus("\u5df2\u4e22\u5f03\u672c\u5730\u8349\u7a3f", "saved");
+    setSaveState("local", "\u5df2\u4e22\u5f03\u672c\u5730\u8349\u7a3f");
   };
 }
 
@@ -487,30 +581,51 @@ function insertAtCursor(text) {
   dispatchEditorInput();
 }
 
+function replaceUploadPlaceholder(anchor, replacement) {
+  if (!markdownInput) return;
+  const scrollTop = markdownInput.scrollTop;
+  let position = anchor.start;
+  if (markdownInput.value.slice(position, position + anchor.placeholder.length) !== anchor.placeholder) {
+    position = markdownInput.value.indexOf(anchor.placeholder);
+  }
+  if (position < 0) {
+    position = Math.min(anchor.start, markdownInput.value.length);
+    markdownInput.setRangeText(replacement, position, position, "end");
+  } else {
+    markdownInput.setRangeText(replacement, position, position + anchor.placeholder.length, "end");
+  }
+  markdownInput.scrollTop = scrollTop;
+  markdownInput.focus();
+  markdownInput.setSelectionRange(position + replacement.length, position + replacement.length);
+  dispatchEditorInput();
+}
+
 async function uploadAndInsertImage(file) {
-  if (!file?.type?.startsWith("image/")) return;
+  if (!file?.type?.startsWith("image/") || !markdownInput) return;
   const token = `uploading-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const placeholder = `![\u4e0a\u4f20\u4e2d\uff1a${safeImageAlt(file)}](uploading://${token})`;
-  insertAtCursor(placeholder);
-  setStatus(`\u6b63\u5728\u4e0a\u4f20 ${file.name || "image"}\u2026\u2026`, "working");
+  const start = markdownInput.selectionStart;
+  const end = markdownInput.selectionEnd;
+  const scrollTop = markdownInput.scrollTop;
+  markdownInput.setRangeText(placeholder, start, end, "end");
+  markdownInput.scrollTop = scrollTop;
+  markdownInput.focus();
+  markdownInput.setSelectionRange(start + placeholder.length, start + placeholder.length);
+  dispatchEditorInput();
+  const anchor = { start, placeholder };
+  setSaveState("syncing", `\u6b63\u5728\u4e0a\u4f20 ${file.name || "image"}\u2026\u2026`);
   const formData = new FormData();
   formData.append("image", file);
   try {
     const data = await fetchJson(document.body.dataset.uploadUrl, { method: "POST", body: formData });
     const markdown = `![${safeImageAlt(file)}](${data.url})`;
-    if (markdownInput.value.includes(placeholder)) {
-      markdownInput.value = markdownInput.value.replace(placeholder, markdown);
-      dispatchEditorInput();
-    } else {
-      insertAtCursor(`\n\n${markdown}`);
-    }
+    replaceUploadPlaceholder(anchor, markdown);
     latestImageMarkdown = markdown;
     renderMediaResult({ url: data.url });
-    setStatus("\u56fe\u7247\u5df2\u4e0a\u4f20\u5e76\u63d2\u5165\u6b63\u6587", "saved");
+    setSaveState("local");
   } catch (error) {
-    markdownInput.value = markdownInput.value.replace(placeholder, `![\u4e0a\u4f20\u5931\u8d25\uff1a${safeImageAlt(file)}]()`);
-    dispatchEditorInput();
-    setStatus(error.message || "\u56fe\u7247\u4e0a\u4f20\u5931\u8d25", "error");
+    replaceUploadPlaceholder(anchor, "");
+    setSaveState("error", error.message || "\u56fe\u7247\u4e0a\u4f20\u5931\u8d25");
   }
 }
 
@@ -542,12 +657,59 @@ workspace?.addEventListener("drop", (event) => {
   files.filter((file) => file.type.startsWith("image/")).forEach((file) => uploadAndInsertImage(file));
 });
 
+function clearSavedLocalDraft() {
+  if (!postForm || postForm.dataset.formSaved !== "true") return;
+  localStorage.removeItem(localDraftKey());
+  localStorage.removeItem("draft:new");
+  postForm.dataset.formSaved = "false";
+}
+
+function isSafeCoverUrl(value) {
+  if (!value) return true;
+  return /^https?:\/\//i.test(value) || /^\/uploads\/(?:media|avatars)\/[^/?#]+$/.test(value);
+}
+
+function focusValidationError(field, message) {
+  if (!field) return false;
+  field.setAttribute("aria-invalid", "true");
+  field.focus();
+  setSaveState("error", message);
+  return false;
+}
+
+function validatePostSubmission(event) {
+  if (!postForm) return true;
+  const title = titleInput?.value.trim() || "";
+  const slug = slugInput?.value.trim() || "";
+  const cover = coverImageInput?.value.trim() || "";
+  const tags = splitTags(tagsInput?.value || "");
+  const action = event.submitter?.value || "draft";
+  if (!title) return focusValidationError(titleInput, "\u8bf7\u5148\u586b\u5199\u6587\u7ae0\u6807\u9898\u3002");
+  if (slug && /[\s/?#]/.test(slug)) return focusValidationError(slugInput, "Slug \u4e0d\u80fd\u5305\u542b\u7a7a\u683c\u3001\u659c\u6760\u6216\u67e5\u8be2\u5b57\u7b26\u3002");
+  if (!isSafeCoverUrl(cover)) return focusValidationError(coverImageInput, "\u5c01\u9762\u56fe\u7247\u5fc5\u987b\u662f /uploads/ \u5730\u5740\u6216 http(s) \u56fe\u7247\u94fe\u63a5\u3002");
+  if (tags.length > 40) return focusValidationError(tagsInput, "\u6807\u7b7e\u6570\u91cf\u4e0d\u80fd\u8d85\u8fc7 40 \u4e2a\u3002");
+  if (action === "published" && !(markdownInput?.value || "").trim()) return focusValidationError(markdownInput, "\u53d1\u5e03\u524d\u8bf7\u5148\u586b\u5199\u6b63\u6587\u3002");
+  return true;
+}
+
+postForm?.addEventListener("invalid", (event) => {
+  if (event.target === titleInput) setSaveState("error", "\u8bf7\u5148\u586b\u5199\u6587\u7ae0\u6807\u9898\u3002");
+}, true);
 postForm?.addEventListener("input", scheduleDraftPersistence);
+postForm?.addEventListener("input", (event) => event.target.removeAttribute?.("aria-invalid"));
+postForm?.addEventListener("submit", (event) => {
+  if (!validatePostSubmission(event)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
 postForm?.addEventListener("submit", () => {
   isSubmitting = true;
   dirty = false;
+  serverSaveController?.abort();
   window.clearTimeout(localSaveTimer);
   window.clearTimeout(serverSaveTimer);
+  setSaveState("syncing", "\u6b63\u5728\u4fdd\u5b58\u2026\u2026");
   saveLocalDraft({ announce: false });
 });
 window.addEventListener("beforeunload", (event) => {
@@ -556,4 +718,5 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
+clearSavedLocalDraft();
 offerLocalDraftRecovery();

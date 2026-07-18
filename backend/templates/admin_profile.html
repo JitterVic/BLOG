@@ -1,4 +1,4 @@
-{% extends "admin_base.html" %}
+﻿{% extends "admin_base.html" %}
 {% set admin_page = "profile" %}
 
 {% block title %}封面资料 · 至知 Journal{% endblock %}
@@ -6,115 +6,154 @@
 {% block page_description %}维护首页身份、联系卡片、关于页简介、更新日历与头像。{% endblock %}
 
 {% block content %}
-  <main class="page-single">
+  <main class="admin-main profile-main">
     <section class="card profile-card" id="profile-card">
-            <div class="card-head">
-              <div>
-                <h2>封面 / 关于资料</h2>
-                <p>对应前台「封面」的 masthead、联系卡片，以及「关于」页的简介和更新日历。</p>
+      <div class="card-head">
+        <div>
+          <h2>封面 / 关于资料</h2>
+          <p>对应前台「封面」的 masthead、联系卡片，以及「关于」页的简介和更新日历。</p>
+        </div>
+        <span class="eyebrow">Cover + About</span>
+      </div>
+
+      <form
+        id="profile-form"
+        method="post"
+        action="{{ url_for('admin_profile') }}"
+        enctype="multipart/form-data"
+        data-loading-form
+        data-dirty="false"
+      >
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="profile-shell">
+          <div class="form-stack">
+            <section class="form-section" aria-labelledby="profile-basic-title">
+              <div class="form-section__heading">
+                <div>
+                  <span class="section-index">01 / Identity</span>
+                  <h4 id="profile-basic-title">基本资料</h4>
+                  <p>同步前台封面标题、角色、地点与首页导语。</p>
+                </div>
               </div>
-              <span class="eyebrow">Cover + About</span>
+              <div class="form-grid">
+                <label class="field">
+                  <span>站点名称 <b aria-hidden="true">*</b></span>
+                  <input type="text" name="name" value="{{ profile_form.name }}" placeholder="e.g. Study Without End" maxlength="120" required aria-describedby="name-help" />
+                  <small class="field-help" id="name-help">作为站点的主识别名称，最多 120 个字符。</small>
+                </label>
+
+                <label class="field">
+                  <span>角色身份</span>
+                  <input type="text" name="role" value="{{ profile_form.role }}" placeholder="全栈开发者 / 终身学习者" maxlength="160" />
+                </label>
+
+                <label class="field">
+                  <span>所在位置</span>
+                  <input type="text" name="location" value="{{ profile_form.location }}" placeholder="e.g. China / Loves Tech" maxlength="160" />
+                </label>
+
+                <label class="field-wide">
+                  <span>封面主标题</span>
+                  <input type="text" name="headline" value="{{ profile_form.headline }}" placeholder="首页主标题，例如：记录成长的点点滴滴" maxlength="240" />
+                </label>
+
+                <label class="field-wide">
+                  <span>封面导语</span>
+                  <textarea class="small-textarea" name="summary" placeholder="首页简介，一两句话说明你是谁、在做什么。" maxlength="1000">{{ profile_form.summary }}</textarea>
+                  <small class="field-help">建议使用 1–2 句话，最多 1000 个字符。</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="profile-contact-title">
+              <div class="form-section__heading">
+                <div>
+                  <span class="section-index">02 / Contact</span>
+                  <h4 id="profile-contact-title">联系方式</h4>
+                  <p>与前台首页 / 页脚的 Email、GitHub 卡片保持一致。</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>Email</span>
+                  <input type="email" name="email" value="{{ profile_form.email }}" placeholder="yourname@example.com" maxlength="320" aria-describedby="email-help" />
+                  <small class="field-help" id="email-help">保存时会在服务端再次校验格式。</small>
+                </label>
+
+                <label class="field">
+                  <span>GitHub 显示文本</span>
+                  <input type="text" name="github_label" value="{{ profile_form.github_label }}" placeholder="github.com/yourname" maxlength="240" />
+                </label>
+
+                <label class="field-wide">
+                  <span>GitHub 链接</span>
+                  <input type="url" name="github_url" value="{{ profile_form.github_url }}" placeholder="https://github.com/yourname" maxlength="2048" aria-describedby="github-help" />
+                  <small class="field-help" id="github-help">必须使用 http:// 或 https:// 开头的链接。</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section" aria-labelledby="profile-about-title">
+              <div class="form-section__heading">
+                <div>
+                  <span class="section-index">03 / About</span>
+                  <h4 id="profile-about-title">关于页内容</h4>
+                  <p>简介一行一段；更新日历使用 <code>Date | Event</code>，对应前台时间线。</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label class="field-wide">
+                  <span>关于页题记</span>
+                  <input type="text" name="hero_note" value="{{ profile_form.hero_note }}" placeholder="Short sentence shown on the about page" maxlength="500" />
+                </label>
+
+                <label class="field-wide">
+                  <span>关于页简介</span>
+                  <textarea name="about_intro" placeholder="One paragraph per line" maxlength="12000" aria-describedby="about-help">{{ profile_form.about_intro_text }}</textarea>
+                  <small class="field-help" id="about-help">每一行会作为一个独立段落显示，空行会被忽略。</small>
+                </label>
+
+                <label class="field-wide">
+                  <span>更新日历</span>
+                  <textarea class="small-textarea" name="update_calendar" placeholder="2026-03-21 | Homepage redesign" maxlength="12000" aria-describedby="calendar-help">{{ profile_form.update_calendar_text }}</textarea>
+                  <small class="field-help" id="calendar-help">每行一条记录；格式为日期、竖线和事件标题。</small>
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <aside class="avatar-panel" aria-labelledby="avatar-title">
+            <div>
+              <span class="section-index">04 / Avatar</span>
+              <h4 id="avatar-title">头像</h4>
+              <p class="helper">选择新文件后会立即在此预览，提交保存后才会同步到前台。</p>
             </div>
+            <div class="avatar-preview-shell">
+              {% if profile.avatar_url %}
+                <img src="{{ profile.avatar_url }}" alt="当前头像" class="avatar-preview" id="avatar-preview" />
+                <div class="avatar-fallback" id="avatar-fallback" hidden>{{ (profile_form.name or 'A')[:1] }}</div>
+              {% else %}
+                <img src="" alt="待上传头像预览" class="avatar-preview" id="avatar-preview" hidden />
+                <div class="avatar-fallback" id="avatar-fallback">{{ (profile_form.name or 'A')[:1] }}</div>
+              {% endif %}
+            </div>
+            <label class="file-picker" for="avatar-input">
+              <span>选择头像文件</span>
+              <input type="file" id="avatar-input" name="avatar" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" />
+            </label>
+            <output class="file-name" id="avatar-file-name">尚未选择新头像</output>
+            <p class="field-help">支持 PNG、JPG、GIF、WEBP 和 BMP。服务端会继续检查真实图片格式、大小和尺寸。</p>
+          </aside>
+        </div>
 
-            <form method="post" action="{{ url_for('admin_profile') }}" enctype="multipart/form-data">
-              <div class="profile-shell">
-                <div class="form-stack">
-                  <section class="form-section">
-                    <div>
-                      <h4>站点身份</h4>
-                      <p>同步前台封面标题、角色、地点与首页导语。</p>
-                    </div>
-                    <div class="form-grid">
-                      <label class="field">
-                        <span>站点名称</span>
-                        <input type="text" name="name" value="{{ profile_form.name }}" placeholder="e.g. Study Without End" required />
-                      </label>
-
-                      <label class="field">
-                        <span>角色身份</span>
-                        <input type="text" name="role" value="{{ profile_form.role }}" placeholder="全栈开发者 / 终身学习者" />
-                      </label>
-
-                      <label class="field">
-                        <span>所在位置</span>
-                        <input type="text" name="location" value="{{ profile_form.location }}" placeholder="e.g. China / Loves Tech" />
-                      </label>
-
-                      <label class="field-wide">
-                        <span>封面主标题</span>
-                        <input type="text" name="headline" value="{{ profile_form.headline }}" placeholder="首页主标题，例如：记录成长的点点滴滴" />
-                      </label>
-
-                      <label class="field-wide">
-                        <span>封面导语</span>
-                        <textarea class="small-textarea" name="summary" placeholder="首页简介，一两句话说明你是谁、在做什么。">{{ profile_form.summary }}</textarea>
-                      </label>
-                    </div>
-                  </section>
-
-                  <section class="form-section">
-                    <div>
-                      <h4>联系卡片</h4>
-                      <p>与前台首页 / 页脚的 Email、GitHub 卡片保持一致。</p>
-                    </div>
-                    <div class="form-grid">
-                      <label class="field">
-                        <span>Email</span>
-                        <input type="email" name="email" value="{{ profile_form.email }}" placeholder="yourname@example.com" />
-                      </label>
-
-                      <label class="field">
-                        <span>GitHub 显示文本</span>
-                        <input type="text" name="github_label" value="{{ profile_form.github_label }}" placeholder="github.com/yourname" />
-                      </label>
-
-                      <label class="field-wide">
-                        <span>GitHub 链接</span>
-                        <input type="url" name="github_url" value="{{ profile_form.github_url }}" placeholder="https://github.com/yourname" />
-                      </label>
-                    </div>
-                  </section>
-
-                  <section class="form-section">
-                    <div>
-                      <h4>关于页内容</h4>
-                      <p>简介一行一段；更新日历使用 <code>Date | Event</code>，对应前台时间线。</p>
-                    </div>
-                    <div class="form-grid">
-                      <label class="field-wide">
-                        <span>关于页题记</span>
-                        <input type="text" name="hero_note" value="{{ profile_form.hero_note }}" placeholder="Short sentence shown on the about page" />
-                      </label>
-
-                      <label class="field-wide">
-                        <span>关于页简介</span>
-                        <textarea name="about_intro" placeholder="One paragraph per line">{{ profile_form.about_intro_text }}</textarea>
-                      </label>
-
-                      <label class="field-wide">
-                        <span>更新日历</span>
-                        <textarea class="small-textarea" name="update_calendar" placeholder="2026-03-21 | Homepage redesign">{{ profile_form.update_calendar_text }}</textarea>
-                      </label>
-                    </div>
-                  </section>
-                </div>
-
-                <div class="avatar-panel">
-                  <span class="fieldset-label">头像上传</span>
-                  {% if profile.avatar_url %}
-                    <img src="{{ profile.avatar_url }}" alt="avatar" class="avatar-preview" />
-                  {% else %}
-                    <div class="avatar-fallback">{{ (profile_form.name or 'A')[:1] }}</div>
-                  {% endif %}
-                  <input type="file" name="avatar" accept="image/*" />
-                  <p class="helper">支持常见图片格式和中文文件名，保存后前台头像立即同步。</p>
-                </div>
-              </div>
-
-              <div class="toolbar">
-                <button type="submit" class="primary">保存封面资料</button>
-              </div>
-            </form>
-          </section>
+        <div class="form-submit-bar">
+          <div class="form-save-state" role="status" aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="profile-save-status">尚未修改</span>
+          </div>
+          <button type="submit" class="button button--primary" data-loading-label="保存中…">保存封面资料</button>
+        </div>
+      </form>
+    </section>
   </main>
 {% endblock %}
