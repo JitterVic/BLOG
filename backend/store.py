@@ -29,8 +29,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 STORAGE_DIR = ROOT_DIR / "storage"
 UPLOADS_DIR = STORAGE_DIR
 DEFAULT_DB_PATH = STORAGE_DIR / "blog.db"
-ALLOWED_MARKDOWN_EXTENSIONS = {".md", ".markdown"}
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif", ".avif", ".heic", ".heif"}
+ALLOWED_MARKDOWN_EXTENSIONS = {".md", ".markdown", ".txt"}
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif"}
 UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif"}
 IMAGE_FORMAT_EXTENSIONS = {
     "PNG": {".png"}, "JPEG": {".jpg", ".jpeg", ".jfif"},
@@ -358,8 +358,10 @@ def sanitize_html(html_text: str) -> str:
 
 
 def render_markdown(markdown_text: str) -> str:
+    # Rich-text paste often carries NBSP (U+00A0) indentation; rendered code
+    # copied back out would then fail to run, so normalize before rendering.
     rendered = markdown_lib.markdown(
-        markdown_text or "",
+        (markdown_text or "").replace(" ", " "),
         extensions=["extra", "fenced_code", "tables", "nl2br"],
     )
     return sanitize_html(rendered)
@@ -422,6 +424,34 @@ def validate_image_upload(file_storage, *, max_bytes: int, max_pixels: int) -> b
     if width <= 0 or height <= 0 or width * height > max_pixels:
         raise ValueError(f"图片尺寸过大，请控制在 {max_pixels:,} 像素以内。")
     return raw_bytes
+
+
+
+
+
+
+def strip_leading_title_heading(markdown_content: str, title: str = "") -> str:
+    """Remove a first ATX H1 when it duplicates the article title field."""
+    text = (markdown_content or "").lstrip("﻿")
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    if index >= len(lines):
+        return markdown_content
+    match = re.match(r"^#\s+(.+?)\s*$", lines[index])
+    if not match:
+        return markdown_content
+    heading = match.group(1).strip()
+    normalized_title = re.sub(r"\s+", " ", (title or "").strip())
+    normalized_heading = re.sub(r"\s+", " ", heading)
+    if normalized_title and normalized_heading != normalized_title:
+        return markdown_content
+    remaining = lines[:index] + lines[index + 1 :]
+    while remaining and not remaining[0].strip():
+        remaining = remaining[1:]
+    joined = "\n".join(remaining).strip()
+    return (joined + "\n") if joined else ""
 
 
 class PostVersionConflict(ValueError):
@@ -1064,7 +1094,7 @@ class BlogStore:
 
     def import_markdown(self, file_storage) -> dict[str, Any]:
         validate_extension(file_storage.filename or "", ALLOWED_MARKDOWN_EXTENSIONS, "Markdown 文件")
-        content = decode_markdown_file(file_storage.read())
+        content = decode_markdown_file(file_storage.read()).replace(" ", " ")
         metadata, markdown_content = parse_markdown_front_matter(content)
 
         guessed_title = str(metadata.get("title") or "").strip()
@@ -1073,6 +1103,8 @@ class BlogStore:
                 if line.startswith("# "):
                     guessed_title = line[2:].strip()
                     break
+
+        markdown_content = strip_leading_title_heading(markdown_content, guessed_title)
 
         tags = metadata.get("tags") if isinstance(metadata.get("tags"), list) else []
         excerpt = str(metadata.get("excerpt") or "").strip() or self.build_excerpt(markdown_content)
@@ -1096,7 +1128,7 @@ class BlogStore:
         relative_path = self.save_file(
             file_storage,
             "media",
-            allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+            allowed_extensions=UPLOAD_IMAGE_EXTENSIONS,
             label="图片",
         )
         return {

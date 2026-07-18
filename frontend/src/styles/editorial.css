@@ -2265,6 +2265,12 @@ body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;b
   padding: 0 0 4rem;
 }
 
+/* Articles without h2/h3 render no TOC aside; collapse to a single centered column
+   so the body is not auto-placed into the narrow TOC track. */
+.post-reading-layout--no-toc {
+  grid-template-columns: minmax(0, 760px);
+}
+
 .post-reading-layout > .print-markdown,
 .post-reading-layout > .post-body {
   width: 100%;

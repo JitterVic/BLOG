@@ -854,3 +854,102 @@ textarea:disabled { cursor: not-allowed; opacity: 0.65; }
 .write-retry[hidden] { display: none; }
 @keyframes save-pulse { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .write-save-state.is-syncing .status-dot { animation: none; } }
+
+
+.import-warning.is-error {
+  color: #7a1f12;
+  border-color: rgba(154, 42, 24, 0.35);
+  background: #fdece8;
+}
+.import-warning.is-success {
+  color: #2f4b2f;
+  border-color: rgba(62, 104, 62, 0.28);
+  background: #eef6ee;
+}
+
+
+/* Write status certainty */
+.write-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.95rem;
+  border: 1px solid var(--rule-light);
+  background: rgba(255, 251, 240, 0.72);
+}
+.write-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid rgba(75, 56, 39, 0.22);
+  border-radius: 999px;
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.write-status-badge.is-draft {
+  color: #6b4500;
+  background: #fff0b8;
+  border-color: rgba(177, 112, 0, 0.34);
+}
+.write-status-badge.is-published {
+  color: #214628;
+  background: #dff3df;
+  border-color: rgba(48, 112, 58, 0.32);
+}
+.write-status-bar strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.published-autosave-tip {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0 0 0.85rem;
+  padding: 0.78rem 0.95rem;
+  color: #4a2d00;
+  border: 1px solid rgba(177, 112, 0, 0.34);
+  background: #fff5d8;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.published-autosave-tip[hidden] { display: none; }
+.published-autosave-tip strong { font-size: 0.74rem; }
+.field-hint {
+  display: block;
+  margin-top: 0.28rem;
+  color: #6b4500;
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+.field-hint[hidden] { display: none; }
+
+/* Stronger flash messages for publish certainty */
+.messages .message.success,
+.messages .message.message--success {
+  border-color: rgba(48, 112, 58, 0.35);
+  background: #e7f6e8;
+  color: #1d3f24;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.95rem 1.05rem;
+}
+.messages .message.error,
+.messages .message.message--error {
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.95rem 1.05rem;
+}
+
+/* Front article without TOC keeps single-column reading layout */
+.post-reading-layout--no-toc,
+.print-article-detail:not(:has(.article-toc)) .post-reading-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+

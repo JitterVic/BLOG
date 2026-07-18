@@ -381,7 +381,7 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <div class="post-reading-layout">
+      <div class="post-reading-layout" :class="{ 'post-reading-layout--no-toc': !tableOfContents.length }">
         <aside v-if="tableOfContents.length" class="article-toc rv" data-reveal-delay="100">
           <div class="article-toc__head">
             <span>On this page</span>

@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const adminPostSearch = document.getElementById("admin-post-search");
 const adminPostStatus = document.getElementById("admin-post-status");
@@ -52,6 +52,9 @@ function bindLoadingForm(form) {
     }
   }, true);
   form.addEventListener("submit", (event) => {
+    // If another capture-phase handler already cancelled submit (e.g. write-page
+    // field validation), do not lock the form into a permanent loading state.
+    if (event.defaultPrevented) return;
     const submitter = event.submitter || form.querySelector("button[type=submit]");
     const confirmation = submitter?.dataset.confirm || form.dataset.confirm;
     if (confirmation && !window.confirm(confirmation)) {
@@ -65,13 +68,18 @@ function bindLoadingForm(form) {
     form.dataset.submitting = "true";
     form.classList.add("is-submitting");
     form.setAttribute("aria-busy", "true");
-    form.querySelectorAll("button[type=submit]").forEach((button) => {
-      button.disabled = true;
-      if (button === submitter || button.dataset.loadingLabel) {
-        button.dataset.originalLabel = button.textContent;
-        button.textContent = button.dataset.loadingLabel || "\u5904\u7406\u4e2d\u2026";
-      }
-    });
+    // Defer disabling: a submit button disabled synchronously inside the submit
+    // event is excluded when the browser serializes the form, dropping its
+    // name/value pair (e.g. action=published on the write page).
+    window.setTimeout(() => {
+      form.querySelectorAll("button[type=submit]").forEach((button) => {
+        button.disabled = true;
+        if (button === submitter || button.dataset.loadingLabel) {
+          button.dataset.originalLabel = button.textContent;
+          button.textContent = button.dataset.loadingLabel || "\u5904\u7406\u4e2d\u2026";
+        }
+      });
+    }, 0);
     if (form === profileForm) {
       profileForm.dataset.dirty = "false";
       if (profileSaveState) {

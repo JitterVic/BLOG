@@ -517,7 +517,7 @@ def create_app():
                 return redirect(url_for("admin_write", post_id=post_id))
             return redirect(url_for("admin_write"))
 
-        message = "文章已保存为草稿/已下架。" if action == "draft" else "文章已发布。"
+        message = ("已保存为草稿（前台不可见）。若要上线，请点击「发布文章」。" if action == "draft" else "文章已发布，前台现在可以看到。")
         flash(message, "success")
         return redirect(url_for("admin_write", post_id=saved_id, saved=1))
 

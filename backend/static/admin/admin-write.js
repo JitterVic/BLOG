@@ -270,34 +270,77 @@ function showImportWarning(markdownContent = "") {
 
 async function importMarkdownFile(file) {
   if (!file) return;
-  if (markdownInput?.value.trim() && !window.confirm("\u7f16\u8f91\u5668\u4e2d\u5df2\u6709\u6b63\u6587\uff0c\u5bfc\u5165 Markdown \u4f1a\u8986\u76d6\u73b0\u6709\u5185\u5bb9\u3002\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f")) {
+  const importUrl = document.body?.dataset?.importUrl;
+  if (!importUrl) {
+    setSaveState("error", "导入地址不可用，请刷新页面后重试。");
+    showImportStatus("导入地址不可用，请刷新页面后重试。", true);
+    return;
+  }
+  if (!/\.(?:md|markdown|txt)$/i.test(file.name || "")) {
+    const message = "请选择 .md / .markdown 文稿文件（也兼容 .txt）。";
+    setSaveState("error", message);
+    showImportStatus(message, true);
+    return;
+  }
+  if (markdownInput?.value.trim() && !window.confirm("编辑器中已有正文，导入 Markdown 会覆盖现有内容。确定继续吗？")) {
     return;
   }
   const formData = new FormData();
   formData.append("markdown_file", file);
   try {
-    setSaveState("syncing", "\u6b63\u5728\u5bfc\u5165 Markdown\u2026\u2026");
-    const data = await fetchJson(document.body.dataset.importUrl, { method: "POST", body: formData });
-    markdownInput.value = data.markdown_content || "";
-    titleInput.value = data.title || "";
-    slugInput.value = data.slug || "";
-    categoryInput.value = data.category || "";
-    publishedAtInput.value = data.published_at || "";
-    tagsInput.value = data.tags_text || (Array.isArray(data.tags) ? data.tags.join(", ") : "");
-    excerptInput.value = data.excerpt || "";
-    readTimeInput.value = data.read_time || "";
-    heroQuoteInput.value = data.hero_quote || "";
-    coverImageInput.value = data.cover_image || "";
-    showImportWarning(markdownInput.value);
+    setSaveState("syncing", `正在导入 ${file.name || "Markdown"}……`);
+    showImportStatus(`正在导入 ${file.name || "Markdown"}……`, false);
+    const data = await fetchJson(importUrl, { method: "POST", body: formData });
+    if (markdownInput) markdownInput.value = data.markdown_content || "";
+    if (titleInput) titleInput.value = data.title || "";
+    if (slugInput) {
+      slugInput.value = data.slug || "";
+      updateSlugHint();
+    }
+    if (categoryInput) categoryInput.value = data.category || "";
+    if (publishedAtInput) publishedAtInput.value = normalizeDateInput(data.published_at || "");
+    if (tagsInput) {
+      tagsInput.value = data.tags_text || (Array.isArray(data.tags) ? data.tags.join(", ") : "");
+    }
+    if (excerptInput) excerptInput.value = data.excerpt || "";
+    if (readTimeInput) readTimeInput.value = data.read_time || "";
+    if (heroQuoteInput) heroQuoteInput.value = data.hero_quote || "";
+    if (coverImageInput) coverImageInput.value = data.cover_image || "";
+    showImportWarning(markdownInput?.value || "");
+    showImportStatus(`已导入 ${file.name || "Markdown"}。若封面是相对路径，请改为 /uploads/ 或 http(s) 地址后再发布。`, false);
     dispatchEditorInput();
     updateFrontPreview();
     saveLocalDraft({ announce: false });
     scheduleDraftPersistence();
-    setSaveState("local");
+    setSaveState("local", "文稿已导入到编辑器（尚未发布）");
   } catch (error) {
-    setSaveState("error", error.message || "\u5bfc\u5165\u5931\u8d25");
+    const message = error.message || "导入失败";
+    setSaveState("error", message);
+    showImportStatus(message, true);
     showRetryAutosave(false);
   }
+}
+
+function normalizeDateInput(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (!match) return "";
+  return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+}
+
+function showImportStatus(message = "", isError = false) {
+  if (!importWarning) return;
+  if (!message) {
+    importWarning.hidden = true;
+    importWarning.textContent = "";
+    importWarning.classList.remove("is-error", "is-success");
+    return;
+  }
+  importWarning.hidden = false;
+  importWarning.textContent = message;
+  importWarning.classList.toggle("is-error", isError);
+  importWarning.classList.toggle("is-success", !isError);
 }
 
 markdownFileInput?.addEventListener("change", async (event) => {
@@ -649,7 +692,7 @@ workspace?.addEventListener("drop", (event) => {
   if (!files.length) return;
   event.preventDefault();
   workspace.classList.remove("is-dragover");
-  const markdownFile = files.find((file) => /\.(?:md|markdown)$/i.test(file.name || ""));
+  const markdownFile = files.find((file) => /\.(?:md|markdown|txt)$/i.test(file.name || ""));
   if (markdownFile) {
     importMarkdownFile(markdownFile);
     return;
@@ -677,18 +720,74 @@ function focusValidationError(field, message) {
   return false;
 }
 
+
+function syncWriteStatusUI(status = "draft") {
+  const badge = document.getElementById("write-status-badge");
+  const label = document.getElementById("write-status-label");
+  const tip = document.getElementById("published-autosave-tip");
+  const normalized = status === "published" ? "published" : "draft";
+  if (postForm) postForm.dataset.postStatus = normalized;
+  if (badge) {
+    badge.dataset.status = normalized;
+    badge.classList.toggle("is-published", normalized === "published");
+    badge.classList.toggle("is-draft", normalized !== "published");
+    badge.textContent = normalized === "published" ? "已发布" : "草稿";
+  }
+  if (label) {
+    label.textContent = normalized === "published"
+      ? "当前线上版本已发布。修改后请再次点击「发布文章」才会更新前台。"
+      : "当前为草稿，前台不可见。确认无误后请点击「发布文章」。";
+  }
+  if (tip) tip.hidden = normalized !== "published";
+}
+
+function updateSlugHint() {
+  const hint = document.getElementById("slug-hint");
+  if (!hint || !slugInput) return;
+  const value = slugInput.value.trim();
+  const hasNonAscii = /[^\x00-\x7F]/.test(value);
+  hint.hidden = !(value && hasNonAscii);
+}
+
+function countUnclosedFences(markdown = "") {
+  let open = 0;
+  for (const line of String(markdown).split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) open += 1;
+  }
+  return open % 2 === 1;
+}
+
+function hasHeadingSpaceIssues(markdown = "") {
+  return /(?:^|\n)#{1,6}[^#\s\n]/.test(String(markdown));
+}
+
+function hasSectionHeadings(markdown = "") {
+  return /(?:^|\n)##\s+\S/.test(String(markdown));
+}
+
 function validatePostSubmission(event) {
   if (!postForm) return true;
   const title = titleInput?.value.trim() || "";
   const slug = slugInput?.value.trim() || "";
   const cover = coverImageInput?.value.trim() || "";
   const tags = splitTags(tagsInput?.value || "");
+  const markdown = markdownInput?.value || "";
   const action = event.submitter?.value || "draft";
-  if (!title) return focusValidationError(titleInput, "\u8bf7\u5148\u586b\u5199\u6587\u7ae0\u6807\u9898\u3002");
-  if (slug && /[\s/?#]/.test(slug)) return focusValidationError(slugInput, "Slug \u4e0d\u80fd\u5305\u542b\u7a7a\u683c\u3001\u659c\u6760\u6216\u67e5\u8be2\u5b57\u7b26\u3002");
-  if (!isSafeCoverUrl(cover)) return focusValidationError(coverImageInput, "\u5c01\u9762\u56fe\u7247\u5fc5\u987b\u662f /uploads/ \u5730\u5740\u6216 http(s) \u56fe\u7247\u94fe\u63a5\u3002");
-  if (tags.length > 40) return focusValidationError(tagsInput, "\u6807\u7b7e\u6570\u91cf\u4e0d\u80fd\u8d85\u8fc7 40 \u4e2a\u3002");
-  if (action === "published" && !(markdownInput?.value || "").trim()) return focusValidationError(markdownInput, "\u53d1\u5e03\u524d\u8bf7\u5148\u586b\u5199\u6b63\u6587\u3002");
+  if (!title) return focusValidationError(titleInput, "请先填写文章标题。");
+  if (slug && /[\s/?#]/.test(slug)) return focusValidationError(slugInput, "Slug 不能包含空格、斜杠或查询字符。");
+  if (!isSafeCoverUrl(cover)) return focusValidationError(coverImageInput, "封面图片必须是 /uploads/ 地址或 http(s) 图片链接。");
+  if (tags.length > 40) return focusValidationError(tagsInput, "标签数量不能超过 40 个。");
+  if (action === "published" && !markdown.trim()) return focusValidationError(markdownInput, "发布前请先填写正文。");
+  if (action === "published" && countUnclosedFences(markdown)) {
+    return focusValidationError(markdownInput, "检测到未闭合的 ``` 代码围栏，请先补全后再发布。");
+  }
+  if (action === "published" && hasHeadingSpaceIssues(markdown)) {
+    return focusValidationError(markdownInput, "标题 # 后需要空格，例如 `## 章节名`。");
+  }
+  if (action === "published" && !hasSectionHeadings(markdown)) {
+    const ok = window.confirm("正文还没有二级标题（## 章节名）。前台将不会显示目录侧栏。仍要发布吗？");
+    if (!ok) return focusValidationError(markdownInput, "已取消发布。建议用 ## 章节名 组织正文。");
+  }
   return true;
 }
 
@@ -718,5 +817,8 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
+slugInput?.addEventListener("input", updateSlugHint);
+updateSlugHint();
+syncWriteStatusUI(postForm?.dataset.postStatus || "draft");
 clearSavedLocalDraft();
 offerLocalDraftRecovery();

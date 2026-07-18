@@ -231,7 +231,8 @@ def test_markdown_import_endpoint_returns_editor_fields(client):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["title"] == "Imported"
-    assert payload["markdown_content"].startswith("# Imported")
+    assert payload["markdown_content"].lstrip().startswith("Body")
+    assert not payload["markdown_content"].lstrip().startswith("# Imported")
     assert payload["tags"] == ["one", "two"]
 
 
@@ -435,4 +436,54 @@ def test_list_posts_omits_body_columns(app_bundle, client):
     assert len(admin_rows) <= 200
     admin_match = next(item for item in admin_rows if item["slug"] == "compact-list-body")
     assert "markdown_content" not in admin_match
+
+
+def test_import_strips_duplicate_leading_h1(app_bundle, client):
+    _application, store = app_bundle
+    class FakeFile:
+        filename = "dup.md"
+        def read(self):
+            return b"---\ntitle: Same Title\n---\n\n# Same Title\n\nBody text"
+    payload = store.import_markdown(FakeFile())
+    assert payload["title"] == "Same Title"
+    assert payload["markdown_content"].lstrip().startswith("Body text")
+    assert not payload["markdown_content"].lstrip().startswith("# Same Title")
+
+
+def test_heic_is_rejected_by_upload_whitelist(app_bundle, client):
+    _application, _store = app_bundle
+    token = login(client)
+    response = client.post(
+        "/admin/api/upload-image",
+        data={"image": (io.BytesIO(b"not-real"), "photo.heic")},
+        headers={"X-CSRF-Token": token},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "validation_error"
+
+
+def test_admin_loading_form_respects_prevented_submit():
+    script = Path("backend/static/admin/admin.js").read_text(encoding="utf-8")
+    assert "event.defaultPrevented" in script
+    assert 'form.dataset.submitting = "true"' in script
+    # loading lock must not run when validation already cancelled submit
+    idx = script.index("event.defaultPrevented")
+    lock = script.index("form.dataset.submitting")
+    assert idx < lock
+
+
+def test_write_page_exposes_publish_status_chrome(client):
+    login(client)
+    page = client.get("/admin/write").get_data(as_text=True)
+    assert "write-status-badge" in page
+    assert "published-autosave-tip" in page
+    assert "write-status-bar" in page
+
+
+def test_css_contains_no_toc_rule():
+    admin_css = Path("backend/static/admin/admin.css").read_text(encoding="utf-8")
+    front_css = Path("frontend/src/styles/editorial.css").read_text(encoding="utf-8")
+    assert "write-status-badge" in admin_css
+    assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
 

@@ -25,6 +25,33 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" id="post-id" name="post_id" value="{{ edit_post.id }}" />
 
+      <div class="write-status-bar" aria-live="polite">
+        <span
+          id="write-status-badge"
+          class="write-status-badge {% if edit_post.status == 'published' %}is-published{% else %}is-draft{% endif %}"
+          data-status="{{ edit_post.status or 'draft' }}"
+        >
+          {% if edit_post.status == 'published' %}已发布{% else %}草稿{% endif %}
+        </span>
+        <strong id="write-status-label">
+          {% if edit_post.status == 'published' %}
+            当前线上版本已发布。修改后请再次点击「发布文章」才会更新前台。
+          {% else %}
+            当前为草稿，前台不可见。确认无误后请点击「发布文章」。
+          {% endif %}
+        </strong>
+      </div>
+
+      <div
+        id="published-autosave-tip"
+        class="published-autosave-tip"
+        role="status"
+        {% if edit_post.status != 'published' %}hidden{% endif %}
+      >
+        <strong>已发布文章提示</strong>
+        <span>自动保存仅在本地生效，不会覆盖线上正文。需要更新前台时，请点击「发布文章」。</span>
+      </div>
+
       <div id="import-warning" class="import-warning" role="status" hidden></div>
 
       <div id="draft-recovery-banner" class="draft-recovery-banner" hidden>
@@ -57,7 +84,8 @@
               </label>
               <label class="field">
                 <span>Slug</span>
-                <input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" placeholder="留空自动生成" maxlength="240" />
+                <input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" />
+                <small id="slug-hint" class="field-hint" hidden>检测到中文或特殊字符：分享链接会变成百分号编码，建议改成英文短链。</small>
               </label>
               <label class="field">
                 <span>发布日期</span>
@@ -120,8 +148,8 @@
         <section class="writing-pane writing-pane--editor">
           <div class="writing-pane__head">
             <div><span>02 / Markdown</span><strong>正文编辑</strong></div>
-            <label class="inline-action" for="markdown-file">导入 Markdown</label>
-            <input type="file" id="markdown-file" accept=".md,.markdown,text/markdown" hidden />
+            <label class="inline-action" for="markdown-file">导入文稿</label>
+            <input type="file" id="markdown-file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
           </div>
           <div class="markdown-toolbar" role="toolbar" aria-label="Markdown 格式工具">
             <button type="button" data-command="bold" title="Ctrl+B"><strong>B</strong></button>
