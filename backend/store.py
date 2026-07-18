@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import io
 import json
 import math
 import os
@@ -13,9 +14,13 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 import markdown as markdown_lib
+from PIL import Image, UnidentifiedImageError
 from werkzeug.utils import secure_filename
 
-from content import POSTS, SITE_CONFIG
+try:
+    from .content import POSTS, SITE_CONFIG
+except ImportError:
+    from content import POSTS, SITE_CONFIG
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -24,6 +29,27 @@ UPLOADS_DIR = STORAGE_DIR
 DEFAULT_DB_PATH = STORAGE_DIR / "blog.db"
 ALLOWED_MARKDOWN_EXTENSIONS = {".md", ".markdown"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".jfif", ".avif", ".heic", ".heif"}
+UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif"}
+IMAGE_FORMAT_EXTENSIONS = {
+    "PNG": {".png"}, "JPEG": {".jpg", ".jpeg", ".jfif"},
+    "GIF": {".gif"}, "WEBP": {".webp"}, "BMP": {".bmp"},
+}
+IMAGE_MIME_TYPES = {
+    "PNG": {"image/png"}, "JPEG": {"image/jpeg", "image/jpg", "image/pjpeg"},
+    "GIF": {"image/gif"}, "WEBP": {"image/webp"},
+    "BMP": {"image/bmp", "image/x-ms-bmp"},
+}
+DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+DEFAULT_MAX_IMAGE_PIXELS = 20_000_000
+MAX_FIELD_LENGTHS = {
+    "name": 120, "role": 160, "location": 160, "headline": 240,
+    "summary": 1000, "email": 320, "hero_note": 500,
+    "github_label": 240, "github_url": 2048, "about_intro": 12_000,
+    "update_calendar": 12_000, "title": 240, "slug": 240,
+    "excerpt": 1200, "published_at": 32, "read_time": 32,
+    "category": 120, "tags": 1200, "hero_quote": 1000,
+    "cover_image": 2048, "markdown_content": 500_000,
+}
 PUBLIC_UPLOAD_FOLDERS = {"avatars", "media"}
 
 JSON_FIELDS = {
@@ -348,6 +374,49 @@ def validate_extension(filename: str, allowed_extensions: set[str], label: str) 
         raise ValueError(f"{label}格式不支持，请使用：{allowed}")
 
 
+def validate_text_length(field: str, value: str, *, max_length: int | None = None) -> str:
+    normalized = str(value or "").strip()
+    limit = max_length or MAX_FIELD_LENGTHS.get(field)
+    if limit and len(normalized) > limit:
+        raise ValueError(f"{field}内容过长，请控制在 {limit} 个字符以内。")
+    return normalized
+
+
+def validate_image_upload(file_storage, *, max_bytes: int, max_pixels: int) -> bytes:
+    filename = (file_storage.filename or "").strip()
+    extension = get_extension(filename)
+    validate_extension(filename, UPLOAD_IMAGE_EXTENSIONS, "图片")
+    mimetype = (file_storage.mimetype or "").lower().split(";", 1)[0].strip()
+    if mimetype and not mimetype.startswith("image/"):
+        raise ValueError("图片 MIME 类型无效，请选择真实的图片文件。")
+    stream = file_storage.stream
+    stream.seek(0)
+    raw_bytes = stream.read(max_bytes + 1)
+    stream.seek(0)
+    if len(raw_bytes) > max_bytes:
+        raise ValueError(f"图片过大，请控制在 {max_bytes // (1024 * 1024)} MB 以内。")
+    if not raw_bytes:
+        raise ValueError("图片文件为空。")
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as image:
+            image_format = (image.format or "").upper()
+            width, height = image.size
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ValueError("图片内容无法识别，请上传有效的图片文件。") from exc
+    if image_format not in IMAGE_FORMAT_EXTENSIONS or extension not in IMAGE_FORMAT_EXTENSIONS[image_format]:
+        raise ValueError("图片扩展名、MIME 类型与真实图片格式不一致。")
+    if mimetype and mimetype not in IMAGE_MIME_TYPES.get(image_format, set()):
+        raise ValueError("图片 MIME 类型与真实图片格式不一致。")
+    if width <= 0 or height <= 0 or width * height > max_pixels:
+        raise ValueError(f"图片尺寸过大，请控制在 {max_pixels:,} 像素以内。")
+    return raw_bytes
+
+
+class PostVersionConflict(ValueError):
+    """Raised when an autosave would overwrite a newer server version."""
+
+
 class BlogStore:
     def __init__(self, db_path: str | os.PathLike[str] | None = None):
         raw_db_path = Path(db_path or os.getenv("BLOG_DATABASE_PATH") or DEFAULT_DB_PATH)
@@ -355,10 +424,16 @@ class BlogStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         (UPLOADS_DIR / "avatars").mkdir(parents=True, exist_ok=True)
         (UPLOADS_DIR / "media").mkdir(parents=True, exist_ok=True)
+        self.max_file_bytes = max(1, int(os.getenv("BLOG_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))))
+        self.max_image_bytes = max(1, int(os.getenv("BLOG_MAX_IMAGE_BYTES", str(DEFAULT_MAX_IMAGE_BYTES))))
+        self.max_image_pixels = max(1, int(os.getenv("BLOG_MAX_IMAGE_PIXELS", str(DEFAULT_MAX_IMAGE_PIXELS))))
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path)
+        connection = sqlite3.connect(self.db_path, timeout=5)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connection.execute("PRAGMA journal_mode = WAL")
         return connection
 
     def init(self) -> None:
@@ -547,12 +622,22 @@ class BlogStore:
 
     def get_site_payload(self) -> dict[str, Any]:
         profile = self.get_site_profile()
-        posts = self.list_posts(published_only=True)
-        tags = sorted({tag for post in posts for tag in post.get("tags", [])})
+        tags: set[str] = set()
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT tags FROM posts WHERE status = 'published'"
+            ).fetchall()
+        for row in rows:
+            try:
+                values = json.loads(row["tags"] or "[]")
+            except (TypeError, json.JSONDecodeError):
+                values = []
+            if isinstance(values, list):
+                tags.update(str(tag).strip() for tag in values if str(tag).strip())
 
         payload = {key: value for key, value in SITE_CONFIG.items() if key != "featured_slug"}
         payload.update(profile)
-        payload["tags"] = tags
+        payload["tags"] = sorted(tags)
         return payload
 
     def _build_post_filters(
@@ -688,17 +773,69 @@ class BlogStore:
             row = connection.execute(query, params).fetchone()
         return self._row_to_dict(row)
 
-    def increment_post_click(self, slug: str) -> None:
+    def increment_post_click(self, slug: str) -> int:
+        """Increase public view count once. Returns the updated click_count (or current if missing)."""
         with self.connect() as connection:
             connection.execute(
                 """
                 UPDATE posts
-                SET click_count = COALESCE(click_count, 0) + 1, updated_at = updated_at
+                SET click_count = COALESCE(click_count, 0) + 1
                 WHERE slug = ? AND status = 'published'
                 """,
                 (slug,),
             )
+            row = connection.execute(
+                "SELECT click_count FROM posts WHERE slug = ? AND status = 'published'",
+                (slug,),
+            ).fetchone()
             connection.commit()
+        return int(row["click_count"] if row else 0)
+
+    def get_related_posts(
+        self,
+        post: dict[str, Any],
+        *,
+        limit: int = 2,
+        candidate_limit: int = 48,
+    ) -> list[dict[str, Any]]:
+        """Pick related published posts without loading full article bodies."""
+        slug = str(post.get("slug") or "")
+        if not slug or limit <= 0:
+            return []
+
+        current_tags = {str(tag).strip().lower() for tag in (post.get("tags") or []) if str(tag).strip()}
+        current_category = (post.get("category") or "").strip().lower()
+        fetch_limit = max(int(limit), min(int(candidate_limit), 200))
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, slug, title, excerpt, category, tags, published_at, updated_at, click_count
+                FROM posts
+                WHERE status = 'published' AND slug != ?
+                ORDER BY published_at DESC, updated_at DESC, id DESC
+                LIMIT ?
+                """,
+                (slug, fetch_limit),
+            ).fetchall()
+
+        candidates = [self._row_to_dict(row) for row in rows]
+
+        def related_score(candidate: dict[str, Any]) -> tuple[int, str]:
+            candidate_tags = {
+                str(tag).strip().lower()
+                for tag in (candidate.get("tags") or [])
+                if str(tag).strip()
+            }
+            shared_tags = len(current_tags & candidate_tags)
+            same_category = int(
+                bool(current_category)
+                and (candidate.get("category") or "").strip().lower() == current_category
+            )
+            return (shared_tags * 3 + same_category * 2, candidate.get("published_at") or "")
+
+        candidates.sort(key=related_score, reverse=True)
+        return candidates[:limit]
 
     def get_post_by_id(self, post_id: int) -> dict[str, Any] | None:
         with self.connect() as connection:
@@ -716,47 +853,35 @@ class BlogStore:
         current = self.get_site_profile()
         avatar_path = current.get("avatar_path", "")
         if avatar_file and avatar_file.filename:
-            avatar_path = self.save_file(
-                avatar_file,
-                "avatars",
-                allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
-                label="头像图片",
-            )
+            avatar_path = self.save_file(avatar_file, "avatars", label="头像图片")
 
-        name = form_data.get("name", "").strip() or current.get("name", "")
+        values = {
+            field: validate_text_length(field, form_data.get(field, ""))
+            for field in (
+                "name", "role", "location", "headline", "summary", "email",
+                "hero_note", "github_label", "github_url", "about_intro", "update_calendar",
+            )
+        }
+        name = values["name"] or current.get("name", "")
         if not name:
             raise ValueError("站点名称不能为空。")
-
-        email = form_data.get("email", "").strip()
-        role = form_data.get("role", "").strip()
-        headline = form_data.get("headline", "").strip()
-        summary = form_data.get("summary", "").strip()
-        github_label = form_data.get("github_label", "").strip()
-        github_url = form_data.get("github_url", "").strip()
+        email = values["email"]
+        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            raise ValueError("Email 格式无效。")
+        github_label = values["github_label"]
+        github_url = values["github_url"]
+        if github_url and not re.match(r"^https?://", github_url, re.IGNORECASE):
+            raise ValueError("GitHub 链接必须使用 http:// 或 https://。")
 
         social_links = []
         if email:
-            social_links.append(
-                {
-                    "label": "邮箱",
-                    "value": email,
-                    "url": f"mailto:{email}",
-                    "icon": "mail",
-                }
-            )
+            social_links.append({"label": "邮箱", "value": email, "url": f"mailto:{email}", "icon": "mail"})
         if github_label or github_url:
-            social_links.append(
-                {
-                    "label": "GitHub 仓库",
-                    "value": github_label or github_url,
-                    "url": github_url,
-                    "icon": "github",
-                }
-            )
+            social_links.append({"label": "GitHub 仓库", "value": github_label or github_url, "url": github_url, "icon": "github"})
 
-        about_intro = [line.strip() for line in form_data.get("about_intro", "").splitlines() if line.strip()]
+        about_intro = [line.strip() for line in values["about_intro"].splitlines() if line.strip()]
         update_calendar = []
-        for line in form_data.get("update_calendar", "").splitlines():
+        for line in values["update_calendar"].splitlines():
             cleaned = line.strip()
             if not cleaned:
                 continue
@@ -777,54 +902,62 @@ class BlogStore:
                 WHERE id = 1
                 """,
                 (
-                    name,
-                    role,
-                    headline,
-                    summary,
-                    form_data.get("location", "").strip(),
-                    email,
-                    form_data.get("hero_note", "").strip(),
-                    json.dumps(social_links, ensure_ascii=False),
-                    json.dumps(about_intro, ensure_ascii=False),
-                    json.dumps(update_calendar, ensure_ascii=False),
-                    avatar_path,
-                    now,
+                    name, values["role"], values["headline"], values["summary"], values["location"],
+                    email, values["hero_note"], json.dumps(social_links, ensure_ascii=False),
+                    json.dumps(about_intro, ensure_ascii=False), json.dumps(update_calendar, ensure_ascii=False),
+                    avatar_path, now,
                 ),
             )
             connection.commit()
 
-    def save_post(self, form_data: dict[str, Any], *, post_id: int | None = None, action: str = "draft") -> int:
-        title = form_data.get("title", "").strip()
+    def save_post(
+        self,
+        form_data: dict[str, Any],
+        *,
+        post_id: int | None = None,
+        action: str = "draft",
+        expected_updated_at: str | None = None,
+    ) -> int:
+        if action not in {"draft", "published"}:
+            raise ValueError("文章状态无效。")
+        title = validate_text_length("title", form_data.get("title", ""))
         if not title:
             raise ValueError("文章标题不能为空。")
-
-        markdown_content = form_data.get("markdown_content", "").strip()
+        markdown_content = validate_text_length("markdown_content", form_data.get("markdown_content", ""))
         html_content = render_markdown(markdown_content)
-        excerpt = form_data.get("excerpt", "").strip() or self.build_excerpt(markdown_content)
-        slug = self.ensure_unique_slug(form_data.get("slug", "") or title, post_id=post_id)
+        excerpt = validate_text_length("excerpt", form_data.get("excerpt", "")) or self.build_excerpt(markdown_content)
+        raw_slug = validate_text_length("slug", form_data.get("slug", ""))
+        slug = self.ensure_unique_slug(raw_slug or title, post_id=post_id)
         published = action == "published"
         status = "published" if published else "draft"
-        published_at = form_data.get("published_at", "").strip()
+        published_at = validate_text_length("published_at", form_data.get("published_at", ""))
         if published and not published_at:
             published_at = date.today().isoformat()
 
-        tags = [item.strip() for item in form_data.get("tags", "").split(",") if item.strip()]
-        # These legacy columns remain for database compatibility, but the current
-        # frontend no longer has article-level featured/tone behavior.
+        tags_text = validate_text_length("tags", form_data.get("tags", ""))
+        tags = [validate_text_length("tag", item, max_length=80) for item in tags_text.split(",") if item.strip()]
+        if len(tags) > 40:
+            raise ValueError("标签数量过多，请控制在 40 个以内。")
         featured = 0
-        read_time = form_data.get("read_time", "").strip() or estimate_read_time(markdown_content)
-        category = form_data.get("category", "").strip()
+        read_time = validate_text_length("read_time", form_data.get("read_time", "")) or estimate_read_time(markdown_content)
+        category = validate_text_length("category", form_data.get("category", ""))
         tone = "amber"
-        hero_quote = form_data.get("hero_quote", "").strip()
-        cover_image = form_data.get("cover_image", "").strip()
+        hero_quote = validate_text_length("hero_quote", form_data.get("hero_quote", ""))
+        cover_image = validate_text_length("cover_image", form_data.get("cover_image", ""))
         if cover_image and not _is_safe_image_url(cover_image):
             raise ValueError("封面图片地址无效：请使用上传得到的 /uploads/ 地址或 http(s) 图片链接。")
         sections = json.dumps([], ensure_ascii=False)
         tags_json = json.dumps(tags, ensure_ascii=False)
-        now = datetime.now().isoformat(timespec="seconds")
+        now = datetime.now().isoformat(timespec="microseconds")
 
         with self.connect() as connection:
             if post_id:
+                if expected_updated_at is not None:
+                    current_row = connection.execute("SELECT updated_at FROM posts WHERE id = ?", (post_id,)).fetchone()
+                    if current_row is None:
+                        raise ValueError("稿件不存在。")
+                    if current_row["updated_at"] != expected_updated_at:
+                        raise PostVersionConflict("文章已在其他页面更新，请重新加载后再保存。")
                 connection.execute(
                     """
                     UPDATE posts
@@ -834,25 +967,8 @@ class BlogStore:
                         html_content = ?, status = ?
                     WHERE id = ?
                     """,
-                    (
-                        slug,
-                        title,
-                        excerpt,
-                        published_at,
-                        now,
-                        read_time,
-                        category,
-                        featured,
-                        tone,
-                        tags_json,
-                        hero_quote,
-                        cover_image,
-                        sections,
-                        markdown_content,
-                        html_content,
-                        status,
-                        post_id,
-                    ),
+                    (slug, title, excerpt, published_at, now, read_time, category, featured, tone, tags_json,
+                     hero_quote, cover_image, sections, markdown_content, html_content, status, post_id),
                 )
                 saved_id = post_id
             else:
@@ -864,25 +980,8 @@ class BlogStore:
                         cover_image, sections, markdown_content, html_content, status
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        slug,
-                        title,
-                        excerpt,
-                        published_at,
-                        now,
-                        now,
-                        read_time,
-                        category,
-                        featured,
-                        tone,
-                        tags_json,
-                        hero_quote,
-                        cover_image,
-                        sections,
-                        markdown_content,
-                        html_content,
-                        status,
-                    ),
+                    (slug, title, excerpt, published_at, now, now, read_time, category, featured, tone, tags_json,
+                     hero_quote, cover_image, sections, markdown_content, html_content, status),
                 )
                 saved_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
             connection.commit()
@@ -909,8 +1008,17 @@ class BlogStore:
         label: str = "文件",
     ) -> str:
         original_filename = (file_storage.filename or "file").strip()
-        if allowed_extensions:
-            validate_extension(original_filename, allowed_extensions, label)
+        if folder in PUBLIC_UPLOAD_FOLDERS:
+            raw_bytes = validate_image_upload(file_storage, max_bytes=self.max_image_bytes, max_pixels=self.max_image_pixels)
+        else:
+            if allowed_extensions:
+                validate_extension(original_filename, allowed_extensions, label)
+            stream = file_storage.stream
+            stream.seek(0)
+            raw_bytes = stream.read(self.max_file_bytes + 1)
+            stream.seek(0)
+            if len(raw_bytes) > self.max_file_bytes:
+                raise ValueError(f"{label}过大，请控制在 {self.max_file_bytes // (1024 * 1024)} MB 以内。")
 
         source_path = Path(original_filename)
         suffix = source_path.suffix.lower()
@@ -919,7 +1027,7 @@ class BlogStore:
         relative_path = Path(folder) / unique_name
         destination = UPLOADS_DIR / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        file_storage.save(destination)
+        destination.write_bytes(raw_bytes)
         return relative_path.as_posix()
 
     def import_markdown(self, file_storage) -> dict[str, Any]:

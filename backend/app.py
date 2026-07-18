@@ -1,5 +1,7 @@
 import os
 import secrets
+import time
+from datetime import timedelta
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -16,9 +18,28 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.exceptions import RequestEntityTooLarge
 
-from env_loader import load_env_file
-from store import BlogStore, UPLOADS_DIR, estimate_read_time, is_allowed_public_upload_path, render_markdown
+try:
+    from .env_loader import load_env_file
+    from .store import (
+        BlogStore,
+        PostVersionConflict,
+        UPLOADS_DIR,
+        estimate_read_time,
+        is_allowed_public_upload_path,
+        render_markdown,
+    )
+except ImportError:
+    from env_loader import load_env_file
+    from store import (
+        BlogStore,
+        PostVersionConflict,
+        UPLOADS_DIR,
+        estimate_read_time,
+        is_allowed_public_upload_path,
+        render_markdown,
+    )
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -110,6 +131,19 @@ def build_profile_form(profile):
     }
 
 
+def form_value(source, key: str, default: str = "") -> str:
+    """Read a form/json field as a stripped string without raising on bad types."""
+    if source is None:
+        return default
+    try:
+        value = source.get(key, default)
+    except Exception:
+        return default
+    if value is None:
+        return default
+    return str(value).strip()
+
+
 def build_edit_post(post):
     if not post:
         return {
@@ -142,6 +176,11 @@ def create_app():
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.getenv("BLOG_COOKIE_SECURE", "false").strip().lower()
         in {"1", "true", "yes", "on"},
+        SESSION_PERMANENT=True,
+        PERMANENT_SESSION_LIFETIME=timedelta(
+            seconds=max(300, int(os.getenv("BLOG_SESSION_LIFETIME_SECONDS", str(8 * 60 * 60))))
+        ),
+        SESSION_REFRESH_EACH_REQUEST=True,
         MAX_CONTENT_LENGTH=int(os.getenv("BLOG_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
     )
     admin_prefix = normalize_admin_prefix(os.getenv("BLOG_ADMIN_PREFIX", "/admin"))
@@ -150,22 +189,105 @@ def create_app():
 
     store = BlogStore()
     store.init()
+    login_failures: dict[str, list[float]] = {}
+    csrf_session_key = "_admin_csrf_token"
+    login_window_seconds = max(60, int(os.getenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "300")))
+    login_max_attempts = max(1, int(os.getenv("BLOG_LOGIN_MAX_ATTEMPTS", "5")))
 
     def is_authenticated():
         return session.get("admin_authenticated") is True
+
+    def is_admin_api_request() -> bool:
+        return request.path.startswith(f"{admin_prefix}/api/")
+
+    def api_error(code: str, error: str, status: int):
+        return jsonify({"ok": False, "code": code, "error": error}), status
+
+    def csrf_token() -> str:
+        token = session.get(csrf_session_key)
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session[csrf_session_key] = token
+        return token
+
+    def valid_csrf_token(candidate: str | None) -> bool:
+        expected = session.get(csrf_session_key)
+        return bool(expected and candidate and secrets.compare_digest(str(candidate), str(expected)))
+
+    def client_key() -> str:
+        return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",", 1)[0].strip()
+
+    def login_rate_limited() -> tuple[bool, int]:
+        now = time.monotonic()
+        key = client_key()
+        attempts = [stamp for stamp in login_failures.get(key, []) if now - stamp < login_window_seconds]
+        login_failures[key] = attempts
+        if len(attempts) < login_max_attempts:
+            return False, 0
+        retry_after = max(1, int(login_window_seconds - (now - attempts[0])))
+        return True, retry_after
+
+    def register_login_failure() -> None:
+        now = time.monotonic()
+        key = client_key()
+        attempts = [stamp for stamp in login_failures.get(key, []) if now - stamp < login_window_seconds]
+        attempts.append(now)
+        login_failures[key] = attempts
+
+    @app.context_processor
+    def inject_admin_security_context():
+        return {"csrf_token": csrf_token}
+
+    @app.before_request
+    def protect_admin_mutations():
+        if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+            return None
+        if not (request.path == admin_prefix or request.path.startswith(f"{admin_prefix}/")):
+            return None
+        if is_admin_api_request() and not is_authenticated():
+            return api_error("auth_required", "登录状态已失效，请重新登录。", 401)
+        candidate = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
+        if valid_csrf_token(candidate):
+            return None
+        if is_admin_api_request() or request.is_json:
+            return api_error("csrf_failed", "请求校验已失效，请刷新页面后重试。", 400)
+        flash("请求校验已失效，请刷新页面后重试。", "error")
+        return redirect(request.referrer or url_for("admin_login"))
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_too_large(error):
+        if is_admin_api_request() or request.is_json:
+            return api_error("payload_too_large", "上传内容过大，请压缩文件后重试。", 413)
+        flash("上传内容过大，请压缩文件后重试。", "error")
+        return redirect(request.referrer or url_for("admin_login"))
+
+    @app.errorhandler(404)
+    def handle_not_found(error):
+        if request.path.startswith("/api/") or is_admin_api_request():
+            return api_error("not_found", "请求的内容不存在。", 404)
+        return error
+
+    @app.errorhandler(500)
+    def handle_server_error(error):
+        if request.path.startswith("/api/") or is_admin_api_request():
+            return api_error("server_error", "服务暂时不可用，请稍后重试。", 500)
+        return error
 
     def admin_required(view_func):
         @wraps(view_func)
         def wrapped(*args, **kwargs):
             if not is_authenticated():
+                if is_admin_api_request() or request.is_json:
+                    return api_error("auth_required", "登录状态已失效，请重新登录。", 401)
                 return redirect(url_for("admin_login", next=request.path))
+            session.permanent = True
             return view_func(*args, **kwargs)
 
         return wrapped
 
     @app.get("/api/health")
     def healthcheck():
-        return jsonify({"status": "ok", "database": str(store.db_path)})
+        return jsonify({"status": "ok"})
 
     @app.get("/api/site")
     def site():
@@ -217,32 +339,24 @@ def create_app():
         if match is None:
             abort(404)
 
-        store.increment_post_click(slug)
-        match["click_count"] = int(match.get("click_count") or 0) + 1
+        # Count a view once per browser session per slug to avoid double counting
+        # when the SPA mounts/remounts the same article during a single session.
+        viewed = session.get("viewed_posts") or []
+        if not isinstance(viewed, list):
+            viewed = []
+        if slug not in viewed:
+            match["click_count"] = store.increment_post_click(slug)
+            viewed = (viewed + [slug])[-80:]
+            session["viewed_posts"] = viewed
+            session.modified = True
 
         previous_match, next_match = store.get_adjacent_posts(match)
         previous_post = summarize_adjacent_post(previous_match) if previous_match else None
         next_post = summarize_adjacent_post(next_match) if next_match else None
-
-        published_posts = store.list_posts(published_only=True)
-        current_tags = {tag.lower() for tag in match.get("tags", [])}
-        current_category = (match.get("category") or "").strip().lower()
-
-        def related_score(candidate):
-            candidate_tags = {tag.lower() for tag in candidate.get("tags", [])}
-            shared_tags = len(current_tags & candidate_tags)
-            same_category = int(
-                bool(current_category)
-                and (candidate.get("category") or "").strip().lower() == current_category
-            )
-            return shared_tags * 3 + same_category * 2
-
-        related_candidates = [post for post in published_posts if post["slug"] != slug]
-        related_candidates.sort(
-            key=lambda post: (related_score(post), post.get("published_at", "")),
-            reverse=True,
-        )
-        related_posts = [summarize_related_post(post) for post in related_candidates[:2]]
+        related_posts = [
+            summarize_related_post(post)
+            for post in store.get_related_posts(match, limit=2)
+        ]
 
         return jsonify(
             build_post_detail_payload(
@@ -265,22 +379,34 @@ def create_app():
     @app.route(f"{admin_prefix}/login", methods=["GET", "POST"])
     def admin_login():
         if request.method == "POST":
-            password = request.form.get("password", "")
+            limited, retry_after = login_rate_limited()
+            if limited:
+                if request.is_json:
+                    return api_error("login_rate_limited", "登录尝试过多，请稍后再试。", 429)
+                flash("登录尝试过多，请稍后再试。", "error")
+                return render_template("admin_login.html"), 429, {"Retry-After": str(retry_after)}
+
+            password = form_value(request.form, "password")
             expected = os.getenv("BLOG_ADMIN_PASSWORD", "admin123456")
             if secrets.compare_digest(password, expected):
+                login_failures.pop(client_key(), None)
                 session.clear()
+                session.permanent = True
                 session["admin_authenticated"] = True
+                csrf_token()
                 flash("已进入管理后台。", "success")
                 next_target = request.args.get("next")
                 if not is_safe_admin_next(next_target, admin_prefix):
                     next_target = url_for("admin_dashboard")
                 return redirect(next_target)
 
+            register_login_failure()
             flash("密码错误，请重试。", "error")
 
         return render_template("admin_login.html")
 
-    @app.get(f"{admin_prefix}/logout")
+    @app.post(f"{admin_prefix}/logout")
+    @admin_required
     def admin_logout():
         session.clear()
         flash("你已退出后台。", "success")
@@ -338,7 +464,7 @@ def create_app():
     @admin_required
     def admin_save_post():
         post_id = request.form.get("post_id", type=int)
-        action = request.form.get("action", "draft")
+        action = form_value(request.form, "action", "draft") or "draft"
         try:
             saved_id = store.save_post(request.form, post_id=post_id, action=action)
         except ValueError as exc:
@@ -349,7 +475,7 @@ def create_app():
 
         message = "文章已保存为草稿/已下架。" if action == "draft" else "文章已发布。"
         flash(message, "success")
-        return redirect(url_for("admin_write", post_id=saved_id))
+        return redirect(url_for("admin_write", post_id=saved_id, saved=1))
 
     @app.post(f"{admin_prefix}/posts/<int:post_id>/delete")
     @admin_required
@@ -370,25 +496,33 @@ def create_app():
         try:
             post_id = int(raw_post_id) if raw_post_id else None
         except (TypeError, ValueError):
-            return jsonify({"message": "稿件 ID 无效。"}), 400
+            return api_error("invalid_post_id", "\u7a3f\u4ef6 ID \u65e0\u6548\u3002", 400)
 
         if post_id:
             existing = store.get_post_by_id(post_id)
             if existing is None:
-                return jsonify({"message": "稿件不存在。"}), 404
+                return api_error("post_not_found", "\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002", 404)
             if existing.get("status") != "draft":
-                return jsonify({"message": "已发布文章仅保存在本地，不会自动覆盖线上内容。"}), 409
+                return api_error("published_autosave_blocked", "\u5df2\u53d1\u5e03\u6587\u7ae0\u4ec5\u4fdd\u5b58\u5728\u672c\u5730\uff0c\u4e0d\u4f1a\u81ea\u52a8\u8986\u76d6\u7ebf\u4e0a\u5185\u5bb9\u3002", 409)
 
         form_data = payload.get("fields") or {}
         if not isinstance(form_data, dict):
-            return jsonify({"message": "自动保存数据格式无效。"}), 400
+            return api_error("invalid_payload", "\u81ea\u52a8\u4fdd\u5b58\u6570\u636e\u683c\u5f0f\u65e0\u6548\u3002", 400)
         if not str(form_data.get("title") or "").strip():
-            return jsonify({"message": "填写标题后才会自动保存到服务器。"}), 400
+            return api_error("title_required", "\u586b\u5199\u6807\u9898\u540e\u624d\u4f1a\u81ea\u52a8\u4fdd\u5b58\u5230\u670d\u52a1\u5668\u3002", 400)
 
+        expected_updated_at = payload.get("updated_at")
         try:
-            saved_id = store.save_post(form_data, post_id=post_id, action="draft")
+            saved_id = store.save_post(
+                form_data,
+                post_id=post_id,
+                action="draft",
+                expected_updated_at=expected_updated_at,
+            )
+        except PostVersionConflict as exc:
+            return api_error("version_conflict", str(exc), 409)
         except ValueError as exc:
-            return jsonify({"message": str(exc)}), 400
+            return api_error("validation_error", str(exc), 400)
 
         saved_post = store.get_post_by_id(saved_id)
         return jsonify(
@@ -407,6 +541,10 @@ def create_app():
     def admin_preview_markdown():
         payload = request.get_json(silent=True) or {}
         markdown_content = payload.get("markdown_content", "")
+        if not isinstance(markdown_content, str):
+            return api_error("invalid_payload", "Markdown 内容格式无效。", 400)
+        if len(markdown_content) > 500_000:
+            return api_error("content_too_large", "Markdown 内容过长。", 400)
         return jsonify(
             {
                 "html": render_markdown(markdown_content),
@@ -420,11 +558,11 @@ def create_app():
     def admin_import_markdown():
         markdown_file = request.files.get("markdown_file")
         if markdown_file is None or not markdown_file.filename:
-            return jsonify({"message": "请选择一个 Markdown 文件。"}), 400
+            return api_error("validation_error", "请选择一个 Markdown 文件。", 400)
         try:
             payload = store.import_markdown(markdown_file)
         except ValueError as exc:
-            return jsonify({"message": str(exc)}), 400
+            return api_error("validation_error", str(exc), 400)
         return jsonify(payload)
 
     @app.post(f"{admin_prefix}/api/upload-image")
@@ -432,11 +570,11 @@ def create_app():
     def admin_upload_image():
         image_file = request.files.get("image")
         if image_file is None or not image_file.filename:
-            return jsonify({"message": "请选择一张图片。"}), 400
+            return api_error("validation_error", "请选择一张图片。", 400)
         try:
             payload = store.upload_media(image_file)
         except ValueError as exc:
-            return jsonify({"message": str(exc)}), 400
+            return api_error("validation_error", str(exc), 400)
         return jsonify(payload)
 
     @app.route("/", defaults={"path": ""})
