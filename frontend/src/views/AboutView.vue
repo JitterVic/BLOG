@@ -1,10 +1,11 @@
 <script setup>
 import { computed, onMounted } from "vue";
 
+import AsyncState from "../components/AsyncState.vue";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 
-const { site, ensureSite, error } = useSite();
+const { site, ensureSite, loading, error } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 
 const introParagraphs = computed(() => {
@@ -16,6 +17,14 @@ const introParagraphs = computed(() => {
   ];
 });
 const contactLinks = computed(() => site.value?.social_links || []);
+
+async function retrySite() {
+  try {
+    await ensureSite({ force: true });
+  } catch (err) {
+    // AsyncState keeps the retry feedback visible.
+  }
+}
 
 onMounted(async () => {
   try {
@@ -36,38 +45,50 @@ onMounted(async () => {
         <div class="sec-hd__line"></div>
       </div>
 
-      <p v-if="error" class="feedback print-feedback rv">{{ error }}</p>
+      <AsyncState
+        v-if="loading && !site"
+        loading
+        loading-message="正在整理编辑部资料……"
+      />
+      <AsyncState
+        v-else-if="error && !site"
+        :error="error"
+        empty-message="请检查网络连接后重试。"
+        @retry="retrySite"
+      />
 
-      <p class="about-chapter-label rv">Editor's Edition</p>
-      <div class="quiet-about-layout">
-        <article class="quiet-about-card quiet-about-card--intro rv" data-reveal-delay="40">
-          <p class="section-label">Editor’s Note</p>
-          <h2>关于这本博客</h2>
-          <div class="quiet-about-copy">
-            <p v-for="paragraph in introParagraphs" :key="paragraph">{{ paragraph }}</p>
-          </div>
-        </article>
+      <template v-else>
+        <p class="about-chapter-label rv">Editor's Edition</p>
+        <div class="quiet-about-layout">
+          <article class="quiet-about-card quiet-about-card--intro rv" data-reveal-delay="40">
+            <p class="section-label">Editor’s Note</p>
+            <h2>关于这本博客</h2>
+            <div class="quiet-about-copy">
+              <p v-for="paragraph in introParagraphs" :key="paragraph">{{ paragraph }}</p>
+            </div>
+          </article>
 
-        <aside class="quiet-about-card quiet-about-card--contact rv" data-reveal-delay="120">
-          <p class="section-label">Contact</p>
-          <h2 class="about-contact-title">如果你想交流</h2>
-          <p>欢迎带着上下文、问题或想法来找我。最好的交流，通常始于一个具体而真诚的问题。</p>
+          <aside class="quiet-about-card quiet-about-card--contact rv" data-reveal-delay="120">
+            <p class="section-label">Contact</p>
+            <h2 class="about-contact-title">如果你想交流</h2>
+            <p>欢迎带着上下文、问题或想法来找我。最好的交流，通常始于一个具体而真诚的问题。</p>
 
-          <div v-if="contactLinks.length" class="quiet-contact-list">
-            <a
-              v-for="item in contactLinks"
-              :key="item.label"
-              :href="item.url"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </a>
-          </div>
-          <p v-else class="feedback quiet-contact-empty">暂未配置联系方式。</p>
-        </aside>
-      </div>
+            <div v-if="contactLinks.length" class="quiet-contact-list">
+              <a
+                v-for="item in contactLinks"
+                :key="item.label"
+                :href="item.url"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </a>
+            </div>
+            <p v-else class="feedback quiet-contact-empty">暂未配置联系方式。</p>
+          </aside>
+        </div>
+      </template>
 
       <span class="pg pg--r">— About —</span>
     </section>

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import AsyncState from "../components/AsyncState.vue";
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
@@ -21,6 +22,7 @@ const {
   loadingMore,
   loadMoreError,
   total,
+  page,
   hasMore,
   loadPosts,
   loadMore,
@@ -37,6 +39,10 @@ let applyingRouteState = false;
 let querySyncTimer = 0;
 let reloadTimer = 0;
 let lastFetchedKey = "";
+let restoreSequence = 0;
+let pendingRouteKey = "";
+let routeSyncIncludePage = true;
+let restoringPage = false;
 
 const normalizedQuery = computed(() => searchQuery.value.trim().toLowerCase());
 const tags = computed(() => {
@@ -92,47 +98,90 @@ function clearAllFilters() {
   selectedTag.value = "全部";
 }
 
-function buildRouteQuery() {
+function routeQueryKey(query = route.query) {
+  return JSON.stringify({
+    view: typeof query.view === "string" ? query.view : "",
+    q: typeof query.q === "string" ? query.q : "",
+    tag: typeof query.tag === "string" ? query.tag : "",
+    page: typeof query.page === "string" ? query.page : "",
+  });
+}
+
+function buildRouteQuery({ includePage = true } = {}) {
   const query = {};
   if (activeView.value !== "latest") query.view = activeView.value;
   if (searchQuery.value.trim()) query.q = searchQuery.value.trim();
   if (activeView.value === "tags" && selectedTag.value !== "全部") query.tag = selectedTag.value;
+  if (includePage && activeView.value === "latest" && page.value > 1) {
+    query.page = String(page.value);
+  }
   return query;
 }
 
-function scheduleRouteSync() {
+function scheduleRouteSync({ includePage = true } = {}) {
   if (applyingRouteState) return;
+  routeSyncIncludePage = includePage;
   if (querySyncTimer) window.clearTimeout(querySyncTimer);
   querySyncTimer = window.setTimeout(() => {
     querySyncTimer = 0;
-    router.replace({ name: "posts", query: buildRouteQuery() });
+    const query = buildRouteQuery({ includePage: routeSyncIncludePage });
+    routeSyncIncludePage = true;
+    pendingRouteKey = routeQueryKey(query);
+    router.replace({ name: "posts", query });
   }, 180);
 }
 
-function listParams() {
+function requestedRoutePage() {
+  const rawPage = Number.parseInt(route.query.page, 10);
+  return Number.isFinite(rawPage) ? Math.min(Math.max(rawPage, 1), 100) : 1;
+}
+
+function listParams(requestedPage = 1) {
   const params = { sort: "latest" };
   const q = searchQuery.value.trim();
   if (q) params.q = q;
   if (activeView.value === "latest") {
-    params.page = 1;
+    params.page = requestedPage;
     params.limit = PAGE_SIZE;
   }
   return params;
 }
 
-function fetchList({ force = false } = {}) {
-  const params = listParams();
+async function fetchList({ force = false, targetPage = 1 } = {}) {
+  const params = listParams(1);
   const key = JSON.stringify(params);
-  if (!force && key === lastFetchedKey) return;
+  if (!force && targetPage === 1 && key === lastFetchedKey) return posts.value;
   lastFetchedKey = key;
-  loadPosts(params);
+  const restoreId = ++restoreSequence;
+  restoringPage = true;
+  try {
+    await loadPosts(params);
+    if (restoreId !== restoreSequence || targetPage <= 1 || activeView.value !== "latest") {
+      return posts.value;
+    }
+
+    while (page.value < targetPage && hasMore.value) {
+      await loadMore();
+      if (restoreId !== restoreSequence) break;
+    }
+    return posts.value;
+  } finally {
+    if (restoreId === restoreSequence) {
+      restoringPage = false;
+      scheduleRouteSync();
+    }
+  }
+}
+
+function retryList() {
+  return fetchList({ force: true, targetPage: requestedRoutePage() });
 }
 
 function scheduleReload() {
   if (reloadTimer) window.clearTimeout(reloadTimer);
   reloadTimer = window.setTimeout(() => {
     reloadTimer = 0;
-    fetchList();
+    fetchList({ force: true, targetPage: 1 });
   }, 250);
 }
 
@@ -171,13 +220,22 @@ watch([visiblePosts, activeView, loading], () => {
 watch(
   () => route.query,
   () => {
-    applyRouteState();
+    const currentRouteKey = routeQueryKey();
+    if (currentRouteKey === pendingRouteKey) {
+      pendingRouteKey = "";
+      return;
+    }
+    applyRouteState().then(() => fetchList({ force: true, targetPage: requestedRoutePage() }));
   },
   { deep: true },
 );
 
 watch([activeView, selectedTag, searchQuery], () => {
-  scheduleRouteSync();
+  scheduleRouteSync({ includePage: false });
+});
+
+watch(page, () => {
+  if (activeView.value === "latest" && !restoringPage) scheduleRouteSync();
 });
 
 // Typing is debounced; a discrete view switch reloads immediately.
@@ -186,17 +244,18 @@ watch(normalizedQuery, () => {
 });
 
 watch(activeView, () => {
+  if (applyingRouteState) return;
   if (reloadTimer) {
     window.clearTimeout(reloadTimer);
     reloadTimer = 0;
   }
-  fetchList();
+  fetchList({ force: true, targetPage: 1 });
 });
 
 onMounted(async () => {
   ensureSite().catch(() => {});
   await applyRouteState();
-  fetchList({ force: true });
+  await fetchList({ force: true, targetPage: requestedRoutePage() });
   refreshReveal();
 });
 
@@ -258,7 +317,12 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <p v-if="error" class="feedback print-feedback rv">{{ error }}</p>
+      <AsyncState
+        v-if="error"
+        :error="error"
+        empty-message="请检查网络连接后重试。"
+        @retry="retryList"
+      />
       <div v-else-if="loading" class="posts-skeleton" aria-busy="true" aria-label="目录整理中">
         <div v-for="n in 4" :key="n" class="posts-skeleton__item">
           <div class="sk-line sk-line--sm"></div>
@@ -266,9 +330,12 @@ onBeforeUnmount(() => {
           <div class="sk-line sk-line--md"></div>
         </div>
       </div>
-      <p v-else-if="!visiblePosts.length" class="feedback print-feedback rv">
-        没有找到符合条件的文章，请调整关键词或筛选条件。
-      </p>
+      <AsyncState
+        v-else-if="!visiblePosts.length"
+        empty
+        empty-title="没有找到文章"
+        empty-message="请调整关键词或筛选条件后再试。"
+      />
 
       <div v-else-if="activeView === 'latest'" class="article-list print-article-list unified-latest-list">
         <RouterLink
@@ -285,6 +352,7 @@ onBeforeUnmount(() => {
             :src="post.cover_image"
             alt=""
             loading="lazy"
+            decoding="async"
             @error="(event) => event.target.classList.add('is-broken')"
           >
           <div class="article-meta">
@@ -360,10 +428,21 @@ onBeforeUnmount(() => {
         v-if="activeView === 'latest' && !loading && !error && hasMore"
         class="home-section-footer"
       >
-        <button type="button" class="cover-button" :disabled="loadingMore" @click="loadMore">
+        <button
+          v-if="!loadMoreError"
+          type="button"
+          class="cover-button"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
           {{ loadingMore ? "加载中……" : "加载更多" }}
         </button>
-        <p v-if="loadMoreError" class="feedback print-feedback" role="alert">{{ loadMoreError }}</p>
+        <AsyncState
+          v-else
+          :error="loadMoreError"
+          empty-message="请检查网络连接后重试。"
+          @retry="loadMore"
+        />
       </div>
 
       <span class="pg pg--r">— Article Index —</span>

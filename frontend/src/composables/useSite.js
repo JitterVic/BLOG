@@ -8,8 +8,8 @@ const error = ref("");
 let siteRequest = null;
 
 export function useSite() {
-  async function ensureSite() {
-    if (site.value) {
+  async function ensureSite({ force = false } = {}) {
+    if (site.value && !force) {
       return site.value;
     }
 

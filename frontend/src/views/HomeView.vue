@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
+import AsyncState from "../components/AsyncState.vue";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
@@ -14,6 +15,8 @@ const latestPosts = ref([]);
 const hotPosts = ref([]);
 const postsError = ref("");
 const postsLoading = ref(false);
+let postsController = null;
+let postsRequestSequence = 0;
 
 const leadPost = computed(() => latestPosts.value[0] || null);
 const secondaryPosts = computed(() => latestPosts.value.slice(1));
@@ -40,30 +43,45 @@ watch([latestPosts, hotPosts, postsLoading], () => {
 });
 
 
+async function loadHomePosts() {
+  const requestId = ++postsRequestSequence;
+  postsController?.abort();
+  postsController = new AbortController();
+  postsLoading.value = true;
+  postsError.value = "";
+
+  try {
+    const [latestList, hotList] = await Promise.all([
+      getPosts({ sort: "latest", limit: HOME_POST_LIMIT, signal: postsController.signal }),
+      getPosts({ sort: "hot", limit: HOME_POST_LIMIT, signal: postsController.signal }),
+    ]);
+    if (requestId !== postsRequestSequence) return;
+    latestPosts.value = Array.isArray(latestList) ? latestList : (latestList?.items || []);
+    hotPosts.value = Array.isArray(hotList) ? hotList : (hotList?.items || []);
+  } catch (err) {
+    if (requestId !== postsRequestSequence || err?.code === "REQUEST_ABORTED") return;
+    postsError.value = err?.code === "REQUEST_TIMEOUT"
+      ? "文章加载超时，请稍后再试。"
+      : "文章暂时无法加载，请稍后再试。";
+  } finally {
+    if (requestId === postsRequestSequence) {
+      postsLoading.value = false;
+      refreshReveal();
+    }
+  }
+}
+
 onMounted(async () => {
   try {
     await ensureSite();
   } catch (err) {
     // The cover keeps a stable fallback title when site metadata is unavailable.
   }
-
-  postsLoading.value = true;
-  postsError.value = "";
-
-  try {
-    const [latestList, hotList] = await Promise.all([
-      getPosts({ sort: "latest", limit: HOME_POST_LIMIT }),
-      getPosts({ sort: "hot", limit: HOME_POST_LIMIT }),
-    ]);
-    latestPosts.value = latestList;
-    hotPosts.value = hotList;
-  } catch (err) {
-    postsError.value = "文章暂时无法加载，请稍后再试。";
-  } finally {
-    postsLoading.value = false;
-    refreshReveal();
-  }
+  await loadHomePosts();
 });
+
+onBeforeUnmount(() => postsController?.abort());
+
 </script>
 
 <template>
@@ -106,7 +124,12 @@ onMounted(async () => {
         <div class="sec-hd__line"></div>
       </div>
 
-      <p v-if="postsError" class="feedback print-feedback rv">{{ postsError }}</p>
+      <AsyncState
+        v-if="postsError"
+        :error="postsError"
+        empty-message="请检查网络连接后重试。"
+        @retry="loadHomePosts"
+      />
 
       <div v-else-if="postsLoading" class="home-skeleton-stack" aria-busy="true" aria-label="文章装订中">
         <div class="home-skeleton-feature">
@@ -125,7 +148,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <p v-else-if="!latestPosts.length" class="feedback print-feedback rv">还没有已发布文章。</p>
+      <AsyncState
+        v-else-if="!latestPosts.length"
+        empty
+        empty-title="还没有已发布文章"
+        empty-message="等下一期内容整理完成后再来看看。"
+      />
 
       <template v-else>
         <div
@@ -145,6 +173,7 @@ onMounted(async () => {
               :src="leadPost.cover_image"
               alt=""
               loading="lazy"
+              decoding="async"
               @error="(event) => event.target.classList.add('is-broken')"
             >
             <div class="feature-spotlight" aria-hidden="true"></div>
@@ -220,7 +249,12 @@ onMounted(async () => {
         <div class="sec-hd__line"></div>
       </div>
 
-      <p v-if="postsError" class="feedback print-feedback rv">{{ postsError }}</p>
+      <AsyncState
+        v-if="postsError"
+        :error="postsError"
+        empty-message="请检查网络连接后重试。"
+        @retry="loadHomePosts"
+      />
 
       <div v-else-if="postsLoading" class="home-hot-ledger home-skeleton-hot" aria-busy="true">
         <div v-for="n in 4" :key="n" class="sk-hot-row">
@@ -233,7 +267,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <p v-else-if="!hotPosts.length" class="feedback print-feedback rv">还没有阅读数据。</p>
+      <AsyncState
+        v-else-if="!hotPosts.length"
+        empty
+        empty-title="还没有阅读数据"
+        empty-message="热点文章将在有阅读记录后显示。"
+      />
 
       <div v-else class="home-hot-ledger">
         <RouterLink

@@ -12,6 +12,9 @@ let jumpTimer = 0;
 let waveTimer = 0;
 let completeTimer = 0;
 let completionShownForPath = "";
+let runtimeEnabled = false;
+let motionQuery = null;
+let coarsePointerQuery = null;
 
 const SHOW_AFTER_PX = 500;
 const COMPLETE_THRESHOLD = 0.94;
@@ -35,7 +38,33 @@ function clearTimer(timer) {
   if (timer) window.clearTimeout(timer);
 }
 
+function shouldRunRuntime() {
+  // Keep scroll/top-button usable on touch devices; only pause while the tab is hidden.
+  return document.visibilityState === "visible";
+}
+
+function prefersReducedMotion() {
+  return motionQuery?.matches
+    ?? window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+    ?? false;
+}
+
+function prefersReducedEffects() {
+  return prefersReducedMotion()
+    || (coarsePointerQuery?.matches
+      ?? window.matchMedia?.("(pointer: coarse)")?.matches
+      ?? false)
+    || Number(navigator.maxTouchPoints || 0) > 0;
+}
+
+const reducedFx = ref(false);
+
+function refreshReducedFx() {
+  reducedFx.value = prefersReducedEffects();
+}
+
 function updateScrollState() {
+  if (!runtimeEnabled) return;
   const y = window.scrollY || 0;
   const doc = document.documentElement;
   const maxScroll = Math.max(doc.scrollHeight - window.innerHeight, 1);
@@ -58,7 +87,7 @@ function updateScrollState() {
 }
 
 function scheduleScrollUpdate() {
-  if (scrollFrame) return;
+  if (!runtimeEnabled || scrollFrame) return;
   scrollFrame = window.requestAnimationFrame(() => {
     scrollFrame = 0;
     updateScrollState();
@@ -83,32 +112,72 @@ function stopWave() {
 function scrollToTop() {
   clearTimer(jumpTimer);
   isJumping.value = true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   jumpTimer = window.setTimeout(() => {
     isJumping.value = false;
     jumpTimer = 0;
-  }, 720);
+  }, prefersReducedMotion() ? 0 : 720);
 }
 
 watch(
   () => route.fullPath,
   () => {
+    if (!runtimeEnabled) return;
     completionShownForPath = "";
     isComplete.value = false;
     window.requestAnimationFrame(updateScrollState);
   },
 );
 
-onMounted(() => {
+function setRuntimeEnabled(enabled) {
+  if (enabled === runtimeEnabled) return;
+  runtimeEnabled = enabled;
+
+  if (!enabled) {
+    window.removeEventListener("scroll", scheduleScrollUpdate);
+    window.removeEventListener("resize", scheduleScrollUpdate);
+    if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+    isVisible.value = false;
+    isComplete.value = false;
+    clearTimer(completeTimer);
+    completeTimer = 0;
+    return;
+  }
+
   updateScrollState();
   window.addEventListener("scroll", scheduleScrollUpdate, { passive: true });
   window.addEventListener("resize", scheduleScrollUpdate, { passive: true });
+}
+
+function refreshRuntimeAvailability() {
+  setRuntimeEnabled(shouldRunRuntime());
+}
+
+function handleVisibilityChange() {
+  refreshRuntimeAvailability();
+}
+
+function handlePreferenceChange() {
+  refreshRuntimeAvailability();
+  refreshReducedFx();
+}
+
+onMounted(() => {
+  motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
+  coarsePointerQuery = window.matchMedia?.("(pointer: coarse)") || null;
+  motionQuery?.addEventListener?.("change", handlePreferenceChange);
+  coarsePointerQuery?.addEventListener?.("change", handlePreferenceChange);
+  document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
+  refreshReducedFx();
+  refreshRuntimeAvailability();
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("scroll", scheduleScrollUpdate);
-  window.removeEventListener("resize", scheduleScrollUpdate);
-  if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+  setRuntimeEnabled(false);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  motionQuery?.removeEventListener?.("change", handlePreferenceChange);
+  coarsePointerQuery?.removeEventListener?.("change", handlePreferenceChange);
   clearTimer(jumpTimer);
   clearTimer(waveTimer);
   clearTimer(completeTimer);
@@ -126,6 +195,7 @@ onBeforeUnmount(() => {
         'is-jumping': isJumping,
         'is-waving': isWaving,
         'is-complete': isComplete,
+        'is-reduced-fx': reducedFx,
       },
     ]"
     :aria-hidden="!isVisible"

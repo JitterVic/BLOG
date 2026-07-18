@@ -11,7 +11,9 @@ import sql from "highlight.js/lib/languages/sql";
 import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 
+import AsyncState from "../components/AsyncState.vue";
 import { usePost } from "../composables/usePost";
+import { setPageMeta } from "../composables/usePageMeta";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 
@@ -51,6 +53,15 @@ const {
 
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
+}
+
+function updatePostMeta(currentPost = post.value) {
+  if (!currentPost) return;
+  const siteName = site.value?.name || "至知";
+  setPageMeta({
+    title: `${currentPost.title || "文章"} · ${siteName}`,
+    description: currentPost.excerpt || `阅读《${currentPost.title || "文章"}》，记录技术实践、项目复盘与长期学习。`,
+  });
 }
 
 function disconnectHeadingObserver() {
@@ -132,18 +143,23 @@ function enhanceArticleBody(body, headings) {
 
   body.querySelectorAll("img").forEach((image) => {
     image.loading = "lazy";
+    image.decoding = "async";
+    image.setAttribute("decoding", "async");
     image.tabIndex = 0;
     image.setAttribute("role", "button");
     image.setAttribute("aria-label", `放大图片：${image.alt || "文章插图"}`);
     const openHandler = () => openLightbox(image);
+    const errorHandler = () => image.classList.add("is-broken");
     const keyHandler = (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       openLightbox(image);
     };
     image.addEventListener("click", openHandler);
+    image.addEventListener("error", errorHandler);
     image.addEventListener("keydown", keyHandler);
     enhancedElements.push({ element: image, event: "click", handler: openHandler });
+    enhancedElements.push({ element: image, event: "error", handler: errorHandler });
     enhancedElements.push({ element: image, event: "keydown", handler: keyHandler });
   });
 
@@ -234,8 +250,18 @@ function scrollToHeading(id) {
   activeHeading.value = id;
 }
 
+async function retryPost() {
+  await loadPost(route.params.slug);
+  await buildArticleNavigation();
+  refreshReveal();
+}
+
 watch([post, loading, relatedPosts], () => {
   refreshReveal();
+});
+
+watch([post, site], () => {
+  updatePostMeta();
 });
 
 onMounted(async () => {
@@ -284,7 +310,11 @@ onBeforeUnmount(() => {
       :style="{ transform: `scaleX(${readingProgress})` }"
       aria-hidden="true"
     ></div>
-    <p v-if="loading" class="feedback print-feedback rv">文章页面正在展开……</p>
+    <AsyncState
+      v-if="loading"
+      loading
+      loading-message="文章页面正在展开……"
+    />
 
     <section v-else-if="error" class="print-page print-section post-empty-state">
       <div class="sec-hd rv">
@@ -292,7 +322,11 @@ onBeforeUnmount(() => {
         <h1 class="sec-hd__t">文章没有找到</h1>
         <div class="sec-hd__line"></div>
       </div>
-      <p class="feedback print-feedback rv">{{ error }}</p>
+      <AsyncState
+        :error="error"
+        empty-message="请返回文章目录，或稍后重试。"
+        @retry="retryPost"
+      />
       <div class="print-cover__actions rv">
         <RouterLink to="/posts" class="cover-button primary-link">返回文章列表</RouterLink>
         <RouterLink to="/" class="cover-button">回到首页</RouterLink>
@@ -320,6 +354,7 @@ onBeforeUnmount(() => {
             :src="post.cover_image"
             :alt="post.title"
             loading="lazy"
+            decoding="async"
             @error="(event) => event.target.closest('figure').classList.add('is-broken')"
           >
         </figure>
@@ -422,7 +457,7 @@ onBeforeUnmount(() => {
         CLOSE ×
       </button>
       <figure>
-        <img :src="lightboxImage.src" :alt="lightboxImage.alt">
+        <img :src="lightboxImage.src" :alt="lightboxImage.alt" decoding="async">
         <figcaption v-if="lightboxImage.alt">{{ lightboxImage.alt }}</figcaption>
       </figure>
     </dialog>

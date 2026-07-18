@@ -36,14 +36,37 @@ let lastPoint = null;
 let pendingSegments = [];
 let pressingTimer = 0;
 let pressedElement = null;
+let effectEnabled = false;
+let motionQuery = null;
+let coarsePointerQuery = null;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function shouldEnableEffect() {
+  const reducedMotion = motionQuery?.matches
+    ?? window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+    ?? false;
+  const coarsePointer = coarsePointerQuery?.matches
+    ?? window.matchMedia?.("(pointer: coarse)")?.matches
+    ?? false;
+  const hasTouchPoints = Number(navigator.maxTouchPoints || 0) > 0;
+  return document.visibilityState === "visible" && !reducedMotion && !coarsePointer && !hasTouchPoints;
+}
+
+function getCanvasContext() {
+  if (context || !canvasEl.value) return context;
+  context = canvasEl.value.getContext("2d", {
+    alpha: true,
+    desynchronized: true,
+  }) || null;
+  return context;
+}
+
 function resizeCanvas() {
   const canvas = canvasEl.value;
-  if (!canvas || !context) return;
+  if (!effectEnabled || !canvas || !context) return;
 
   deviceScale = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_SCALE);
   const width = window.innerWidth;
@@ -207,7 +230,7 @@ function pointerSamples(event) {
 }
 
 function handlePointerMove(event) {
-  if (event.pointerType === "touch") return;
+  if (!effectEnabled || event.pointerType === "touch") return;
 
   let hasNewInk = false;
   for (const sample of pointerSamples(event)) {
@@ -259,7 +282,7 @@ function markPressed(element) {
 }
 
 function handlePointerDown(event) {
-  if (event.pointerType === "touch") return;
+  if (!effectEnabled || event.pointerType === "touch") return;
   const interactive = event.target?.closest?.(INTERACTIVE_SELECTOR);
   drawClickMark(event.clientX, event.clientY, Boolean(interactive));
   markPressed(interactive);
@@ -281,19 +304,55 @@ function detachListeners() {
   document.removeEventListener("pointerleave", handlePointerLeave);
 }
 
-onMounted(() => {
-  context = canvasEl.value?.getContext("2d", {
-    alpha: true,
-    desynchronized: true,
-  }) || null;
-  if (!context) return;
+function setEffectEnabled(enabled) {
+  if (enabled === effectEnabled) {
+    if (!enabled) stage.value?.setAttribute("data-disabled", "true");
+    return;
+  }
+
+  if (!enabled) {
+    effectEnabled = false;
+    detachListeners();
+    clearCanvas();
+    context = null;
+    stage.value?.setAttribute("data-disabled", "true");
+    return;
+  }
+
+  if (!getCanvasContext()) return;
+  effectEnabled = true;
+  stage.value?.removeAttribute("data-disabled");
   resizeCanvas();
   attachListeners();
   updateMetadata();
+}
+
+function refreshEffectAvailability() {
+  setEffectEnabled(shouldEnableEffect());
+}
+
+function handleVisibilityChange() {
+  refreshEffectAvailability();
+}
+
+function handlePreferenceChange() {
+  refreshEffectAvailability();
+}
+
+onMounted(() => {
+  motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
+  coarsePointerQuery = window.matchMedia?.("(pointer: coarse)") || null;
+  motionQuery?.addEventListener?.("change", handlePreferenceChange);
+  coarsePointerQuery?.addEventListener?.("change", handlePreferenceChange);
+  document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
+  refreshEffectAvailability();
 });
 
 onBeforeUnmount(() => {
-  detachListeners();
+  setEffectEnabled(false);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  motionQuery?.removeEventListener?.("change", handlePreferenceChange);
+  coarsePointerQuery?.removeEventListener?.("change", handlePreferenceChange);
   if (animationFrame) window.cancelAnimationFrame(animationFrame);
   if (pressingTimer) window.clearTimeout(pressingTimer);
   pressedElement?.classList.remove("is-pressing");
