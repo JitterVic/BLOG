@@ -10,6 +10,7 @@ from PIL import Image
 
 @pytest.fixture()
 def app_bundle(tmp_path, monkeypatch):
+    monkeypatch.setenv("BLOG_DEBUG", "true")
     monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
     monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
     monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
@@ -353,4 +354,56 @@ def test_sqlite_connection_enables_wal_and_foreign_keys(app_bundle):
     assert int(foreign_keys) == 1
     assert str(journal_mode).lower() == "wal"
     assert int(busy_timeout) >= 5000
+
+
+def test_production_rejects_default_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("BLOG_DEBUG", "false")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "strong-enough-password")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+
+    with pytest.raises(RuntimeError, match="BLOG_SECRET_KEY"):
+        app_module.create_app()
+
+    monkeypatch.setenv("BLOG_SECRET_KEY", "unique-test-secret")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "admin123456")
+    with pytest.raises(RuntimeError, match="BLOG_ADMIN_PASSWORD"):
+        app_module.create_app()
+
+
+def test_security_headers_present_on_html_and_api(client):
+    html = client.get("/admin/login")
+    assert html.status_code == 200
+    assert html.headers.get("X-Frame-Options") == "DENY"
+    assert html.headers.get("X-Content-Type-Options") == "nosniff"
+    assert "strict-origin-when-cross-origin" in (html.headers.get("Referrer-Policy") or "")
+    assert "default-src 'self'" in (html.headers.get("Content-Security-Policy") or "")
+
+    api = client.get("/api/health")
+    assert api.status_code == 200
+    assert api.headers.get("X-Frame-Options") == "DENY"
+    assert api.headers.get("X-Content-Type-Options") == "nosniff"
+
+
+def test_svg_is_not_served_from_uploads(app_bundle, client):
+    _application, _store = app_bundle
+    uploads = Path(importlib.import_module("store").UPLOADS_DIR)
+    media = uploads / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    target = media / "evil.svg"
+    target.write_text("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>", encoding="utf-8")
+    response = client.get("/uploads/media/evil.svg")
+    assert response.status_code == 404
+
+
+def test_env_int_falls_back_on_invalid_values(monkeypatch):
+    env_loader = importlib.import_module("env_loader")
+    monkeypatch.setenv("BLOG_PORT", "not-a-number")
+    with pytest.warns(RuntimeWarning):
+        assert env_loader.env_int("BLOG_PORT", 5000) == 5000
 

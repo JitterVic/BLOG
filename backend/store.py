@@ -19,8 +19,10 @@ from werkzeug.utils import secure_filename
 
 try:
     from .content import POSTS, SITE_CONFIG
+    from .env_loader import env_int
 except ImportError:
     from content import POSTS, SITE_CONFIG
+    from env_loader import env_int
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -28,7 +30,7 @@ STORAGE_DIR = ROOT_DIR / "storage"
 UPLOADS_DIR = STORAGE_DIR
 DEFAULT_DB_PATH = STORAGE_DIR / "blog.db"
 ALLOWED_MARKDOWN_EXTENSIONS = {".md", ".markdown"}
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".jfif", ".avif", ".heic", ".heif"}
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif", ".avif", ".heic", ".heif"}
 UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jfif"}
 IMAGE_FORMAT_EXTENSIONS = {
     "PNG": {".png"}, "JPEG": {".jpg", ".jpeg", ".jfif"},
@@ -424,9 +426,9 @@ class BlogStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         (UPLOADS_DIR / "avatars").mkdir(parents=True, exist_ok=True)
         (UPLOADS_DIR / "media").mkdir(parents=True, exist_ok=True)
-        self.max_file_bytes = max(1, int(os.getenv("BLOG_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))))
-        self.max_image_bytes = max(1, int(os.getenv("BLOG_MAX_IMAGE_BYTES", str(DEFAULT_MAX_IMAGE_BYTES))))
-        self.max_image_pixels = max(1, int(os.getenv("BLOG_MAX_IMAGE_PIXELS", str(DEFAULT_MAX_IMAGE_PIXELS))))
+        self.max_file_bytes = env_int("BLOG_MAX_UPLOAD_BYTES", 10 * 1024 * 1024, minimum=1)
+        self.max_image_bytes = env_int("BLOG_MAX_IMAGE_BYTES", DEFAULT_MAX_IMAGE_BYTES, minimum=1)
+        self.max_image_pixels = env_int("BLOG_MAX_IMAGE_PIXELS", DEFAULT_MAX_IMAGE_PIXELS, minimum=1)
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, timeout=5)

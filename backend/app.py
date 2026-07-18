@@ -21,7 +21,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 
 try:
-    from .env_loader import load_env_file
+    from .env_loader import env_bool, env_int, load_env_file
     from .store import (
         BlogStore,
         PostVersionConflict,
@@ -31,7 +31,7 @@ try:
         render_markdown,
     )
 except ImportError:
-    from env_loader import load_env_file
+    from env_loader import env_bool, env_int, load_env_file
     from store import (
         BlogStore,
         PostVersionConflict,
@@ -168,20 +168,38 @@ def build_edit_post(post):
     }
 
 
+DEFAULT_SECRET_KEY = "dev-secret-key-change-me"
+DEFAULT_ADMIN_PASSWORD = "admin123456"
+
+
 def create_app():
     app = Flask(__name__)
-    app.secret_key = os.getenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
+    debug_mode = env_bool("BLOG_DEBUG", False)
+    secret_key = os.getenv("BLOG_SECRET_KEY", DEFAULT_SECRET_KEY)
+    admin_password = os.getenv("BLOG_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+    if not debug_mode:
+        if not secret_key or secret_key == DEFAULT_SECRET_KEY:
+            raise RuntimeError(
+                "生产环境禁止使用默认 BLOG_SECRET_KEY。请在 .env 中设置随机密钥后再启动。"
+            )
+        if not admin_password or admin_password == DEFAULT_ADMIN_PASSWORD:
+            raise RuntimeError(
+                "生产环境禁止使用默认 BLOG_ADMIN_PASSWORD。请在 .env 中设置强密码后再启动。"
+            )
+
+    app.secret_key = secret_key
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.getenv("BLOG_COOKIE_SECURE", "false").strip().lower()
-        in {"1", "true", "yes", "on"},
+        SESSION_COOKIE_SECURE=env_bool("BLOG_COOKIE_SECURE", False),
         SESSION_PERMANENT=True,
         PERMANENT_SESSION_LIFETIME=timedelta(
-            seconds=max(300, int(os.getenv("BLOG_SESSION_LIFETIME_SECONDS", str(8 * 60 * 60))))
+            seconds=env_int("BLOG_SESSION_LIFETIME_SECONDS", 8 * 60 * 60, minimum=300)
         ),
         SESSION_REFRESH_EACH_REQUEST=True,
-        MAX_CONTENT_LENGTH=int(os.getenv("BLOG_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
+        MAX_CONTENT_LENGTH=env_int("BLOG_MAX_UPLOAD_BYTES", 10 * 1024 * 1024, minimum=1),
+        BLOG_DEBUG=debug_mode,
+        BLOG_ADMIN_PASSWORD=admin_password,
     )
     admin_prefix = normalize_admin_prefix(os.getenv("BLOG_ADMIN_PREFIX", "/admin"))
     admin_path = admin_prefix.lstrip("/")
@@ -191,8 +209,8 @@ def create_app():
     store.init()
     login_failures: dict[str, list[float]] = {}
     csrf_session_key = "_admin_csrf_token"
-    login_window_seconds = max(60, int(os.getenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "300")))
-    login_max_attempts = max(1, int(os.getenv("BLOG_LOGIN_MAX_ATTEMPTS", "5")))
+    login_window_seconds = env_int("BLOG_LOGIN_RATE_WINDOW_SECONDS", 300, minimum=60)
+    login_max_attempts = env_int("BLOG_LOGIN_MAX_ATTEMPTS", 5, minimum=1)
 
     def is_authenticated():
         return session.get("admin_authenticated") is True
@@ -253,6 +271,32 @@ def create_app():
             return api_error("csrf_failed", "请求校验已失效，请刷新页面后重试。", 400)
         flash("请求校验已失效，请刷新页面后重试。", "error")
         return redirect(request.referrer or url_for("admin_login"))
+
+    @app.after_request
+    def apply_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=()",
+        )
+        content_type = (response.headers.get("Content-Type") or "").lower()
+        if "text/html" in content_type:
+            # Admin templates still rely on small inline scripts/styles.
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; "
+                "img-src 'self' data: blob: https:; "
+                "style-src 'self' 'unsafe-inline'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "font-src 'self' data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self'",
+            )
+        return response
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_too_large(error):
@@ -387,7 +431,7 @@ def create_app():
                 return render_template("admin_login.html"), 429, {"Retry-After": str(retry_after)}
 
             password = form_value(request.form, "password")
-            expected = os.getenv("BLOG_ADMIN_PASSWORD", "admin123456")
+            expected = app.config.get("BLOG_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
             if secrets.compare_digest(password, expected):
                 login_failures.pop(client_key(), None)
                 session.clear()
@@ -611,9 +655,9 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    debug = os.getenv("BLOG_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+    debug = env_bool("BLOG_DEBUG", False)
     host = os.getenv("BLOG_HOST", "127.0.0.1")
-    port = int(os.getenv("BLOG_PORT", "5000"))
+    port = env_int("BLOG_PORT", 5000, minimum=1)
     app.run(host=host, port=port, debug=debug)
 
 
