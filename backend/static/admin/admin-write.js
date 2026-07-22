@@ -31,6 +31,19 @@ const mediaResult = document.getElementById("media-result");
 const toolbar = document.querySelector(".markdown-toolbar");
 const importWarning = document.getElementById("import-warning");
 const retryAutosaveButton = document.getElementById("retry-autosave");
+const publishWarningsAcknowledged = document.getElementById("publish-warnings-acknowledged");
+const revisionPanel = document.getElementById("revision-panel");
+const revisionList = document.getElementById("revision-list");
+const revisionCount = document.getElementById("revision-count");
+const revisionPreview = document.getElementById("revision-preview");
+const revisionPreviewType = document.getElementById("revision-preview-type");
+const revisionPreviewTitle = document.getElementById("revision-preview-title");
+const revisionPreviewTime = document.getElementById("revision-preview-time");
+const revisionPreviewBody = document.getElementById("revision-preview-body");
+const revisionRestore = document.getElementById("revision-restore");
+
+let publishValidationPending = false;
+let selectedRevisionId = null;
 
 let previewTimer = null;
 let previewController = null;
@@ -77,8 +90,9 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.error || data.message || `\u8bf7\u6c42\u5931\u8d25\uff1a${response.status}`);
+    const error = new Error(data.error || data.message || `\u8bf7\u6c42\u5931\uff1a${response.status}`);
     error.code = data.code || "request_failed";
+    error.payload = data;
     throw error;
   }
   return data;
@@ -765,6 +779,160 @@ function hasSectionHeadings(markdown = "") {
   return /(?:^|\n)##\s+\S/.test(String(markdown));
 }
 
+function adminApiUrl(path) {
+  const action = postForm?.getAttribute("action") || "/admin/posts/save";
+  const base = action.replace(/\/posts\/save\/?$/, "");
+  return `${base}/api/${path.replace(/^\//, "")}`;
+}
+
+function fieldForValidation(field) {
+  if (field === "title") return titleInput;
+  if (field === "slug") return slugInput;
+  if (field === "excerpt") return excerptInput;
+  if (field === "category") return categoryInput;
+  if (field === "tags") return tagsInput;
+  if (field === "cover_image") return coverImageInput;
+  if (field === "markdown_content") return markdownInput;
+  return null;
+}
+
+function publishFields() {
+  const data = Object.fromEntries(new FormData(postForm).entries());
+  delete data.csrf_token;
+  delete data.action;
+  delete data.publish_warnings_acknowledged;
+  return data;
+}
+
+async function runPublishPreflight(submitter) {
+  if (publishValidationPending) return;
+  publishValidationPending = true;
+  setSaveState("working", "\\u6b63\\u5728\\u68c0\\u67e5\\u53d1\\u5e03\\u5185\\u5bb9\\u2026\\u2026");
+  try {
+    const result = await fetchJson(adminApiUrl("validate-post"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ post_id: currentPostId(), fields: publishFields() }),
+    });
+    const warnings = result.warnings || [];
+    if (warnings.length) {
+      const summary = warnings.map((item) => `\\u2022 ${item.message}`).join("\\n");
+      if (!window.confirm(`\\u53d1\\u5e03\\u524d\\u63d0\\u9192\\uff1a\\n\\n${summary}\\n\\n\\u4ecd\\u8981\\u7ee7\\u7eed\\u53d1\\u5e03\\u5417\\uff1f`)) {
+        setSaveState("error", "\\u5df2\\u53d6\\u6d88\\u53d1\\u5e03\\uff0c\\u8bf7\\u5148\\u5904\\u7406\\u63d0\\u9192\\u6216\\u7ee7\\u7eed\\u7f16\\u8f91\\u3002");
+        return;
+      }
+    }
+    if (publishWarningsAcknowledged) publishWarningsAcknowledged.value = "1";
+    postForm.dataset.publishValidated = "true";
+    postForm.requestSubmit(submitter);
+  } catch (error) {
+    const issues = error.payload?.errors || [];
+    const first = issues[0];
+    if (first) {
+      focusValidationError(fieldForValidation(first.field), first.message);
+    } else {
+      setSaveState("error", error.message || "\\u53d1\\u5e03\\u68c0\\u67e5\\u5931\\u8d25\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5\\u3002");
+    }
+  } finally {
+    publishValidationPending = false;
+  }
+}
+
+const REVISION_TYPE_LABELS = {
+  created: "\\u65b0\\u5efa",
+  draft_saved: "\\u4fdd\\u5b58\\u8349\\u7a3f",
+  published: "\\u53d1\\u5e03",
+  unpublished: "\\u4e0b\\u67b6",
+  trashed: "\\u79fb\\u5165\\u56de\\u6536\\u7ad9",
+  restored_from_trash: "\\u4ece\\u56de\\u6536\\u7ad9\\u6062\\u590d",
+  pre_restore: "\\u6062\\u590d\\u524d\\u5feb\\u7167",
+  restored: "\\u6062\\u590d\\u5386\\u53f2\\u7248\\u672c",
+};
+
+function formatRevisionTime(value) {
+  const date = new Date(String(value || "").replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? String(value || "") : date.toLocaleString("zh-CN");
+}
+
+function revisionStatusLabel(status) {
+  if (status === "published") return "\\u5df2\\u53d1\\u5e03";
+  if (status === "trashed") return "\\u56de\\u6536\\u7ad9";
+  return "\\u8349\\u7a3f";
+}
+
+function renderRevisionList(items) {
+  if (!revisionList) return;
+  if (!items.length) {
+    revisionList.innerHTML = '<p class="revision-empty">\\u8fd8\\u6ca1\\u6709\\u5386\\u53f2\\u7248\\u672c\\u3002\\u624b\\u52a8\\u4fdd\\u5b58\\u6216\\u53d1\\u5e03\\u540e\\u4f1a\\u51fa\\u73b0\\u5728\\u8fd9\\u91cc\\u3002</p>';
+    return;
+  }
+  revisionList.innerHTML = items.map((item) => `
+    <button type="button" class="revision-item${item.id === selectedRevisionId ? " is-selected" : ""}" data-revision-id="${item.id}">
+      <span class="revision-item__top"><strong>${escapeHtml(REVISION_TYPE_LABELS[item.revision_type] || item.revision_type)}</strong><small>${escapeHtml(revisionStatusLabel(item.status))}</small></span>
+      <span class="revision-item__title">${escapeHtml(item.title || "\\u65e0\\u6807\\u9898")}</span>
+      <time datetime="${escapeHtml(item.created_at || "")}">${escapeHtml(formatRevisionTime(item.created_at))}</time>
+    </button>
+  `).join("");
+}
+
+async function loadRevisionDetail(revisionId) {
+  const detail = await fetchJson(adminApiUrl(`posts/${postForm.dataset.postId}/revisions/${revisionId}`));
+  selectedRevisionId = Number(revisionId);
+  if (revisionPreview) revisionPreview.hidden = false;
+  if (revisionPreviewType) revisionPreviewType.textContent = REVISION_TYPE_LABELS[detail.revision_type] || detail.revision_type;
+  if (revisionPreviewTitle) revisionPreviewTitle.textContent = detail.snapshot?.title || "\\u65e0\\u6807\\u9898";
+  if (revisionPreviewTime) revisionPreviewTime.textContent = formatRevisionTime(detail.created_at);
+  if (revisionPreviewBody) revisionPreviewBody.innerHTML = detail.snapshot?.html_content || "<p>\\u8be5\\u7248\\u672c\\u6ca1\\u6709\\u6b63\\u6587\\u3002</p>";
+  if (revisionRestore) {
+    revisionRestore.hidden = false;
+    revisionRestore.dataset.revisionId = String(revisionId);
+  }
+  revisionList?.querySelectorAll("[data-revision-id]").forEach((button) => {
+    button.classList.toggle("is-selected", Number(button.dataset.revisionId) === selectedRevisionId);
+  });
+}
+
+async function loadRevisions() {
+  if (!revisionPanel || !postForm?.dataset.postId) return;
+  try {
+    const result = await fetchJson(adminApiUrl(`posts/${postForm.dataset.postId}/revisions`));
+    if (revisionCount) revisionCount.textContent = `${result.total || 0} \\u4e2a\\u7248\\u672c`;
+    renderRevisionList(result.items || []);
+  } catch (error) {
+    if (revisionList) revisionList.innerHTML = `<p class="revision-empty">${escapeHtml(error.message || "\\u5386\\u53f2\\u7248\\u672c\\u52a0\\u8f7d\\u5931\\u8d25")}</p>`;
+    if (revisionCount) revisionCount.textContent = "\\u52a0\\u8f7d\\u5931\\u8d25";
+  }
+}
+
+revisionList?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-revision-id]");
+  if (!button) return;
+  try {
+    await loadRevisionDetail(button.dataset.revisionId);
+  } catch (error) {
+    setSaveState("error", error.message || "\\u5386\\u53f2\\u7248\\u672c\\u52a0\\u8f7d\\u5931\\u8d25");
+  }
+});
+
+revisionRestore?.addEventListener("click", async () => {
+  const revisionId = revisionRestore.dataset.revisionId;
+  if (!revisionId || !window.confirm("\\u6062\\u590d\\u540e\\u5f53\\u524d\\u5185\\u5bb9\\u4f1a\\u53d8\\u6210\\u8349\\u7a3f\\uff0c\\u9700\\u8981\\u518d\\u6b21\\u53d1\\u5e03\\u624d\\u4f1a\\u66f4\\u65b0\\u524d\\u53f0\\u3002\\u786e\\u5b9a\\u7ee7\\u7eed\\u5417\\uff1f")) return;
+  revisionRestore.disabled = true;
+  try {
+    await fetchJson(adminApiUrl(`posts/${postForm.dataset.postId}/revisions/${revisionId}/restore`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    window.location.reload();
+  } catch (error) {
+    revisionRestore.disabled = false;
+    setSaveState("error", error.message || "\\u5386\\u53f2\\u7248\\u672c\\u6062\\u590d\\u5931\\u8d25");
+  }
+});
+
+loadRevisions();
+
 function validatePostSubmission(event) {
   if (!postForm) return true;
   const title = titleInput?.value.trim() || "";
@@ -784,9 +952,9 @@ function validatePostSubmission(event) {
   if (action === "published" && hasHeadingSpaceIssues(markdown)) {
     return focusValidationError(markdownInput, "标题 # 后需要空格，例如 `## 章节名`。");
   }
-  if (action === "published" && !hasSectionHeadings(markdown)) {
-    const ok = window.confirm("正文还没有二级标题（## 章节名）。前台将不会显示目录侧栏。仍要发布吗？");
-    if (!ok) return focusValidationError(markdownInput, "已取消发布。建议用 ## 章节名 组织正文。");
+  if (action === "published" && postForm.dataset.publishValidated !== "true") {
+    runPublishPreflight(event.submitter);
+    return false;
   }
   return true;
 }
@@ -795,7 +963,11 @@ postForm?.addEventListener("invalid", (event) => {
   if (event.target === titleInput) setSaveState("error", "\u8bf7\u5148\u586b\u5199\u6587\u7ae0\u6807\u9898\u3002");
 }, true);
 postForm?.addEventListener("input", scheduleDraftPersistence);
-postForm?.addEventListener("input", (event) => event.target.removeAttribute?.("aria-invalid"));
+postForm?.addEventListener("input", (event) => {
+  event.target.removeAttribute?.("aria-invalid");
+  postForm.dataset.publishValidated = "false";
+  if (publishWarningsAcknowledged) publishWarningsAcknowledged.value = "0";
+});
 postForm?.addEventListener("submit", (event) => {
   if (!validatePostSubmission(event)) {
     event.preventDefault();

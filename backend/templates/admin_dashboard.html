@@ -32,6 +32,11 @@
           <strong>{{ stats.draft_count }}</strong>
           <small>仅后台可见</small>
         </div>
+        <div class="dashboard-stat dashboard-stat--trashed">
+          <span>回收站</span>
+          <strong>{{ stats.trashed_count }}</strong>
+          <small>保留 30 天</small>
+        </div>
       </div>
     </section>
 
@@ -58,6 +63,7 @@
                   <option value="">全部状态</option>
                   <option value="published">已发布</option>
                   <option value="draft">草稿</option>
+                  <option value="trashed">回收站</option>
                 </select>
               </label>
             </div>
@@ -76,7 +82,7 @@
                   <a class="post-link__main" href="{{ url_for('admin_write', post_id=item.id) }}">
                     <div class="post-link__title-line">
                       <strong>{{ item.title }}</strong>
-                      <em class="status-badge {{ item.status }}">{{ '已发布' if item.status == 'published' else '草稿' }}</em>
+                      <em class="status-badge {{ item.status }}">{% if item.status == 'published' %}已发布{% elif item.status == 'trashed' %}回收站{% else %}草稿{% endif %}</em>
                     </div>
                     <span class="post-link__meta">
                       <span>{{ item.category or 'Article' }}</span>
@@ -91,25 +97,33 @@
                     {% endif %}
                     <span class="post-link__actions">
                       <span>最近更新：{{ item.updated_at }}</span>
+                      {% if item.status == 'trashed' and item.deleted_at %}<span>移入回收站：{{ item.deleted_at }}</span>{% endif %}
                       {% if item.status == 'published' and item.slug %}
                         <span>前台：/posts/{{ item.slug }}</span>
                       {% endif %}
                     </span>
                   </a>
                   <div class="post-item__actions" aria-label="{{ item.title }} 操作">
-                    <a class="post-action" href="{{ url_for('admin_write', post_id=item.id) }}">编辑</a>
-                    {% if item.status == 'published' and item.slug %}
-                      <a class="post-action" href="/posts/{{ item.slug }}" target="_blank" rel="noreferrer">查看</a>
+                    {% if item.status == 'trashed' %}
+                      <form method="post" action="{{ url_for('admin_restore_post', post_id=item.id) }}" data-confirm-form data-confirm="确定将《{{ item.title|e }}》恢复为草稿吗？">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <button type="submit" class="post-action" data-loading-label="恢复中…">恢复为草稿</button>
+                      </form>
+                    {% else %}
+                      <a class="post-action" href="{{ url_for('admin_write', post_id=item.id) }}">编辑</a>
+                      {% if item.status == 'published' and item.slug %}
+                        <a class="post-action" href="/posts/{{ item.slug }}" target="_blank" rel="noreferrer">查看</a>
+                      {% endif %}
+                      <form
+                        method="post"
+                        action="{{ url_for('admin_delete_post', post_id=item.id) }}"
+                        data-confirm-form
+                        data-confirm="确定将《{{ item.title|e }}》移入回收站吗？30 天内可以恢复。"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <button type="submit" class="post-action post-action--danger" data-loading-label="移动中…">移入回收站</button>
+                      </form>
                     {% endif %}
-                    <form
-                      method="post"
-                      action="{{ url_for('admin_delete_post', post_id=item.id) }}"
-                      data-confirm-form
-                      data-confirm="确定删除《{{ item.title|e }}》吗？此操作不可撤销。"
-                    >
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                      <button type="submit" class="post-action post-action--danger" data-loading-label="删除中…">删除</button>
-                    </form>
                   </div>
                 </article>
               {% endfor %}

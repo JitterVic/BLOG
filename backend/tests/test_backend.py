@@ -487,3 +487,380 @@ def test_css_contains_no_toc_rule():
     assert "write-status-badge" in admin_css
     assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
 
+
+def test_import_normalizes_nbsp(app_bundle):
+    _application, store = app_bundle
+
+    class FakeFile:
+        filename = "nbsp.md"
+
+        def read(self):
+            return "---\ntitle: NBSP Doc\n---\n\nHello\u00a0world".encode("utf-8")
+
+    payload = store.import_markdown(FakeFile())
+    assert "\xa0" not in payload["markdown_content"]
+    assert "Hello world" in payload["markdown_content"]
+
+
+def test_atom_feed_and_sitemap_and_robots(app_bundle, client, monkeypatch):
+    _application, store = app_bundle
+    monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
+    store.save_post(
+        {
+            "title": "Public Feed Post",
+            "slug": "public-feed-post",
+            "markdown_content": "Hello feed",
+            "excerpt": "Feed excerpt",
+            "published_at": "2099-04-01",
+        },
+        action="published",
+    )
+    store.save_post(
+        {
+            "title": "Draft Stay Hidden",
+            "slug": "draft-stay-hidden",
+            "markdown_content": "secret",
+        },
+        action="draft",
+    )
+
+    feed = client.get("/feed.xml")
+    assert feed.status_code == 200
+    assert "application/atom+xml" in feed.headers.get("Content-Type", "")
+    body = feed.get_data(as_text=True)
+    assert "Public Feed Post" in body
+    assert "https://example.com/posts/public-feed-post" in body
+    assert "Draft Stay Hidden" not in body
+    import xml.etree.ElementTree as ET
+
+    ET.fromstring(body)
+
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.status_code == 200
+    sm = sitemap.get_data(as_text=True)
+    assert "https://example.com/posts/public-feed-post" in sm
+    assert "draft-stay-hidden" not in sm
+    ET.fromstring(sm)
+
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    robots_body = robots.get_data(as_text=True)
+    assert "Sitemap: https://example.com/sitemap.xml" in robots_body
+    assert "Disallow" not in robots_body
+
+
+def test_post_page_injects_open_graph_meta(app_bundle, client, tmp_path, monkeypatch):
+    application, store = app_bundle
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        "<!doctype html><html><head><title>至知</title>"
+        '<meta name="description" content="default" />'
+        "</head><body><div id=\"app\"></div></body></html>",
+        encoding="utf-8",
+    )
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "FRONTEND_DIST", dist)
+    monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
+    # recreate app with patched FRONTEND_DIST
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+    store = app_module.BlogStore if False else store
+    # store still points to tmp db from fixture; need same store path
+    from store import BlogStore
+    # fixture store already has data path; save via fixture store then hit new app
+    # Re-bind: create_app makes new BlogStore from env BLOG_DATABASE_PATH which fixture set.
+    store = BlogStore()
+    store.init()
+    store.save_post(
+        {
+            "title": 'Title <script> & "quotes"',
+            "slug": "og-post",
+            "markdown_content": "body",
+            "excerpt": 'Desc <b>x</b> & more',
+            "cover_image": "/uploads/media/cover.jpg",
+            "published_at": "2099-05-01",
+        },
+        action="published",
+    )
+
+    response = client.get("/posts/og-post")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "og:title" in html
+    assert "Title &lt;script&gt; &amp; &quot;quotes&quot;" in html or "Title &lt;script&gt;" in html
+    assert 'property="og:type" content="article"' in html
+    assert "https://example.com/posts/og-post" in html
+    assert "https://example.com/uploads/media/cover.jpg" in html
+    assert "<script>" not in html.split("</head>")[0]
+
+    missing = client.get("/posts/does-not-exist-slug")
+    assert missing.status_code == 200
+    missing_html = missing.get_data(as_text=True)
+    assert "og:title" not in missing_html
+    assert "<title>至知</title>" in missing_html
+
+
+def test_image_pipeline_strips_exif_and_downscales(app_bundle, client):
+    _application, store = app_bundle
+    from PIL import Image as PILImage
+    from PIL.ExifTags import Base as ExifBase
+
+    big = PILImage.new("RGB", (3000, 1000), "#336699")
+    # attach fake GPS-ish EXIF via piexif-less path: use info? Pillow JPEG exif needs encoded bytes.
+    # Use simple exif dict if available
+    exif = big.getexif()
+    try:
+        exif[271] = "TestCamera"  # Make
+        exif[34853] = {1: "N", 2: (1, 1, 1), 3: "E", 4: (1, 1, 1)}  # GPSInfo-ish
+    except Exception:
+        pass
+    buf = io.BytesIO()
+    try:
+        big.save(buf, format="JPEG", quality=95, exif=exif)
+    except Exception:
+        big.save(buf, format="JPEG", quality=95)
+    buf.seek(0)
+
+    class FakeStorage:
+        filename = "phone.jpg"
+        mimetype = "image/jpeg"
+        stream = buf
+
+    relative = store.save_file(FakeStorage(), "media")
+    from store import UPLOADS_DIR
+
+    saved = (UPLOADS_DIR / relative).read_bytes()
+    with PILImage.open(io.BytesIO(saved)) as out:
+        assert max(out.size) <= 1920
+        assert out.format == "JPEG"
+        out_exif = out.getexif()
+        # re-encoded JPEG should not keep original GPS dump
+        assert not out_exif or 34853 not in out_exif
+
+    # small PNG unchanged dimensions
+    small_buf = io.BytesIO()
+    PILImage.new("RGB", (32, 32), "#112233").save(small_buf, format="PNG")
+    small_buf.seek(0)
+
+    class FakePng:
+        filename = "small.png"
+        mimetype = "image/png"
+        stream = small_buf
+
+    rel_png = store.save_file(FakePng(), "media")
+    with PILImage.open(UPLOADS_DIR / rel_png) as out_png:
+        assert out_png.size == (32, 32)
+
+    # uploads cache header
+    token = login(client)
+    upload_resp = client.post(
+        "/admin/api/upload-image",
+        data={"image": (image_bytes("JPEG"), "tiny.jpg")},
+        headers={"X-CSRF-Token": token},
+        content_type="multipart/form-data",
+    )
+    assert upload_resp.status_code == 200
+    url = upload_resp.get_json()["url"]
+    cached = client.get(url)
+    assert cached.status_code == 200
+    assert "max-age=31536000" in cached.headers.get("Cache-Control", "")
+    assert "immutable" in cached.headers.get("Cache-Control", "")
+
+
+
+def post_fields(title="Revision article", slug="revision-article", markdown="# Revision\n\n## Section\n\nBody text"):
+    return {
+        "title": title,
+        "slug": slug,
+        "markdown_content": markdown,
+        "category": "Testing",
+        "tags": "one, two",
+        "excerpt": "A test excerpt",
+    }
+
+
+def test_manual_saves_create_revisions_but_autosave_does_not(app_bundle, client):
+    _application, store = app_bundle
+    token = login(client)
+    response = client.post(
+        "/admin/posts/save",
+        data={"csrf_token": token, **post_fields(), "action": "draft"},
+    )
+    assert response.status_code == 302
+    post_id = next(item["id"] for item in store.list_admin_posts() if item["title"] == "Revision article")
+    assert len(store.list_post_revisions(post_id)) == 1
+
+    current = store.get_post_by_id(post_id)
+    autosave = client.post(
+        "/admin/api/autosave",
+        json={
+            "post_id": post_id,
+            "updated_at": current["updated_at"],
+            "fields": {**post_fields(), "title": "Autosaved only"},
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert autosave.status_code == 200
+    assert len(store.list_post_revisions(post_id)) == 1
+
+    published = client.post(
+        "/admin/posts/save",
+        data={
+            "csrf_token": token,
+            "post_id": post_id,
+            **post_fields(title="Published revision", markdown="# Published\n\n## Section\n\nLong enough body"),
+            "action": "published",
+        },
+    )
+    assert published.status_code == 302
+    revisions = store.list_post_revisions(post_id)
+    assert len(revisions) == 2
+    assert revisions[0]["revision_type"] == "published"
+
+
+def test_trash_hides_post_and_restore_returns_draft(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(), action="published")
+    token = login(client)
+
+    response = client.post(
+        f"/admin/posts/{post_id}/delete",
+        data={"csrf_token": token},
+    )
+    assert response.status_code == 302
+    trashed = store.get_post_by_id(post_id)
+    assert trashed["status"] == "trashed"
+    assert trashed["deleted_at"]
+    assert client.get(f"/api/posts/{trashed['slug']}").status_code == 404
+
+    response = client.post(
+        f"/admin/posts/{post_id}/restore",
+        data={"csrf_token": token},
+    )
+    assert response.status_code == 302
+    restored = store.get_post_by_id(post_id)
+    assert restored["status"] == "draft"
+    assert restored["deleted_at"] is None
+    assert client.get(f"/api/posts/{restored['slug']}").status_code == 404
+
+
+def test_revision_preview_and_restore_returns_draft(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="First version"), action="draft")
+    store.save_post(post_fields(title="Second version", markdown="# Second\n\n## Section\n\nBody"), post_id=post_id, action="draft")
+    revisions = store.list_post_revisions(post_id)
+    assert len(revisions) == 2
+    oldest_id = revisions[-1]["id"]
+    token = login(client)
+
+    detail = client.get(f"/admin/api/posts/{post_id}/revisions/{oldest_id}")
+    assert detail.status_code == 200
+    assert detail.get_json()["snapshot"]["title"] == "First version"
+
+    restored = client.post(
+        f"/admin/api/posts/{post_id}/revisions/{oldest_id}/restore",
+        json={},
+        headers={"X-CSRF-Token": token},
+    )
+    assert restored.status_code == 200
+    current = store.get_post_by_id(post_id)
+    assert current["title"] == "First version"
+    assert current["status"] == "draft"
+
+
+def test_restore_revision_uniquifies_slug_on_collision(app_bundle):
+    _application, store = app_bundle
+    # Post A holds an early revision snapshotting slug "collide", then A moves off it.
+    post_a = store.save_post(
+        {"title": "A one", "slug": "collide", "markdown_content": "# A\n\nBody"},
+        action="draft",
+    )
+    store.save_post(
+        {"title": "A two", "slug": "a-two-new", "markdown_content": "# A2\n\nBody"},
+        post_id=post_a,
+        action="draft",
+    )
+    # Post B now claims the freed "collide" slug.
+    post_b = store.save_post(
+        {"title": "B", "slug": "collide", "markdown_content": "# B\n\nBody"},
+        action="draft",
+    )
+    assert store.get_post_by_id(post_b)["slug"] == "collide"
+
+    # Oldest revision of A snapshots slug "collide"; restoring it must not collide with B.
+    revisions = store.list_post_revisions(post_a)
+    oldest = revisions[-1]
+    restored = store.restore_post_revision(post_a, oldest["id"])
+
+    assert restored["title"] == "A one"
+    assert restored["status"] == "draft"
+    assert restored["slug"] != store.get_post_by_id(post_b)["slug"]
+    slugs = {store.get_post_by_id(post_a)["slug"], store.get_post_by_id(post_b)["slug"]}
+    assert len(slugs) == 2
+
+
+def test_publish_preflight_returns_errors_and_warnings(client):
+    token = login(client)
+    invalid = client.post(
+        "/admin/api/validate-post",
+        json={"fields": {"title": "", "markdown_content": ""}},
+        headers={"X-CSRF-Token": token},
+    )
+    assert invalid.status_code == 400
+    assert {item["code"] for item in invalid.get_json()["errors"]} >= {"title_required", "content_required"}
+
+    valid = client.post(
+        "/admin/api/validate-post",
+        json={"fields": post_fields(markdown="# Short")},
+        headers={"X-CSRF-Token": token},
+    )
+    assert valid.status_code == 200
+    warning_codes = {item["code"] for item in valid.get_json()["warnings"]}
+    assert "missing_sections" in warning_codes
+
+
+def test_expired_trash_is_purged(app_bundle):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Expired"), action="draft")
+    store.trash_post(post_id)
+    with store.connect() as connection:
+        connection.execute(
+            "UPDATE posts SET deleted_at = ? WHERE id = ?",
+            ("2020-01-01T00:00:00.000000", post_id),
+        )
+        connection.commit()
+    assert store.purge_expired_trash(now=__import__("datetime").datetime(2026, 7, 21)) == 1
+    assert store.get_post_by_id(post_id) is None
+
+
+def test_media_library_reports_body_and_cover_references(app_bundle):
+    _application, store = app_bundle
+    relative = store.save_file(type("Upload", (), {"filename": "library.png", "mimetype": "image/png", "stream": image_bytes()})(), "media")
+    url = "/uploads/" + relative
+    store.save_post(
+        {**post_fields(title="Media article"), "cover_image": url, "markdown_content": f"# Media\n\n## Section\n\n![image]({url})"},
+        action="draft",
+    )
+    assets = store.list_media_assets()
+    asset = next(item for item in assets if item["url"] == url)
+    assert asset["reference_count"] == 2
+    assert {item["kind"] for item in asset["references"]} == {"cover", "body"}
+
+
+def test_admin_media_and_revision_surfaces_render(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Surface article"), action="draft")
+    login(client)
+
+    media_page = client.get("/admin/media")
+    assert media_page.status_code == 200
+    assert 'id="media-grid"' in media_page.get_data(as_text=True) or "还没有媒体文件" in media_page.get_data(as_text=True)
+
+    write_page = client.get(f"/admin/write/{post_id}")
+    assert write_page.status_code == 200
+    html = write_page.get_data(as_text=True)
+    assert 'id="revision-panel"' in html
+    assert 'id="publish-warnings-acknowledged"' in html

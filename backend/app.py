@@ -1,13 +1,19 @@
 import os
+import re
 import secrets
+from typing import Any
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import html as html_lib
+from xml.sax.saxutils import escape as xml_escape
+
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     jsonify,
@@ -207,6 +213,7 @@ def create_app():
 
     store = BlogStore()
     store.init()
+    store.purge_expired_trash(retention_days=30)
     login_failures: dict[str, list[float]] = {}
     csrf_session_key = "_admin_csrf_token"
     login_window_seconds = env_int("BLOG_LOGIN_RATE_WINDOW_SECONDS", 300, minimum=60)
@@ -418,6 +425,7 @@ def create_app():
 
         response = send_from_directory(UPLOADS_DIR, path)
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
     @app.route(f"{admin_prefix}/login", methods=["GET", "POST"])
@@ -464,6 +472,7 @@ def create_app():
     @app.get(admin_prefix)
     @admin_required
     def admin_dashboard():
+        store.purge_expired_trash(retention_days=30)
         return render_template(
             "admin_dashboard.html",
             **build_admin_context(admin_posts=store.list_admin_posts()),
@@ -476,9 +485,20 @@ def create_app():
         post = store.get_post_by_id(post_id) if post_id else None
         if post_id and post is None:
             abort(404)
+        if post and post.get("status") == "trashed":
+            flash("请先从稿件总览恢复文章，再继续编辑。", "error")
+            return redirect(url_for("admin_dashboard"))
         return render_template(
             "admin_write.html",
             **build_admin_context(edit_post=build_edit_post(post)),
+        )
+
+    @app.get(f"{admin_prefix}/media")
+    @admin_required
+    def admin_media():
+        return render_template(
+            "admin_media.html",
+            **build_admin_context(media_assets=store.list_media_assets()),
         )
 
     @app.get(f"{admin_prefix}/profile")
@@ -509,15 +529,36 @@ def create_app():
     def admin_save_post():
         post_id = request.form.get("post_id", type=int)
         action = form_value(request.form, "action", "draft") or "draft"
+        existing = store.get_post_by_id(post_id) if post_id else None
+        if existing and existing.get("status") == "trashed":
+            flash("回收站文章不能直接保存，请先恢复为草稿。", "error")
+            return redirect(url_for("admin_dashboard"))
         try:
             saved_id = store.save_post(request.form, post_id=post_id, action=action)
         except ValueError as exc:
             flash(str(exc), "error")
-            if post_id:
-                return redirect(url_for("admin_write", post_id=post_id))
-            return redirect(url_for("admin_write"))
+            submitted = build_edit_post(existing)
+            submitted.update({
+                "id": post_id or "",
+                "title": form_value(request.form, "title"),
+                "slug": form_value(request.form, "slug"),
+                "excerpt": form_value(request.form, "excerpt"),
+                "published_at": form_value(request.form, "published_at"),
+                "read_time": form_value(request.form, "read_time"),
+                "category": form_value(request.form, "category"),
+                "tags_text": form_value(request.form, "tags"),
+                "hero_quote": form_value(request.form, "hero_quote"),
+                "cover_image": form_value(request.form, "cover_image"),
+                "markdown_content": str(request.form.get("markdown_content") or ""),
+                "html_content": render_markdown(str(request.form.get("markdown_content") or "")),
+                "status": (existing or {}).get("status", "draft"),
+            })
+            return render_template(
+                "admin_write.html",
+                **build_admin_context(edit_post=submitted),
+            ), 400
 
-        message = ("已保存为草稿（前台不可见）。若要上线，请点击「发布文章」。" if action == "draft" else "文章已发布，前台现在可以看到。")
+        message = ('已保存为草稿（前台不可见）。若要上线，请点击「发布文章」。' if action == "draft" else '文章已发布，前台现在可以看到。')
         flash(message, "success")
         return redirect(url_for("admin_write", post_id=saved_id, saved=1))
 
@@ -525,11 +566,22 @@ def create_app():
     @admin_required
     def admin_delete_post(post_id):
         try:
-            store.delete_post(post_id)
+            store.trash_post(post_id)
         except ValueError as exc:
             flash(str(exc), "error")
         else:
-            flash("文章已删除。", "success")
+            flash("文章已移入回收站，30 天内可以恢复。", "success")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.post(f"{admin_prefix}/posts/<int:post_id>/restore")
+    @admin_required
+    def admin_restore_post(post_id):
+        try:
+            store.restore_post(post_id)
+        except ValueError as exc:
+            flash(str(exc), "error")
+        else:
+            flash("文章已恢复为草稿。", "success")
         return redirect(url_for("admin_dashboard"))
 
     @app.post(f"{admin_prefix}/api/autosave")
@@ -562,6 +614,7 @@ def create_app():
                 post_id=post_id,
                 action="draft",
                 expected_updated_at=expected_updated_at,
+                create_revision=False,
             )
         except PostVersionConflict as exc:
             return api_error("version_conflict", str(exc), 409)
@@ -621,6 +674,218 @@ def create_app():
             return api_error("validation_error", str(exc), 400)
         return jsonify(payload)
 
+
+    @app.post(f"{admin_prefix}/api/validate-post")
+    @admin_required
+    def admin_validate_post():
+        payload = request.get_json(silent=True) or {}
+        fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else payload
+        raw_post_id = payload.get("post_id")
+        try:
+            post_id = int(raw_post_id) if raw_post_id else None
+        except (TypeError, ValueError):
+            return api_error("invalid_post_id", "稿件 ID 无效。", 400)
+        result = store.validate_post_for_publish(fields, post_id=post_id)
+        return jsonify(result), (200 if result["ok"] else 400)
+
+    @app.get(f"{admin_prefix}/api/posts/<int:post_id>/revisions")
+    @admin_required
+    def admin_post_revisions(post_id):
+        try:
+            items = store.list_post_revisions(post_id)
+        except ValueError as exc:
+            return api_error("post_not_found", str(exc), 404)
+        return jsonify({"items": items, "total": len(items)})
+
+    @app.get(f"{admin_prefix}/api/posts/<int:post_id>/revisions/<int:revision_id>")
+    @admin_required
+    def admin_post_revision_detail(post_id, revision_id):
+        revision = store.get_post_revision(post_id, revision_id)
+        if revision is None:
+            return api_error("revision_not_found", "历史版本不存在。", 404)
+        return jsonify(revision)
+
+    @app.post(f"{admin_prefix}/api/posts/<int:post_id>/revisions/<int:revision_id>/restore")
+    @admin_required
+    def admin_restore_post_revision(post_id, revision_id):
+        try:
+            post = store.restore_post_revision(post_id, revision_id)
+        except ValueError as exc:
+            return api_error("revision_restore_failed", str(exc), 400)
+        return jsonify({
+            "ok": True,
+            "post_id": post_id,
+            "status": post.get("status", "draft"),
+            "updated_at": post.get("updated_at", ""),
+            "message": "历史版本已恢复为草稿。",
+        })
+
+
+    def public_base_url() -> str:
+        configured = (os.getenv("BLOG_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+        if configured:
+            return configured
+        return request.url_root.rstrip("/")
+
+    def absolute_url(path: str) -> str:
+        base = public_base_url()
+        if not path:
+            return base + "/"
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+        if not path.startswith("/"):
+            path = "/" + path
+        return base + path
+
+    def atom_datetime(value: str | None) -> str:
+        text = (value or "").strip()
+        if not text:
+            return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        if "T" in text:
+            return text if text.endswith("Z") else text + "Z" if len(text) == 19 else text
+        if len(text) >= 10:
+            return text[:10] + "T00:00:00Z"
+        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def build_atom_feed() -> str:
+        base = public_base_url()
+        posts = store.list_posts(published_only=True, sort="latest", limit=20)
+        updated = atom_datetime(posts[0].get("updated_at") or posts[0].get("published_at") if posts else None)
+        entries: list[str] = []
+        for post in posts:
+            link = absolute_url(f"/posts/{post['slug']}")
+            title = xml_escape(str(post.get("title") or ""))
+            summary = xml_escape(str(post.get("excerpt") or ""))
+            entry_updated = atom_datetime(post.get("updated_at") or post.get("published_at"))
+            entries.append(
+                "\n".join(
+                    [
+                        "  <entry>",
+                        f"    <title>{title}</title>",
+                        f'    <link href="{xml_escape(link)}" rel="alternate" type="text/html"/>',
+                        f"    <id>{xml_escape(link)}</id>",
+                        f"    <updated>{entry_updated}</updated>",
+                        f'    <summary type="text">{summary}</summary>',
+                        "  </entry>",
+                    ]
+                )
+            )
+        feed = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<feed xmlns="http://www.w3.org/2005/Atom">',
+            "  <title>至知</title>",
+            "  <subtitle>记录技术实践、项目复盘和长期学习的个人博客</subtitle>",
+            f'  <link href="{xml_escape(absolute_url("/feed.xml"))}" rel="self" type="application/atom+xml"/>',
+            f'  <link href="{xml_escape(base + "/")}" rel="alternate" type="text/html"/>',
+            f"  <id>{xml_escape(base + "/")}</id>",
+            f"  <updated>{updated}</updated>",
+            *entries,
+            "</feed>",
+            "",
+        ]
+        return "\n".join(feed)
+
+    def build_sitemap() -> str:
+        posts = store.list_posts(published_only=True, sort="latest")
+        urls = [
+            ("/", None),
+            ("/posts", None),
+            ("/about", None),
+        ]
+        for post in posts:
+            lastmod = (post.get("updated_at") or post.get("published_at") or "")[:10] or None
+            urls.append((f"/posts/{post['slug']}", lastmod))
+        parts = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ]
+        for path, lastmod in urls:
+            parts.append("  <url>")
+            parts.append(f"    <loc>{xml_escape(absolute_url(path))}</loc>")
+            if lastmod:
+                parts.append(f"    <lastmod>{xml_escape(lastmod)}</lastmod>")
+            parts.append("  </url>")
+        parts.append("</urlset>")
+        parts.append("")
+        return "\n".join(parts)
+
+    _index_html_cache: dict[str, Any] = {"mtime": None, "text": None}
+
+    def load_index_html() -> str | None:
+        index_file = FRONTEND_DIST / "index.html"
+        if not index_file.exists():
+            return None
+        mtime = index_file.stat().st_mtime
+        if _index_html_cache["mtime"] != mtime or _index_html_cache["text"] is None:
+            _index_html_cache["text"] = index_file.read_text(encoding="utf-8")
+            _index_html_cache["mtime"] = mtime
+        return _index_html_cache["text"]
+
+    def render_spa_index(post: dict[str, Any] | None = None) -> Response | None:
+        html_text = load_index_html()
+        if html_text is None:
+            return None
+        if post:
+            title = str(post.get("title") or "至知")
+            description = str(post.get("excerpt") or "至知：记录技术实践、项目复盘和长期学习的个人博客。")
+            page_url = absolute_url(f"/posts/{post['slug']}")
+            safe_title = html_lib.escape(title, quote=True)
+            safe_desc = html_lib.escape(description, quote=True)
+            safe_page_url = html_lib.escape(page_url, quote=True)
+            html_text = re.sub(
+                r"<title>.*?</title>",
+                f"<title>{html_lib.escape(title)} · 至知</title>",
+                html_text,
+                count=1,
+                flags=re.I | re.S,
+            )
+            desc_pattern = r"<meta[^>]*name=[\"']description[\"'][^>]*/?>"
+            if re.search(desc_pattern, html_text, flags=re.I | re.S):
+                html_text = re.sub(
+                    desc_pattern,
+                    f'<meta name="description" content="{safe_desc}" />',
+                    html_text,
+                    count=1,
+                    flags=re.I | re.S,
+                )
+            else:
+                html_text = html_text.replace(
+                    "</head>",
+                    f'    <meta name="description" content="{safe_desc}" />\n  </head>',
+                    1,
+                )
+            cover = str(post.get("cover_image") or "").strip()
+            og_image_tag = ""
+            if cover:
+                og_image = absolute_url(cover)
+                og_image_tag = f'    <meta property="og:image" content="{html_lib.escape(og_image, quote=True)}" />\n'
+            og_block = (
+                f'    <meta property="og:title" content="{safe_title}" />\n'
+                f'    <meta property="og:description" content="{safe_desc}" />\n'
+                f'    <meta property="og:type" content="article" />\n'
+                f'    <meta property="og:url" content="{safe_page_url}" />\n'
+                f"{og_image_tag}"
+                f'    <link rel="canonical" href="{safe_page_url}" />\n'
+            )
+            html_text = html_text.replace("</head>", og_block + "  </head>", 1)
+        return Response(html_text, mimetype="text/html; charset=utf-8")
+
+    @app.get("/feed.xml")
+    def atom_feed():
+        body = build_atom_feed()
+        return Response(body, mimetype="application/atom+xml; charset=utf-8")
+
+    @app.get("/sitemap.xml")
+    def sitemap_xml():
+        body = build_sitemap()
+        return Response(body, mimetype="application/xml; charset=utf-8")
+
+    @app.get("/robots.txt")
+    def robots_txt():
+        body = "User-agent: *\nAllow: /\nSitemap: " + absolute_url("/sitemap.xml") + "\n"
+        return Response(body, mimetype="text/plain; charset=utf-8")
+
+
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
     def frontend(path):
@@ -633,9 +898,15 @@ def create_app():
         if path and requested.exists() and requested.is_file():
             return send_from_directory(FRONTEND_DIST, path)
 
-        index_file = FRONTEND_DIST / "index.html"
-        if index_file.exists():
-            return send_from_directory(FRONTEND_DIST, "index.html")
+        post_for_meta = None
+        if path.startswith("posts/"):
+            slug = path[len("posts/"):].strip("/")
+            if slug and "/" not in slug:
+                post_for_meta = store.get_post_by_slug(slug, include_drafts=False)
+
+        spa = render_spa_index(post_for_meta)
+        if spa is not None:
+            return spa
 
         return (
             jsonify(

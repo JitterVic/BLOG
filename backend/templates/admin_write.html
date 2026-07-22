@@ -24,6 +24,7 @@
     >
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" id="post-id" name="post_id" value="{{ edit_post.id }}" />
+      <input type="hidden" id="publish-warnings-acknowledged" name="publish_warnings_acknowledged" value="0" />
 
       <div class="write-status-bar" aria-live="polite">
         <span
@@ -177,6 +178,34 @@
         </section>
       </div>
 
+      {% if edit_post.id %}
+        <section class="revision-panel card" id="revision-panel" data-post-id="{{ edit_post.id }}" aria-labelledby="revision-title">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">History</span>
+              <h3 id="revision-title">关键节点版本</h3>
+              <p>自动保存不会制造历史记录；手动保存、发布、下架和恢复时会保留版本。</p>
+            </div>
+            <span class="revision-count" id="revision-count">加载中…</span>
+          </div>
+          <div class="revision-layout">
+            <div class="revision-list" id="revision-list" aria-live="polite">
+              <p class="revision-empty">正在加载历史版本……</p>
+            </div>
+            <div class="revision-preview" id="revision-preview" hidden>
+              <div class="revision-preview__head">
+                <div>
+                  <span class="eyebrow" id="revision-preview-type">Revision</span>
+                  <strong id="revision-preview-title">选择一个历史版本</strong>
+                  <small id="revision-preview-time"></small>
+                </div>
+                <button type="button" class="post-action" id="revision-restore" hidden>恢复为草稿</button>
+              </div>
+              <article class="markdown-body revision-preview__body" id="revision-preview-body"></article>
+            </div>
+          </div>
+        </section>
+      {% endif %}
       <footer class="write-action-bar">
         <div class="write-save-state">
           <span class="status-dot"></span>
@@ -185,7 +214,7 @@
         </div>
         <div class="write-action-bar__buttons">
           {% if edit_post.slug and edit_post.status == 'published' %}<a href="/posts/{{ edit_post.slug }}" target="_blank" rel="noreferrer">查看前台</a>{% endif %}
-          {% if edit_post.id %}<button type="submit" class="danger-button" form="delete-form">删除</button>{% endif %}
+          {% if edit_post.id %}<button type="submit" class="danger-button" form="delete-form">移入回收站</button>{% endif %}
           <button type="submit" name="action" value="draft">存草稿 / 下架</button>
           <button type="submit" name="action" value="published" class="primary">发布文章</button>
         </div>
@@ -193,7 +222,7 @@
     </form>
 
     {% if edit_post.id %}
-      <form id="delete-form" method="post" action="{{ url_for('admin_delete_post', post_id=edit_post.id) }}" onsubmit="return confirm('确定删除这篇文章吗？此操作不可撤销。');">
+      <form id="delete-form" method="post" action="{{ url_for('admin_delete_post', post_id=edit_post.id) }}" onsubmit="return confirm('确定将这篇文章移入回收站吗？30 天内可以恢复。');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       </form>
     {% endif %}

@@ -1,0 +1,107 @@
+﻿{% extends "admin_base.html" %}
+{% set admin_page = "media" %}
+
+{% block page_title %}媒体资源{% endblock %}
+{% block page_description %}浏览上传图片、复制引用地址，并确认每张图片正在被哪些稿件使用。{% endblock %}
+
+{% block content %}
+  <main class="admin-main media-main">
+    <section class="card media-library" aria-labelledby="media-library-title">
+      <div class="card-head media-library__head">
+        <div>
+          <span class="eyebrow">Media Library</span>
+          <h2 id="media-library-title">图片档案</h2>
+          <p>媒体库第一版只提供浏览和引用检查，不提供删除，避免误删仍被文章使用的图片。</p>
+        </div>
+        <a class="button button--primary" href="{{ url_for('admin_write') }}">进入写作台上传</a>
+      </div>
+
+      {% if media_assets %}
+        <div class="media-tools" aria-label="媒体筛选">
+          <label class="filter-control">
+            <span>查找文件</span>
+            <input id="media-search" type="search" placeholder="搜索文件名或引用文章" autocomplete="off" />
+          </label>
+          <label class="filter-control">
+            <span>引用状态</span>
+            <select id="media-reference-filter">
+              <option value="">全部图片</option>
+              <option value="referenced">已引用</option>
+              <option value="unreferenced">未引用</option>
+            </select>
+          </label>
+          <p id="media-count" class="admin-post-count" role="status" aria-live="polite">共 {{ media_assets|length }} 张图片</p>
+        </div>
+
+        <div class="media-grid" id="media-grid">
+          {% for asset in media_assets %}
+            <article
+              class="media-card"
+              data-media-card
+              data-reference-state="{{ 'referenced' if asset.reference_count else 'unreferenced' }}"
+              data-search="{{ (asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}"
+            >
+              <a class="media-card__preview" href="{{ asset.url }}" target="_blank" rel="noreferrer">
+                <img src="{{ asset.url }}" alt="{{ asset.filename }}" loading="lazy" />
+              </a>
+              <div class="media-card__body">
+                <div class="media-card__title">
+                  <strong title="{{ asset.filename }}">{{ asset.filename }}</strong>
+                  <span class="status-badge {{ 'published' if asset.reference_count else 'draft' }}">
+                    {{ asset.reference_count }} 处引用
+                  </span>
+                </div>
+                <p class="media-card__meta">
+                  {{ '%.1f'|format(asset.size / 1024) }} KB
+                  {% if asset.width and asset.height %} · {{ asset.width }} × {{ asset.height }}{% endif %}
+                  · {{ asset.created_at }}
+                </p>
+                <div class="media-card__actions">
+                  <button type="button" class="post-action" data-copy-text="{{ asset.url }}">复制 URL</button>
+                  <button type="button" class="post-action" data-copy-text="![图片描述]({{ asset.url }})">复制 Markdown</button>
+                </div>
+
+                <details class="media-references" {% if not asset.reference_count %}open{% endif %}>
+                  <summary>引用详情</summary>
+                  {% if asset.references %}
+                    <ul>
+                      {% for ref in asset.references %}
+                        <li>
+                          {% if ref.status != 'trashed' %}
+                            <a href="{{ url_for('admin_write', post_id=ref.post_id) }}">{{ ref.title }}</a>
+                          {% else %}
+                            <span>{{ ref.title }}</span>
+                          {% endif %}
+                          <small>{{ ref.kind == 'cover' and '封面' or '正文' }} · {% if ref.status == 'published' %}已发布{% elif ref.status == 'trashed' %}回收站{% else %}草稿{% endif %}</small>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p>当前没有稿件引用这张图片。</p>
+                  {% endif %}
+                </details>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+        <div class="filter-empty" id="media-filter-empty" hidden>
+          <strong>没有匹配的图片</strong>
+          <span>试试清空搜索词或切换引用状态。</span>
+        </div>
+      {% else %}
+        <div class="empty-state empty-state--large">
+          <span class="empty-state__mark">04</span>
+          <div>
+            <strong>还没有媒体文件</strong>
+            <p>前往写作台上传第一张正文图片，上传后会自动出现在这里。</p>
+          </div>
+          <a class="button button--primary" href="{{ url_for('admin_write') }}">进入写作台</a>
+        </div>
+      {% endif %}
+    </section>
+  </main>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='admin/admin-media.js') }}" defer></script>
+{% endblock %}

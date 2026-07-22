@@ -7,7 +7,7 @@ import math
 import os
 import re
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -67,9 +67,29 @@ JSON_FIELDS = {
 LIST_POST_COLUMNS = (
     "id, slug, title, excerpt, published_at, created_at, updated_at, "
     "read_time, category, featured, tone, tags, hero_quote, cover_image, "
-    "status, click_count"
+    "status, click_count, deleted_at"
 )
 ADMIN_LIST_LIMIT = 200
+MAX_REVISIONS_PER_POST = 50
+POST_REVISION_FIELDS = (
+    "title", "slug", "excerpt", "published_at", "read_time", "category",
+    "tags", "hero_quote", "cover_image", "markdown_content",
+    "html_content", "status",
+)
+MEDIA_URL_PATTERN = re.compile(r"/uploads/media/([^\s)\]\"\'<>?#]+)", re.IGNORECASE)
+
+
+def _markdown_has_unclosed_fence(markdown_content: str) -> bool:
+    fence_count = sum(1 for line in str(markdown_content or "").splitlines() if re.match(r"^\s*```", line))
+    return fence_count % 2 == 1
+
+
+def _markdown_has_heading_space_issue(markdown_content: str) -> bool:
+    return bool(re.search(r"(?:^|\n)#{1,6}[^#\s\n]", str(markdown_content or "")))
+
+
+def _markdown_has_section_heading(markdown_content: str) -> bool:
+    return bool(re.search(r"(?:^|\n)##\s+\S", str(markdown_content or "")))
 
 
 def slugify(value: str) -> str:
@@ -361,7 +381,7 @@ def render_markdown(markdown_text: str) -> str:
     # Rich-text paste often carries NBSP (U+00A0) indentation; rendered code
     # copied back out would then fail to run, so normalize before rendering.
     rendered = markdown_lib.markdown(
-        (markdown_text or "").replace(" ", " "),
+        (markdown_text or "").replace("\xa0", " "),
         extensions=["extra", "fenced_code", "tables", "nl2br"],
     )
     return sanitize_html(rendered)
@@ -393,6 +413,40 @@ def validate_text_length(field: str, value: str, *, max_length: int | None = Non
     if limit and len(normalized) > limit:
         raise ValueError(f"{field}内容过长，请控制在 {limit} 个字符以内。")
     return normalized
+
+
+
+MAX_IMAGE_EDGE = 1920
+JPEG_RECODE_QUALITY = 85
+
+
+def process_uploaded_image_bytes(raw_bytes: bytes) -> bytes:
+    """Downscale large raster images and strip JPEG EXIF/GPS via re-encode."""
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as image:
+            image_format = (image.format or "").upper()
+            if image_format not in {"JPEG", "PNG", "WEBP"}:
+                return raw_bytes
+            image.load()
+            working = image
+            original_size = working.size
+            if image_format == "JPEG" and working.mode not in {"RGB", "L"}:
+                working = working.convert("RGB")
+            needs_resize = max(original_size) > MAX_IMAGE_EDGE
+            if needs_resize:
+                working = working.copy()
+                working.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE), Image.Resampling.LANCZOS)
+            # JPEG always re-encoded to drop EXIF/GPS even when dimensions stay.
+            if image_format == "JPEG" or needs_resize:
+                output = io.BytesIO()
+                save_kwargs: dict[str, Any] = {"format": image_format, "optimize": True}
+                if image_format in {"JPEG", "WEBP"}:
+                    save_kwargs["quality"] = JPEG_RECODE_QUALITY
+                working.save(output, **save_kwargs)
+                return output.getvalue()
+            return raw_bytes
+    except (UnidentifiedImageError, OSError, ValueError):
+        return raw_bytes
 
 
 def validate_image_upload(file_storage, *, max_bytes: int, max_pixels: int) -> bytes:
@@ -524,11 +578,24 @@ class BlogStore:
                 sections TEXT NOT NULL DEFAULT '[]',
                 markdown_content TEXT DEFAULT '',
                 html_content TEXT DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'draft'
+                status TEXT NOT NULL DEFAULT 'draft',
+                deleted_at TEXT DEFAULT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS post_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                revision_type TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
+            ON post_revisions (post_id, created_at DESC, id DESC);
             """
         )
 
@@ -540,10 +607,22 @@ class BlogStore:
             connection.execute("ALTER TABLE posts ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0")
         if "cover_image" not in post_columns:
             connection.execute("ALTER TABLE posts ADD COLUMN cover_image TEXT NOT NULL DEFAULT ''")
-        connection.execute(
+        if "deleted_at" not in post_columns:
+            connection.execute("ALTER TABLE posts ADD COLUMN deleted_at TEXT DEFAULT NULL")
+        connection.executescript(
             """
+            CREATE TABLE IF NOT EXISTS post_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                revision_type TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+            );
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
-            ON posts (status, published_at DESC, updated_at DESC, id DESC)
+            ON posts (status, published_at DESC, updated_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
+            ON post_revisions (post_id, created_at DESC, id DESC);
             """
         )
 
@@ -972,6 +1051,121 @@ class BlogStore:
             )
             connection.commit()
 
+    def validate_post_for_publish(
+        self,
+        form_data: dict[str, Any],
+        *,
+        post_id: int | None = None,
+    ) -> dict[str, Any]:
+        errors: list[dict[str, str]] = []
+        warnings: list[dict[str, str]] = []
+
+        def add(target: list[dict[str, str]], code: str, field: str, message: str) -> None:
+            target.append({"code": code, "field": field, "message": message})
+
+        try:
+            title = validate_text_length("title", form_data.get("title", ""))
+            markdown_content = validate_text_length("markdown_content", form_data.get("markdown_content", ""))
+            raw_slug = validate_text_length("slug", form_data.get("slug", ""))
+            excerpt = validate_text_length("excerpt", form_data.get("excerpt", ""))
+            category = validate_text_length("category", form_data.get("category", ""))
+            tags_text = validate_text_length("tags", form_data.get("tags", ""))
+            cover_image = validate_text_length("cover_image", form_data.get("cover_image", ""))
+        except ValueError as exc:
+            add(errors, "field_too_long", "", str(exc))
+            return {"ok": False, "errors": errors, "warnings": warnings, "normalized": {}}
+
+        tags = [item.strip() for item in tags_text.split(",") if item.strip()]
+        if not title:
+            add(errors, "title_required", "title", '请先填写文章标题。')
+        if not markdown_content:
+            add(errors, "content_required", "markdown_content", '发布前请先填写正文。')
+        if raw_slug and re.search(r"[\s/?#]", raw_slug):
+            add(errors, "invalid_slug", "slug", 'Slug 不能包含空格、斜杠或查询字符。')
+        if cover_image and not _is_safe_image_url(cover_image):
+            add(errors, "invalid_cover", "cover_image", '封面图片必须是 /uploads/ 地址或 http(s) 图片链接。')
+        if len(tags) > 40:
+            add(errors, "too_many_tags", "tags", '标签数量不能超过 40 个。')
+        if any(len(item) > 80 for item in tags):
+            add(errors, "tag_too_long", "tags", '单个标签不能超过 80 个字符。')
+        if _markdown_has_unclosed_fence(markdown_content):
+            add(errors, "unclosed_code_fence", "markdown_content", '检测到未闭合的 ``` 代码围栏。')
+        if _markdown_has_heading_space_issue(markdown_content):
+            add(errors, "invalid_heading", "markdown_content", 'Markdown 标题 # 后需要空格。')
+
+        if not excerpt:
+            add(warnings, "missing_excerpt", "excerpt", '未填写摘要，发布时将自动生成。')
+        if not category:
+            add(warnings, "missing_category", "category", '建议填写文章分类，方便前台组织内容。')
+        if not tags:
+            add(warnings, "missing_tags", "tags", '建议至少填写一个标签。')
+        if not cover_image:
+            add(warnings, "missing_cover", "cover_image", '未设置封面图，前台将使用文字卡片。')
+        if markdown_content and not _markdown_has_section_heading(markdown_content):
+            add(warnings, "missing_sections", "markdown_content", '正文没有二级标题，前台不会显示目录。')
+        if raw_slug and re.search(r"[^\x00-\x7f]", raw_slug):
+            add(warnings, "non_ascii_slug", "slug", 'Slug 包含中文或特殊字符，分享链接会被编码。')
+        if markdown_content and len(re.sub(r"\s+", "", markdown_content)) < 200:
+            add(warnings, "short_content", "markdown_content", '正文较短，请确认内容已经完整。')
+
+        normalized_slug = slugify(raw_slug or title) if title or raw_slug else ""
+        return {
+            "ok": not errors,
+            "errors": errors,
+            "warnings": warnings,
+            "normalized": {
+                "slug": normalized_slug,
+                "excerpt": excerpt or self.build_excerpt(markdown_content),
+                "read_time": estimate_read_time(markdown_content),
+            },
+        }
+
+    @staticmethod
+    def _revision_snapshot_from_row(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        source = dict(row)
+        snapshot: dict[str, Any] = {}
+        for field in POST_REVISION_FIELDS:
+            value = source.get(field, "")
+            if field == "tags" and not isinstance(value, list):
+                try:
+                    value = json.loads(value or "[]")
+                except (TypeError, json.JSONDecodeError):
+                    value = []
+            snapshot[field] = value
+        return snapshot
+
+    def _insert_revision(
+        self,
+        connection: sqlite3.Connection,
+        post_id: int,
+        revision_type: str,
+    ) -> int:
+        row = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if row is None:
+            raise ValueError('稿件不存在。')
+        snapshot = self._revision_snapshot_from_row(row)
+        created_at = datetime.now().isoformat(timespec="microseconds")
+        cursor = connection.execute(
+            """
+            INSERT INTO post_revisions (post_id, revision_type, snapshot_json, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (post_id, revision_type, json.dumps(snapshot, ensure_ascii=False), created_at),
+        )
+        connection.execute(
+            """
+            DELETE FROM post_revisions
+            WHERE post_id = ? AND id NOT IN (
+                SELECT id FROM post_revisions
+                WHERE post_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            )
+            """,
+            (post_id, post_id, MAX_REVISIONS_PER_POST),
+        )
+        return int(cursor.lastrowid)
+
     def save_post(
         self,
         form_data: dict[str, Any],
@@ -979,12 +1173,18 @@ class BlogStore:
         post_id: int | None = None,
         action: str = "draft",
         expected_updated_at: str | None = None,
+        create_revision: bool = True,
     ) -> int:
         if action not in {"draft", "published"}:
-            raise ValueError("文章状态无效。")
+            raise ValueError('文章状态无效。')
+        if action == "published":
+            validation = self.validate_post_for_publish(form_data, post_id=post_id)
+            if validation["errors"]:
+                raise ValueError(validation["errors"][0]["message"])
+
         title = validate_text_length("title", form_data.get("title", ""))
         if not title:
-            raise ValueError("文章标题不能为空。")
+            raise ValueError('文章标题不能为空。')
         markdown_content = validate_text_length("markdown_content", form_data.get("markdown_content", ""))
         html_content = render_markdown(markdown_content)
         excerpt = validate_text_length("excerpt", form_data.get("excerpt", "")) or self.build_excerpt(markdown_content)
@@ -999,7 +1199,7 @@ class BlogStore:
         tags_text = validate_text_length("tags", form_data.get("tags", ""))
         tags = [validate_text_length("tag", item, max_length=80) for item in tags_text.split(",") if item.strip()]
         if len(tags) > 40:
-            raise ValueError("标签数量过多，请控制在 40 个以内。")
+            raise ValueError('标签数量过多，请控制在 40 个以内。')
         featured = 0
         read_time = validate_text_length("read_time", form_data.get("read_time", "")) or estimate_read_time(markdown_content)
         category = validate_text_length("category", form_data.get("category", ""))
@@ -1007,26 +1207,27 @@ class BlogStore:
         hero_quote = validate_text_length("hero_quote", form_data.get("hero_quote", ""))
         cover_image = validate_text_length("cover_image", form_data.get("cover_image", ""))
         if cover_image and not _is_safe_image_url(cover_image):
-            raise ValueError("封面图片地址无效：请使用上传得到的 /uploads/ 地址或 http(s) 图片链接。")
+            raise ValueError('封面图片地址无效：请使用上传得到的 /uploads/ 地址或 http(s) 图片链接。')
         sections = json.dumps([], ensure_ascii=False)
         tags_json = json.dumps(tags, ensure_ascii=False)
         now = datetime.now().isoformat(timespec="microseconds")
 
         with self.connect() as connection:
+            previous_status = ""
             if post_id:
-                if expected_updated_at is not None:
-                    current_row = connection.execute("SELECT updated_at FROM posts WHERE id = ?", (post_id,)).fetchone()
-                    if current_row is None:
-                        raise ValueError("稿件不存在。")
-                    if current_row["updated_at"] != expected_updated_at:
-                        raise PostVersionConflict("文章已在其他页面更新，请重新加载后再保存。")
+                current_row = connection.execute("SELECT updated_at, status FROM posts WHERE id = ?", (post_id,)).fetchone()
+                if current_row is None:
+                    raise ValueError('稿件不存在。')
+                previous_status = current_row["status"] or "draft"
+                if expected_updated_at is not None and current_row["updated_at"] != expected_updated_at:
+                    raise PostVersionConflict('文章已在其他页面更新，请重新加载后再保存。')
                 connection.execute(
                     """
                     UPDATE posts
                     SET slug = ?, title = ?, excerpt = ?, published_at = ?, updated_at = ?,
                         read_time = ?, category = ?, featured = ?, tone = ?, tags = ?,
                         hero_quote = ?, cover_image = ?, sections = ?, markdown_content = ?,
-                        html_content = ?, status = ?
+                        html_content = ?, status = ?, deleted_at = NULL
                     WHERE id = ?
                     """,
                     (slug, title, excerpt, published_at, now, read_time, category, featured, tone, tags_json,
@@ -1039,22 +1240,229 @@ class BlogStore:
                     INSERT INTO posts (
                         slug, title, excerpt, published_at, created_at, updated_at,
                         read_time, category, featured, tone, tags, hero_quote,
-                        cover_image, sections, markdown_content, html_content, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cover_image, sections, markdown_content, html_content, status, deleted_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                     """,
                     (slug, title, excerpt, published_at, now, now, read_time, category, featured, tone, tags_json,
                      hero_quote, cover_image, sections, markdown_content, html_content, status),
                 )
-                saved_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+                saved_id = int(connection.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+            if create_revision:
+                if not post_id:
+                    revision_type = "created"
+                elif action == "published":
+                    revision_type = "published"
+                elif previous_status == "published":
+                    revision_type = "unpublished"
+                else:
+                    revision_type = "draft_saved"
+                self._insert_revision(connection, saved_id, revision_type)
             connection.commit()
         return saved_id
 
-    def delete_post(self, post_id: int) -> None:
+    def trash_post(self, post_id: int) -> None:
+        now = datetime.now().isoformat(timespec="microseconds")
         with self.connect() as connection:
-            cursor = connection.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+            row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if row is None:
+                raise ValueError('文章不存在或已经被删除。')
+            if row["status"] == "trashed":
+                raise ValueError('文章已经在回收站中。')
+            connection.execute(
+                "UPDATE posts SET status = 'trashed', deleted_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, post_id),
+            )
+            self._insert_revision(connection, post_id, "trashed")
             connection.commit()
-        if cursor.rowcount == 0:
-            raise ValueError("文章不存在或已经被删除。")
+
+    def delete_post(self, post_id: int) -> None:
+        self.trash_post(post_id)
+
+    def restore_post(self, post_id: int) -> None:
+        now = datetime.now().isoformat(timespec="microseconds")
+        with self.connect() as connection:
+            row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if row is None:
+                raise ValueError('文章不存在。')
+            if row["status"] != "trashed":
+                raise ValueError('只有回收站中的文章可以恢复。')
+            connection.execute(
+                "UPDATE posts SET status = 'draft', deleted_at = NULL, updated_at = ? WHERE id = ?",
+                (now, post_id),
+            )
+            self._insert_revision(connection, post_id, "restored_from_trash")
+            connection.commit()
+
+    def purge_expired_trash(self, *, retention_days: int = 30, now: datetime | None = None) -> int:
+        cutoff = (now or datetime.now()) - timedelta(days=max(1, retention_days))
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM posts WHERE status = 'trashed' AND deleted_at IS NOT NULL AND deleted_at <= ?",
+                (cutoff.isoformat(timespec="microseconds"),),
+            )
+            connection.commit()
+        return max(0, int(cursor.rowcount or 0))
+
+    def list_post_revisions(self, post_id: int) -> list[dict[str, Any]]:
+        if self.get_post_by_id(post_id) is None:
+            raise ValueError('稿件不存在。')
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, post_id, revision_type, snapshot_json, created_at
+                FROM post_revisions
+                WHERE post_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (post_id,),
+            ).fetchall()
+        items = []
+        for row in rows:
+            try:
+                snapshot = json.loads(row["snapshot_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                snapshot = {}
+            items.append({
+                "id": row["id"],
+                "post_id": row["post_id"],
+                "revision_type": row["revision_type"],
+                "created_at": row["created_at"],
+                "title": snapshot.get("title", ""),
+                "status": snapshot.get("status", "draft"),
+            })
+        return items
+
+    def get_post_revision(self, post_id: int, revision_id: int) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, post_id, revision_type, snapshot_json, created_at
+                FROM post_revisions
+                WHERE id = ? AND post_id = ?
+                """,
+                (revision_id, post_id),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            snapshot = json.loads(row["snapshot_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            snapshot = {}
+        markdown_content = str(snapshot.get("markdown_content") or "")
+        snapshot["html_content"] = render_markdown(markdown_content)
+        return {
+            "id": row["id"],
+            "post_id": row["post_id"],
+            "revision_type": row["revision_type"],
+            "created_at": row["created_at"],
+            "snapshot": snapshot,
+        }
+
+    def restore_post_revision(self, post_id: int, revision_id: int) -> dict[str, Any]:
+        revision = self.get_post_revision(post_id, revision_id)
+        if revision is None:
+            raise ValueError('历史版本不存在。')
+        snapshot = revision["snapshot"]
+        title = validate_text_length("title", snapshot.get("title", ""))
+        markdown_content = validate_text_length("markdown_content", snapshot.get("markdown_content", ""))
+        if not title:
+            raise ValueError('历史版本缺少文章标题，无法恢复。')
+        tags = snapshot.get("tags") if isinstance(snapshot.get("tags"), list) else []
+        tags = [validate_text_length("tag", item, max_length=80) for item in tags[:40]]
+        cover_image = validate_text_length("cover_image", snapshot.get("cover_image", ""))
+        if cover_image and not _is_safe_image_url(cover_image):
+            cover_image = ""
+        # Restore must not resurrect a slug now owned by another post (slug is UNIQUE).
+        slug = self.ensure_unique_slug(
+            validate_text_length("slug", snapshot.get("slug", "")) or title,
+            post_id=post_id,
+        )
+        now = datetime.now().isoformat(timespec="microseconds")
+        with self.connect() as connection:
+            current = connection.execute("SELECT id FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if current is None:
+                raise ValueError('稿件不存在。')
+            self._insert_revision(connection, post_id, "pre_restore")
+            connection.execute(
+                """
+                UPDATE posts
+                SET title = ?, slug = ?, excerpt = ?, published_at = ?, read_time = ?,
+                    category = ?, tags = ?, hero_quote = ?, cover_image = ?,
+                    markdown_content = ?, html_content = ?, status = 'draft',
+                    deleted_at = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    title,
+                    slug,
+                    validate_text_length("excerpt", snapshot.get("excerpt", "")) or self.build_excerpt(markdown_content),
+                    validate_text_length("published_at", snapshot.get("published_at", "")),
+                    validate_text_length("read_time", snapshot.get("read_time", "")) or estimate_read_time(markdown_content),
+                    validate_text_length("category", snapshot.get("category", "")),
+                    json.dumps(tags, ensure_ascii=False),
+                    validate_text_length("hero_quote", snapshot.get("hero_quote", "")),
+                    cover_image,
+                    markdown_content,
+                    render_markdown(markdown_content),
+                    now,
+                    post_id,
+                ),
+            )
+            self._insert_revision(connection, post_id, "restored")
+            connection.commit()
+        return self.get_post_by_id(post_id) or {}
+
+    def list_media_assets(self) -> list[dict[str, Any]]:
+        media_dir = UPLOADS_DIR / "media"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        references: dict[str, list[dict[str, Any]]] = {}
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT id, title, slug, status, cover_image, markdown_content FROM posts"
+            ).fetchall()
+        for row in rows:
+            found: set[tuple[str, str]] = set()
+            cover_url = str(row["cover_image"] or "")
+            if cover_url.startswith("/uploads/media/"):
+                found.add((unquote(cover_url.split("?", 1)[0].split("#", 1)[0]), "cover"))
+            for match in MEDIA_URL_PATTERN.finditer(str(row["markdown_content"] or "")):
+                found.add(("/uploads/media/" + unquote(match.group(1)), "body"))
+            for url, kind in found:
+                references.setdefault(url, []).append({
+                    "post_id": row["id"],
+                    "title": row["title"],
+                    "slug": row["slug"],
+                    "status": row["status"],
+                    "kind": kind,
+                })
+
+        assets: list[dict[str, Any]] = []
+        for path in media_dir.iterdir():
+            if not path.is_file() or path.suffix.lower() not in UPLOAD_IMAGE_EXTENSIONS:
+                continue
+            stat = path.stat()
+            width = 0
+            height = 0
+            try:
+                with Image.open(path) as image:
+                    width, height = image.size
+            except (UnidentifiedImageError, OSError, ValueError):
+                pass
+            url = "/uploads/media/" + path.name
+            refs = references.get(url, [])
+            assets.append({
+                "url": url,
+                "filename": path.name,
+                "size": stat.st_size,
+                "width": width,
+                "height": height,
+                "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                "references": refs,
+                "reference_count": len(refs),
+            })
+        assets.sort(key=lambda item: (item["created_at"], item["filename"]), reverse=True)
+        return assets
 
     def build_excerpt(self, markdown_content: str) -> str:
         text = re.sub(r"[#>*`\-]", " ", markdown_content)
@@ -1072,6 +1480,7 @@ class BlogStore:
         original_filename = (file_storage.filename or "file").strip()
         if folder in PUBLIC_UPLOAD_FOLDERS:
             raw_bytes = validate_image_upload(file_storage, max_bytes=self.max_image_bytes, max_pixels=self.max_image_pixels)
+            raw_bytes = process_uploaded_image_bytes(raw_bytes)
         else:
             if allowed_extensions:
                 validate_extension(original_filename, allowed_extensions, label)
@@ -1094,7 +1503,7 @@ class BlogStore:
 
     def import_markdown(self, file_storage) -> dict[str, Any]:
         validate_extension(file_storage.filename or "", ALLOWED_MARKDOWN_EXTENSIONS, "Markdown 文件")
-        content = decode_markdown_file(file_storage.read()).replace(" ", " ")
+        content = decode_markdown_file(file_storage.read()).replace("\xa0", " ")
         metadata, markdown_content = parse_markdown_front_matter(content)
 
         guessed_title = str(metadata.get("title") or "").strip()
@@ -1141,11 +1550,13 @@ class BlogStore:
             post_count = connection.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
             draft_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'draft'").fetchone()[0]
             published_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'published'").fetchone()[0]
+            trashed_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'trashed'").fetchone()[0]
         return {
             "db_path": str(self.db_path),
             "post_count": post_count,
             "published_count": published_count,
             "draft_count": draft_count,
+            "trashed_count": trashed_count,
             "upload_dir": str(UPLOADS_DIR),
         }
 
