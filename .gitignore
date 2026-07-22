@@ -11,3 +11,4 @@ frontend/dist/
 .playwright-cli/
 output/
 .codex/
+storage-backups/
