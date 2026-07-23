@@ -66,12 +66,15 @@ python backend/app.py
 
 ```bash
 BLOG_SECRET_KEY=change-me-before-deploy
-BLOG_ADMIN_PASSWORD=admin123456
-BLOG_ADMIN_PREFIX=/admin
+BLOG_ADMIN_PASSWORD=replace-with-a-strong-password
+BLOG_ADMIN_PREFIX=/your-hidden-admin-path
 BLOG_DATABASE_PATH=storage/blog.db
 BLOG_HOST=127.0.0.1
 BLOG_PORT=5000
 BLOG_DEBUG=false
+BLOG_COOKIE_SECURE=false
+BLOG_PUBLIC_BASE_URL=
+BLOG_REQUIRE_PUBLIC_BASE_URL=false
 ```
 
 - `.env` 已加入忽略规则，不会被提交
@@ -94,6 +97,9 @@ BLOG_DATABASE_PATH=/absolute/path/to/blog.db
 BLOG_HOST=127.0.0.1
 BLOG_PORT=5000
 BLOG_DEBUG=false
+BLOG_COOKIE_SECURE=true
+BLOG_PUBLIC_BASE_URL=https://example.com
+BLOG_REQUIRE_PUBLIC_BASE_URL=true
 ```
 
 说明：
@@ -119,11 +125,57 @@ npm run build
 
 构建后，Flask 会自动托管 `frontend/dist` 里的静态文件。
 
+## 发布前一键验证
+
+在准备上线或提交前，可以从仓库根目录运行（完整清单见 `docs/launch-checklist.md`）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\一键验证.ps1
+```
+
+脚本会依次执行后端 pytest、前端生产构建、临时后端 API 冒烟验证（默认端口 `5055`，并强制 `BLOG_DEBUG=false` 以检查生产启动约束）。如果端口被占用，可以指定 `-Port 5060`；如果只想跳过前端构建，可以加 `-SkipFrontend`。
+
+上线前请额外运行严格配置检查：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch
+```
+
+`-StrictLaunch` 会失败退出，直到 `.env` 中的后台密码足够强、后台路径不是默认 `/admin`、`BLOG_PUBLIC_BASE_URL` 已设置为真实的 HTTPS 公开域名、`BLOG_REQUIRE_PUBLIC_BASE_URL=true`，并且 HTTPS 场景下 `BLOG_COOKIE_SECURE=true`。
+
+## Linux 服务器一键部署
+
+如果服务器是 Linux，可以使用仓库根目录的 `deploy.sh`。它会创建/更新 `.venv`、安装生产依赖（含 Gunicorn）、构建前端、校验生产 `.env`，并可安装/重启 systemd 服务。建议在有 sudo 权限的普通管理员账号下执行。
+
+首次运行前先准备 `.env`：
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+至少修改：`BLOG_SECRET_KEY`、`BLOG_ADMIN_PASSWORD`、`BLOG_ADMIN_PREFIX`、`BLOG_PUBLIC_BASE_URL`、`BLOG_REQUIRE_PUBLIC_BASE_URL=true`、`BLOG_COOKIE_SECURE=true`。
+
+常用部署命令：
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+如果服务器已经安装了 Nginx，并希望脚本同时写入反向代理配置：
+
+```bash
+DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
+```
+
+可选参数通过环境变量传入：`SERVICE_NAME=blog`、`APP_PORT=8000`、`GUNICORN_WORKERS=2`、`SERVICE_USER=blog`、`RUN_TESTS=0`、`INSTALL_SERVICE=0`。Nginx HTTPS 证书仍建议用服务器上的 Certbot/面板单独签发，然后保持 `.env` 中的 `BLOG_PUBLIC_BASE_URL=https://你的域名`。
+
 ## 部署前建议
 
 - 修改默认后台密码和 `secret key`
 - 把 `BLOG_ADMIN_PREFIX` 设成不容易猜到的路径
-- 关闭 `BLOG_DEBUG`
+- 关闭 `BLOG_DEBUG`；如果站点已通过 HTTPS 对外发布，建议将 `BLOG_REQUIRE_PUBLIC_BASE_URL` 设为 `true`，并将 `BLOG_COOKIE_SECURE` 设为 `true`
 - 备份 `storage/blog.db` 和 `storage/` 上传目录
 - 如果是正式服务器，建议使用 Nginx + Gunicorn / Waitress 之类的生产部署方式，而不是 Flask 自带开发服务器
 
@@ -143,7 +195,7 @@ npm run build
 1. 修改 `.env` 中的 `BLOG_SECRET_KEY` 和 `BLOG_ADMIN_PASSWORD`。
 2. 将 `BLOG_ADMIN_PREFIX` 改成不容易猜到的后台路径。
 3. 确认 `BLOG_DEBUG=false`。
-4. 执行 `cd frontend && npm run build` 生成前端静态文件。
-5. 备份 `storage/blog.db`、`storage/avatars` 和 `storage/media`。
-6. 登录后台确认首页资料、关于页文案、联系方式和已发布文章内容。
-
+4. 运行 `powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch`，确认后端测试、前端构建、API 冒烟验证和严格上线配置检查全部通过。
+5. 确认 `frontend/dist/` 已由最新构建生成。
+6. 备份 `storage/blog.db`、`storage/avatars` 和 `storage/media`。
+7. 登录后台确认首页资料、关于页文案、联系方式和已发布文章内容。

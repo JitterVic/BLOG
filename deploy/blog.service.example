@@ -1,0 +1,18 @@
+# systemd unit example. deploy.sh can generate and install a unit automatically.
+# Replace /opt/blog, blog, and port values for your server if installing manually.
+
+[Unit]
+Description=Personal Blog Flask App
+After=network.target
+
+[Service]
+Type=simple
+User=blog
+WorkingDirectory=/opt/blog
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/blog/.venv/bin/gunicorn --chdir /opt/blog/backend --bind 127.0.0.1:8000 --workers 2 --access-logfile - --error-logfile - app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

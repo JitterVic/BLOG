@@ -178,26 +178,74 @@ DEFAULT_SECRET_KEY = "dev-secret-key-change-me"
 DEFAULT_ADMIN_PASSWORD = "admin123456"
 
 
+def validate_launch_config(
+    *,
+    debug_mode: bool,
+    secret_key: str,
+    admin_password: str,
+    admin_prefix: str,
+    public_base_url: str,
+    cookie_secure: bool,
+    require_public_base_url: bool = False,
+) -> None:
+    if debug_mode:
+        return
+
+    if not secret_key or secret_key == DEFAULT_SECRET_KEY:
+        raise RuntimeError(
+            "?????????? BLOG_SECRET_KEY??? .env ????????????"
+        )
+    if (
+        not admin_password
+        or len(admin_password) < 12
+        or admin_password in {DEFAULT_ADMIN_PASSWORD, "123", "123456", "admin", "password", "change-me-before-deploy"}
+    ):
+        raise RuntimeError(
+            "?????????????? BLOG_ADMIN_PASSWORD??? .env ???????????"
+        )
+    if admin_prefix == "/admin" or not admin_prefix.startswith("/"):
+        raise RuntimeError(
+            "??????????? BLOG_ADMIN_PREFIX??? /launch-admin?"
+        )
+    if require_public_base_url and not public_base_url:
+        raise RuntimeError(
+            "???????? BLOG_PUBLIC_BASE_URL ???? HTTPS ?????"
+        )
+    if public_base_url:
+        if not public_base_url.startswith("https://"):
+            raise RuntimeError(
+                "???? BLOG_PUBLIC_BASE_URL ???? https://?"
+            )
+        if not cookie_secure:
+            raise RuntimeError(
+                "?????? HTTPS ????????? BLOG_COOKIE_SECURE=true?"
+            )
+
+
 def create_app():
     app = Flask(__name__)
     debug_mode = env_bool("BLOG_DEBUG", False)
     secret_key = os.getenv("BLOG_SECRET_KEY", DEFAULT_SECRET_KEY)
     admin_password = os.getenv("BLOG_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
-    if not debug_mode:
-        if not secret_key or secret_key == DEFAULT_SECRET_KEY:
-            raise RuntimeError(
-                "生产环境禁止使用默认 BLOG_SECRET_KEY。请在 .env 中设置随机密钥后再启动。"
-            )
-        if not admin_password or admin_password == DEFAULT_ADMIN_PASSWORD:
-            raise RuntimeError(
-                "生产环境禁止使用默认 BLOG_ADMIN_PASSWORD。请在 .env 中设置强密码后再启动。"
-            )
+    admin_prefix = normalize_admin_prefix(os.getenv("BLOG_ADMIN_PREFIX", "/admin"))
+    public_base_url = (os.getenv("BLOG_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    require_public_base_url = env_bool("BLOG_REQUIRE_PUBLIC_BASE_URL", False)
+    cookie_secure = env_bool("BLOG_COOKIE_SECURE", False)
+    validate_launch_config(
+        debug_mode=debug_mode,
+        secret_key=secret_key,
+        admin_password=admin_password,
+        admin_prefix=admin_prefix,
+        public_base_url=public_base_url,
+        cookie_secure=cookie_secure,
+        require_public_base_url=require_public_base_url,
+    )
 
     app.secret_key = secret_key
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=env_bool("BLOG_COOKIE_SECURE", False),
+        SESSION_COOKIE_SECURE=cookie_secure,
         SESSION_PERMANENT=True,
         PERMANENT_SESSION_LIFETIME=timedelta(
             seconds=env_int("BLOG_SESSION_LIFETIME_SECONDS", 8 * 60 * 60, minimum=300)
@@ -206,8 +254,8 @@ def create_app():
         MAX_CONTENT_LENGTH=env_int("BLOG_MAX_UPLOAD_BYTES", 10 * 1024 * 1024, minimum=1),
         BLOG_DEBUG=debug_mode,
         BLOG_ADMIN_PASSWORD=admin_password,
+        BLOG_REQUIRE_PUBLIC_BASE_URL=require_public_base_url,
     )
-    admin_prefix = normalize_admin_prefix(os.getenv("BLOG_ADMIN_PREFIX", "/admin"))
     admin_path = admin_prefix.lstrip("/")
     app.config["ADMIN_PREFIX"] = admin_prefix
 

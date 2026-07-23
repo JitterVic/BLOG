@@ -12,3 +12,6 @@ frontend/dist/
 output/
 .codex/
 storage-backups/
+.tmp/
+.agents/
+.claude/

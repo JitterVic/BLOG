@@ -13,6 +13,10 @@ def app_bundle(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_DEBUG", "true")
     monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
     monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_REQUIRE_PUBLIC_BASE_URL", "false")
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
     monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
     monkeypatch.setenv("BLOG_LOGIN_MAX_ATTEMPTS", "3")
     monkeypatch.setenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "60")
@@ -359,8 +363,6 @@ def test_sqlite_connection_enables_wal_and_foreign_keys(app_bundle):
 
 def test_production_rejects_default_secrets(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_DEBUG", "false")
-    monkeypatch.setenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
-    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "strong-enough-password")
     monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
 
     backend_dir = Path(__file__).resolve().parents[1]
@@ -368,13 +370,46 @@ def test_production_rejects_default_secrets(tmp_path, monkeypatch):
         sys.path.insert(0, str(backend_dir))
     app_module = importlib.import_module("app")
 
+    monkeypatch.setenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "strong-enough-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/launch-admin")
+    monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "true")
     with pytest.raises(RuntimeError, match="BLOG_SECRET_KEY"):
         app_module.create_app()
 
-    monkeypatch.setenv("BLOG_SECRET_KEY", "unique-test-secret")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "unique-test-secret-1234567890")
     monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "admin123456")
     with pytest.raises(RuntimeError, match="BLOG_ADMIN_PASSWORD"):
         app_module.create_app()
+
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "strong-enough-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    with pytest.raises(RuntimeError, match="BLOG_ADMIN_PREFIX"):
+        app_module.create_app()
+
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/launch-admin")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.delenv("BLOG_COOKIE_SECURE", raising=False)
+    monkeypatch.setenv("BLOG_REQUIRE_PUBLIC_BASE_URL", "true")
+    with pytest.raises(RuntimeError, match="BLOG_PUBLIC_BASE_URL"):
+        app_module.create_app()
+
+    monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+    with pytest.raises(RuntimeError, match="BLOG_COOKIE_SECURE"):
+        app_module.create_app()
+
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "true")
+    launched = app_module.create_app()
+    assert launched.config["ADMIN_PREFIX"] == "/launch-admin"
+    assert launched.config["BLOG_REQUIRE_PUBLIC_BASE_URL"] is True
+
+    monkeypatch.setenv("BLOG_REQUIRE_PUBLIC_BASE_URL", "false")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.delenv("BLOG_COOKIE_SECURE", raising=False)
+    relaxed = app_module.create_app()
+    assert relaxed.config["BLOG_REQUIRE_PUBLIC_BASE_URL"] is False
 
 
 def test_security_headers_present_on_html_and_api(client):
