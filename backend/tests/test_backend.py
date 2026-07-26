@@ -379,7 +379,7 @@ def test_production_rejects_default_secrets(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="BLOG_SECRET_KEY"):
         app_module.create_app()
 
-    monkeypatch.setenv("BLOG_SECRET_KEY", "unique-test-secret-1234567890")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "unique-test-secret-1234567890abcdef")
     monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "admin123456")
     with pytest.raises(RuntimeError, match="BLOG_ADMIN_PASSWORD"):
         app_module.create_app()
@@ -1241,3 +1241,106 @@ def test_csrf_failure_does_not_follow_external_referer(client):
     )
     assert resp.status_code == 302
     assert resp.location.endswith("/admin/write")
+
+
+# ---------------------------------------------------------------------------
+# T10 — HSTS 仅在 BLOG_COOKIE_SECURE=true 时下发
+# ---------------------------------------------------------------------------
+
+
+def test_hsts_header_follows_cookie_secure(client):
+    """默认 BLOG_COOKIE_SECURE=false → 无 HSTS；true 时应下发."""
+    resp = client.get("/api/health")
+    assert "Strict-Transport-Security" not in resp.headers
+
+
+def test_hsts_header_present_when_secure(tmp_path, monkeypatch):
+    monkeypatch.setenv("BLOG_DEBUG", "true")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "true")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+    store_module = importlib.import_module("store")
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir()
+    monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
+
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+    resp = client.get("/api/health")
+    hsts = resp.headers.get("Strict-Transport-Security", "")
+    assert "max-age=" in hsts
+    assert "includeSubDomains" in hsts
+
+
+# ---------------------------------------------------------------------------
+# T11 — 弱 SECRET_KEY（含过短）被拒绝
+# ---------------------------------------------------------------------------
+
+
+def test_short_secret_key_is_rejected():
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+
+    base = dict(
+        debug_mode=False,
+        admin_password="strong-enough-password",
+        admin_prefix="/launch-admin",
+        public_base_url="https://example.com",
+        cookie_secure=True,
+    )
+    # 31 字符 → 拒绝
+    with pytest.raises(RuntimeError, match="BLOG_SECRET_KEY"):
+        app_module.validate_launch_config(secret_key="a" * 31, **base)
+    # 32 字符 → 通过
+    app_module.validate_launch_config(secret_key="a" * 32, **base)
+    # 已知弱密钥 → 拒绝
+    with pytest.raises(RuntimeError, match="BLOG_SECRET_KEY"):
+        app_module.validate_launch_config(secret_key="replace-with-a-random-secret", **base)
+
+
+# ---------------------------------------------------------------------------
+# T12 — feed.xml 属性内引号被正确转义
+# ---------------------------------------------------------------------------
+
+
+def test_feed_link_attributes_escape_quotes(tmp_path, monkeypatch):
+    """BLOG_PUBLIC_BASE_URL 含引号时，feed.xml 属性内应出现 &quot;."""
+    monkeypatch.setenv("BLOG_DEBUG", "true")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+    monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", 'https://example.com/a"b')
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+    store_module = importlib.import_module("store")
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir()
+    monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
+
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+    resp = client.get("/feed.xml")
+    body = resp.get_data(as_text=True)
+    # 不应出现裸引号在 href= 里
+    assert 'href="https://example.com/a"b' not in body
+    # 应出现转义后的 &quot;
+    assert "&quot;" in body

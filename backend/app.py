@@ -204,6 +204,12 @@ DEFAULT_SECRET_KEY = "dev-secret-key-change-me"
 DEFAULT_ADMIN_PASSWORD = "admin123456"
 LOGIN_FAILURE_MAX_KEYS = 2048
 
+WEAK_SECRET_KEYS = {DEFAULT_SECRET_KEY, "change-me-before-deploy", "replace-with-a-random-secret"}
+WEAK_ADMIN_PASSWORDS = {
+    DEFAULT_ADMIN_PASSWORD, "123", "123456", "admin", "password",
+    "change-me-before-deploy", "replace-with-a-strong-password",
+}
+
 
 def validate_launch_config(
     *,
@@ -218,14 +224,14 @@ def validate_launch_config(
     if debug_mode:
         return
 
-    if not secret_key or secret_key == DEFAULT_SECRET_KEY:
+    if not secret_key or secret_key in WEAK_SECRET_KEYS or len(secret_key) < 32:
         raise RuntimeError(
             "BLOG_SECRET_KEY 仍是默认值或过短，请在 .env 中改为随机的长密钥。"
         )
     if (
         not admin_password
         or len(admin_password) < 12
-        or admin_password in {DEFAULT_ADMIN_PASSWORD, "123", "123456", "admin", "password", "change-me-before-deploy"}
+        or admin_password in WEAK_ADMIN_PASSWORDS
     ):
         raise RuntimeError(
             "BLOG_ADMIN_PASSWORD 太弱或仍是默认值，请在 .env 中改为至少 12 位的强密码。"
@@ -258,6 +264,7 @@ def create_app():
     public_base_url = (os.getenv("BLOG_PUBLIC_BASE_URL") or "").strip().rstrip("/")
     require_public_base_url = env_bool("BLOG_REQUIRE_PUBLIC_BASE_URL", False)
     cookie_secure = env_bool("BLOG_COOKIE_SECURE", False)
+    hsts_max_age = env_int("BLOG_HSTS_MAX_AGE", 31536000, minimum=0)
     validate_launch_config(
         debug_mode=debug_mode,
         secret_key=secret_key,
@@ -399,6 +406,10 @@ def create_app():
                 "frame-ancestors 'none'; "
                 "base-uri 'self'; "
                 "form-action 'self'",
+            )
+        if cookie_secure and hsts_max_age > 0:
+            response.headers.setdefault(
+                "Strict-Transport-Security", f"max-age={hsts_max_age}; includeSubDomains"
             )
         return response
 
@@ -846,6 +857,9 @@ def create_app():
         return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def build_atom_feed() -> str:
+        def xml_attr(value: str) -> str:
+            return xml_escape(str(value), {'"': "&quot;", "'": "&apos;"})
+
         base = public_base_url()
         posts = store.list_posts(published_only=True, sort="latest", limit=20)
         updated = atom_datetime(posts[0].get("updated_at") or posts[0].get("published_at") if posts else None)
@@ -860,7 +874,7 @@ def create_app():
                     [
                         "  <entry>",
                         f"    <title>{title}</title>",
-                        f'    <link href="{xml_escape(link)}" rel="alternate" type="text/html"/>',
+                        f'    <link href="{xml_attr(link)}" rel="alternate" type="text/html"/>',
                         f"    <id>{xml_escape(link)}</id>",
                         f"    <updated>{entry_updated}</updated>",
                         f'    <summary type="text">{summary}</summary>',
@@ -873,8 +887,8 @@ def create_app():
             '<feed xmlns="http://www.w3.org/2005/Atom">',
             "  <title>至知</title>",
             "  <subtitle>记录技术实践、项目复盘和长期学习的个人博客</subtitle>",
-            f'  <link href="{xml_escape(absolute_url("/feed.xml"))}" rel="self" type="application/atom+xml"/>',
-            f'  <link href="{xml_escape(base + "/")}" rel="alternate" type="text/html"/>',
+            f'  <link href="{xml_attr(absolute_url("/feed.xml"))}" rel="self" type="application/atom+xml"/>',
+            f'  <link href="{xml_attr(base + "/")}" rel="alternate" type="text/html"/>',
             f"  <id>{xml_escape(base + "/")}</id>",
             f"  <updated>{updated}</updated>",
             *entries,
