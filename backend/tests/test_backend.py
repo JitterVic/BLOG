@@ -1344,3 +1344,31 @@ def test_feed_link_attributes_escape_quotes(tmp_path, monkeypatch):
     assert 'href="https://example.com/a"b' not in body
     # 应出现转义后的 &quot;
     assert "&quot;" in body
+
+
+# ---------------------------------------------------------------------------
+# T13 — 审计日志记录登录事件且不含明文密码
+# ---------------------------------------------------------------------------
+
+
+def test_audit_log_records_login_events(client, caplog):
+    """登录失败/成功均应写入审计日志，且不含密码明文."""
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO, logger="flask.app")
+
+    token = csrf_token(client)
+
+    # 失败登录
+    with caplog.at_level(_logging.INFO, logger="flask.app"):
+        client.post("/admin/login", data={"password": "wrong-password", "csrf_token": token})
+    assert "audit login.failed" in caplog.text
+    assert "wrong-password" not in caplog.text
+
+    caplog.clear()
+
+    # 成功登录
+    with caplog.at_level(_logging.INFO, logger="flask.app"):
+        client.post("/admin/login", data={"password": "test-password", "csrf_token": token})
+    assert "audit login.success" in caplog.text
+    assert "test-password" not in caplog.text

@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import secrets
@@ -257,6 +258,7 @@ def validate_launch_config(
 
 def create_app():
     app = Flask(__name__)
+    app.logger.setLevel(logging.INFO)
     debug_mode = env_bool("BLOG_DEBUG", False)
     secret_key = os.getenv("BLOG_SECRET_KEY", DEFAULT_SECRET_KEY)
     admin_password = os.getenv("BLOG_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
@@ -332,6 +334,10 @@ def create_app():
         index = max(0, len(chain) - trusted_proxy_count)
         return chain[index] or remote
 
+    def audit(event: str, *, level: int = logging.INFO, **fields) -> None:
+        detail = " ".join(f"{key}={value}" for key, value in fields.items() if value not in (None, ""))
+        app.logger.log(level, "audit %s client=%s %s", event, client_key(), detail)
+
     def prune_login_failures(now: float) -> None:
         for key in [k for k, stamps in login_failures.items()
                     if not stamps or now - stamps[-1] >= login_window_seconds]:
@@ -380,6 +386,7 @@ def create_app():
             return None
         if is_admin_api_request() or request.is_json:
             return api_error("csrf_failed", "请求校验已失效，请刷新页面后重试。", 400)
+        audit("csrf.failed", level=logging.WARNING, path=request.path)
         flash("请求校验已失效，请刷新页面后重试。", "error")
         return redirect(safe_referrer_target(request.referrer, admin_prefix, request.host) or url_for("admin_login"))
 
@@ -542,6 +549,7 @@ def create_app():
         if request.method == "POST":
             limited, retry_after = login_rate_limited()
             if limited:
+                audit("login.rate_limited", level=logging.WARNING, retry_after=retry_after)
                 if request.is_json:
                     return api_error("login_rate_limited", "登录尝试过多，请稍后再试。", 429)
                 flash("登录尝试过多，请稍后再试。", "error")
@@ -555,6 +563,7 @@ def create_app():
                 session.permanent = True
                 session["admin_authenticated"] = True
                 csrf_token()
+                audit("login.success")
                 flash("已进入管理后台。", "success")
                 next_target = request.args.get("next")
                 if not is_safe_admin_next(next_target, admin_prefix):
@@ -562,6 +571,7 @@ def create_app():
                 return redirect(next_target)
 
             register_login_failure()
+            audit("login.failed", level=logging.WARNING)
             flash("密码错误，请重试。", "error")
 
         return render_template("admin_login.html")
@@ -569,6 +579,7 @@ def create_app():
     @app.post(f"{admin_prefix}/logout")
     @admin_required
     def admin_logout():
+        audit("logout")
         session.clear()
         flash("你已退出后台。", "success")
         return redirect(url_for("admin_login"))
@@ -630,6 +641,7 @@ def create_app():
         except ValueError as exc:
             flash(str(exc), "error")
         else:
+            audit("profile.updated")
             flash("个人资料已更新。", "success")
         return redirect(url_for("admin_profile_page"))
 
@@ -668,6 +680,7 @@ def create_app():
             ), 400
 
         message = ('已保存为草稿（前台不可见）。若要上线，请点击「发布文章」。' if action == "draft" else '文章已发布，前台现在可以看到。')
+        audit("post.saved", post_id=saved_id, action=action)
         flash(message, "success")
         return redirect(url_for("admin_write", post_id=saved_id, saved=1))
 
@@ -679,6 +692,7 @@ def create_app():
         except ValueError as exc:
             flash(str(exc), "error")
         else:
+            audit("post.trashed", post_id=post_id)
             flash("文章已移入回收站，30 天内可以恢复。", "success")
         return redirect(url_for("admin_dashboard"))
 
@@ -690,6 +704,7 @@ def create_app():
         except ValueError as exc:
             flash(str(exc), "error")
         else:
+            audit("post.restored", post_id=post_id)
             flash("文章已恢复为草稿。", "success")
         return redirect(url_for("admin_dashboard"))
 
@@ -781,6 +796,7 @@ def create_app():
             payload = store.upload_media(image_file)
         except ValueError as exc:
             return api_error("validation_error", str(exc), 400)
+        audit("media.uploaded", filename=payload.get("filename"))
         return jsonify(payload)
 
 
@@ -821,6 +837,7 @@ def create_app():
             post = store.restore_post_revision(post_id, revision_id)
         except ValueError as exc:
             return api_error("revision_restore_failed", str(exc), 400)
+        audit("revision.restored", post_id=post_id, revision_id=revision_id)
         return jsonify({
             "ok": True,
             "post_id": post_id,
