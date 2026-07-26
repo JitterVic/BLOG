@@ -176,6 +176,7 @@ def build_edit_post(post):
 
 DEFAULT_SECRET_KEY = "dev-secret-key-change-me"
 DEFAULT_ADMIN_PASSWORD = "admin123456"
+LOGIN_FAILURE_MAX_KEYS = 2048
 
 
 def validate_launch_config(
@@ -266,6 +267,7 @@ def create_app():
     csrf_session_key = "_admin_csrf_token"
     login_window_seconds = env_int("BLOG_LOGIN_RATE_WINDOW_SECONDS", 300, minimum=60)
     login_max_attempts = env_int("BLOG_LOGIN_MAX_ATTEMPTS", 5, minimum=1)
+    trusted_proxy_count = env_int("BLOG_TRUSTED_PROXY_COUNT", 0, minimum=0)
 
     def is_authenticated():
         return session.get("admin_authenticated") is True
@@ -288,12 +290,32 @@ def create_app():
         return bool(expected and candidate and secrets.compare_digest(str(candidate), str(expected)))
 
     def client_key() -> str:
-        return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",", 1)[0].strip()
+        remote = (request.remote_addr or "").strip() or "unknown"
+        if trusted_proxy_count <= 0:
+            return remote
+        chain = [item.strip() for item in (request.headers.get("X-Forwarded-For") or "").split(",") if item.strip()]
+        if not chain:
+            return remote
+        index = max(0, len(chain) - trusted_proxy_count)
+        return chain[index] or remote
+
+    def prune_login_failures(now: float) -> None:
+        for key in [k for k, stamps in login_failures.items()
+                    if not stamps or now - stamps[-1] >= login_window_seconds]:
+            login_failures.pop(key, None)
+        overflow = len(login_failures) - LOGIN_FAILURE_MAX_KEYS
+        if overflow > 0:
+            for key, _ in sorted(login_failures.items(), key=lambda item: item[1][-1])[:overflow]:
+                login_failures.pop(key, None)
 
     def login_rate_limited() -> tuple[bool, int]:
         now = time.monotonic()
         key = client_key()
+        prune_login_failures(now)
         attempts = [stamp for stamp in login_failures.get(key, []) if now - stamp < login_window_seconds]
+        if not attempts:
+            login_failures.pop(key, None)
+            return False, 0
         login_failures[key] = attempts
         if len(attempts) < login_max_attempts:
             return False, 0
@@ -305,7 +327,8 @@ def create_app():
         key = client_key()
         attempts = [stamp for stamp in login_failures.get(key, []) if now - stamp < login_window_seconds]
         attempts.append(now)
-        login_failures[key] = attempts
+        login_failures[key] = attempts[-login_max_attempts:]
+        prune_login_failures(now)
 
     @app.context_processor
     def inject_admin_security_context():
@@ -967,6 +990,7 @@ def create_app():
             200,
         )
 
+    app.extensions["blog_login_failures"] = login_failures
     return app
 
 

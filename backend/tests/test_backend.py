@@ -977,3 +977,138 @@ def test_ops_scripts_are_utf8_without_mojibake():
         assert re.search(r"[一-鿿]", text), f"{path.name}: 缺少中文字符"
         # 无乱码（连续 ???? 不在 URL 查询字符串中）
         assert "????" not in text, f"{path.name}: 含乱码 ????"
+
+
+# ---------------------------------------------------------------------------
+# T3 — 默认（BLOG_TRUSTED_PROXY_COUNT=0）下伪造 XFF 无效
+# ---------------------------------------------------------------------------
+
+
+def test_login_rate_limit_ignores_forged_forwarded_for(client, app_bundle):
+    """count=0 时完全忽略 XFF，不同伪造 IP 仍归入同一桶."""
+    _application, _store = app_bundle
+    token = csrf_token(client)
+    for i in range(3):
+        resp = client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": f"10.0.0.{i + 1}"},
+        )
+        assert resp.status_code == 200
+    resp = client.post(
+        "/admin/login",
+        data={"password": "wrong", "csrf_token": token},
+        headers={"X-Forwarded-For": "10.0.0.99"},
+    )
+    assert resp.status_code == 429
+    assert len(_application.extensions["blog_login_failures"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# T4 — BLOG_TRUSTED_PROXY_COUNT=1 时取 XFF 链倒数第 1 段
+# ---------------------------------------------------------------------------
+
+
+def test_login_rate_limit_uses_trusted_proxy_chain(tmp_path, monkeypatch):
+    """count=1 时取 XFF 链尾段；尾段相同归入同一桶，不同则分开."""
+    monkeypatch.setenv("BLOG_TRUSTED_PROXY_COUNT", "1")
+    monkeypatch.setenv("BLOG_DEBUG", "true")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+    monkeypatch.setenv("BLOG_LOGIN_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "60")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+    store_module = importlib.import_module("store")
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir()
+    monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
+
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+
+    # 取 CSRF token
+    client.get("/admin/login")
+    with client.session_transaction() as session:
+        token = session["_admin_csrf_token"]
+
+    # 尾段固定 203.0.113.7，前缀伪造变化 → 归入同一桶
+    for i in range(3):
+        resp = client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": f"192.168.{i}.1, 203.0.113.7"},
+        )
+        assert resp.status_code == 200
+    resp = client.post(
+        "/admin/login",
+        data={"password": "wrong", "csrf_token": token},
+        headers={"X-Forwarded-For": "10.99.99.99, 203.0.113.7"},
+    )
+    assert resp.status_code == 429
+
+    # 尾段不同 → 不同桶，应该可以正常登录
+    resp = client.post(
+        "/admin/login",
+        data={"password": "wrong", "csrf_token": token},
+        headers={"X-Forwarded-For": "192.168.1.1, 198.51.100.9"},
+    )
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# T5 — 登录失败桶数量上限
+# ---------------------------------------------------------------------------
+
+
+def test_login_failure_buckets_are_capped(tmp_path, monkeypatch):
+    """超过 LOGIN_FAILURE_MAX_KEYS 时淘汰最老的桶."""
+    monkeypatch.setenv("BLOG_TRUSTED_PROXY_COUNT", "1")
+    monkeypatch.setenv("BLOG_DEBUG", "true")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+    monkeypatch.setenv("BLOG_LOGIN_MAX_ATTEMPTS", "10")
+    monkeypatch.setenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "60")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+    store_module = importlib.import_module("store")
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir()
+    monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
+
+    monkeypatch.setattr(app_module, "LOGIN_FAILURE_MAX_KEYS", 4)
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+
+    client.get("/admin/login")
+    with client.session_transaction() as session:
+        token = session["_admin_csrf_token"]
+
+    # 10 个不同尾段各失败一次
+    for i in range(10):
+        client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": f"10.0.0.1, 198.51.100.{i}"},
+        )
+
+    failures = application.extensions["blog_login_failures"]
+    assert len(failures) <= 4
