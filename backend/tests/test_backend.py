@@ -1,5 +1,6 @@
 import io
 import importlib
+import re
 import sys
 import time
 from pathlib import Path
@@ -899,3 +900,80 @@ def test_admin_media_and_revision_surfaces_render(app_bundle, client):
     html = write_page.get_data(as_text=True)
     assert 'id="revision-panel"' in html
     assert 'id="publish-warnings-acknowledged"' in html
+
+
+# ---------------------------------------------------------------------------
+# T1 — 上线校验报错消息必须包含中文（防 mojibake 复发）
+# ---------------------------------------------------------------------------
+
+
+def test_launch_config_messages_are_chinese(tmp_path, monkeypatch):
+    """validate_launch_config 的每条 RuntimeError 必须含中文字符且不含乱码."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+
+    # 6 类非法配置，每类对应一条 RuntimeError
+    cases = [
+        # (kwargs_overrides, expected_env_name_in_message)
+        ({"secret_key": ""}, "BLOG_SECRET_KEY"),
+        ({"secret_key": "a" * 100}, "BLOG_SECRET_KEY"),  # 默认值测试由另一个 case 覆盖
+        ({"admin_password": "weak"}, "BLOG_ADMIN_PASSWORD"),
+        ({"admin_prefix": "/admin"}, "BLOG_ADMIN_PREFIX"),
+        ({"public_base_url": "", "require_public_base_url": True}, "BLOG_PUBLIC_BASE_URL"),
+        ({"public_base_url": "http://example.com"}, "BLOG_PUBLIC_BASE_URL"),
+    ]
+
+    # 第一个 case 需要 secret_key != DEFAULT_SECRET_KEY 才会走 "过短" 分支
+    # 其实 secret_key="" 走的是 not secret_key 分支
+    # 第二个 "a"*100 不是默认值，不短——不触发。改为测试 cookie_secure：
+    cases[1] = ({"public_base_url": "https://example.com", "cookie_secure": False}, "BLOG_COOKIE_SECURE")
+
+    base = dict(
+        debug_mode=False,
+        secret_key="unique-test-secret-key-1234567890abcdef",
+        admin_password="strong-enough-password",
+        admin_prefix="/launch-admin",
+        public_base_url="https://example.com",
+        cookie_secure=True,
+        require_public_base_url=False,
+    )
+
+    for overrides, env_name in cases:
+        params = {**base, **overrides}
+        try:
+            app_module.validate_launch_config(**params)
+        except RuntimeError as exc:
+            msg = str(exc)
+            assert re.search(r"[一-鿿]", msg), f"消息缺少中文字符: {msg}"
+            assert "??" not in msg, f"消息含乱码: {msg}"
+            assert env_name in msg, f"消息缺少变量名 {env_name}: {msg}"
+        else:
+            raise AssertionError(f"应抛出 RuntimeError: {overrides}")
+
+
+# ---------------------------------------------------------------------------
+# T2 — ops shell 脚本必须是 UTF-8 且无乱码
+# ---------------------------------------------------------------------------
+
+
+def test_ops_scripts_are_utf8_without_mojibake():
+    """deploy.sh 和 deploy/*.sh 必须是 UTF-8、含中文、无 ???? 乱码、无 BOM、无 CRLF."""
+    repo_root = Path(__file__).resolve().parents[2]
+    scripts = [repo_root / "deploy.sh"]
+    scripts.extend(sorted((repo_root / "deploy").glob("*.sh")))
+    assert scripts, "未找到任何 shell 脚本"
+
+    for path in scripts:
+        raw = path.read_bytes()
+        # 无 BOM
+        assert not raw.startswith(b"\xef\xbb\xbf"), f"{path.name}: 含 UTF-8 BOM"
+        # 无 CRLF
+        assert b"\r\n" not in raw, f"{path.name}: 含 CRLF 换行"
+        # UTF-8 严格可解码
+        text = raw.decode("utf-8")
+        # 含中文字符
+        assert re.search(r"[一-鿿]", text), f"{path.name}: 缺少中文字符"
+        # 无乱码（连续 ???? 不在 URL 查询字符串中）
+        assert "????" not in text, f"{path.name}: 含乱码 ????"

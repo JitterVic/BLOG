@@ -32,7 +32,7 @@ sudo_cmd() {
 }
 
 validate_launch_env() {
-  log "???? .env ??"
+  log "校验 .env 上线配置"
   "$APP_DIR/.venv/bin/python" - <<'PY'
 from pathlib import Path
 import os
@@ -116,7 +116,7 @@ WantedBy=multi-user.target
 EOF
 )
 
-  log "??/?? systemd ??: ${unit_path}"
+  log "写入/更新 systemd 单元：${unit_path}"
   printf '%s\n' "$unit_content" | sudo_cmd tee "$unit_path" >/dev/null
   sudo_cmd systemctl daemon-reload
   sudo_cmd systemctl enable "$SERVICE_NAME" >/dev/null
@@ -149,7 +149,7 @@ server {
 EOF
 )
 
-  log "??/?? Nginx ??: ${conf_path}"
+  log "写入/更新 Nginx 配置：${conf_path}"
   printf '%s\n' "$conf_content" | sudo_cmd tee "$conf_path" >/dev/null
   sudo_cmd ln -sfn "$conf_path" "$enabled_path"
   sudo_cmd nginx -t
@@ -158,32 +158,32 @@ EOF
 
 main() {
   cd "$APP_DIR"
-  log "Linux ????: $APP_DIR"
+  log "开始 Linux 一键部署：$APP_DIR"
 
   need_cmd "$PYTHON_BIN"
   need_cmd "$NPM_BIN"
 
   if [[ ! -f ".env" ]]; then
     cp .env.example .env
-    fail "??? .env???????????????? deploy.sh"
+    fail "已生成 .env，请先填写生产配置后重新运行 deploy.sh"
   fi
 
-  log "??/?? Python ????"
+  log "创建/更新 Python 虚拟环境"
   "$PYTHON_BIN" -m venv .venv
   .venv/bin/python -m pip install --upgrade pip
   .venv/bin/python -m pip install -r requirements-prod.txt
 
   if [[ "$RUN_TESTS" == "1" ]]; then
-    log "?? pytest ???????"
+    log "运行 pytest 后端回归测试"
     .venv/bin/python -m pip install 'pytest>=8,<10'
     PYTHONPATH="$APP_DIR/backend" .venv/bin/python -m pytest backend/tests -q
   else
-    warn "???????RUN_TESTS=$RUN_TESTS"
+    warn "已跳过后端测试（RUN_TESTS=$RUN_TESTS）"
   fi
 
   validate_launch_env
 
-  log "???????????????"
+  log "安装前端依赖并执行生产构建"
   pushd frontend >/dev/null
   if [[ -f package-lock.json ]]; then
     "$NPM_BIN" ci
@@ -197,22 +197,22 @@ main() {
     if command -v systemctl >/dev/null 2>&1; then
       write_systemd_unit
     else
-      warn "systemctl ?????? systemd ????"
+      warn "未检测到 systemctl，跳过 systemd 服务安装"
     fi
   else
-    warn "?? systemd ?????INSTALL_SERVICE=$INSTALL_SERVICE"
+    warn "已跳过 systemd 服务安装（INSTALL_SERVICE=$INSTALL_SERVICE）"
   fi
 
   if [[ "$INSTALL_NGINX" == "1" ]]; then
     write_nginx_conf
   else
-    warn "??? Nginx?????????????? INSTALL_NGINX=1 DOMAIN=????"
+    warn "未安装 Nginx 配置；如需自动写入，请使用 INSTALL_NGINX=1 DOMAIN=你的域名"
   fi
 
-  log "????"
-  printf '????: http://%s:%s\n' "$APP_HOST" "$APP_PORT"
-  printf 'systemd ??: %s\n' "$SERVICE_NAME"
-  printf '????: sudo systemctl status %s\n' "$SERVICE_NAME"
+  log "部署完成"
+  printf '本地地址：http://%s:%s\n' "$APP_HOST" "$APP_PORT"
+  printf 'systemd 服务：%s\n' "$SERVICE_NAME"
+  printf '查看状态：sudo systemctl status %s\n' "$SERVICE_NAME"
 }
 
 main "$@"

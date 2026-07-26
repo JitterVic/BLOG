@@ -193,7 +193,7 @@ def validate_launch_config(
 
     if not secret_key or secret_key == DEFAULT_SECRET_KEY:
         raise RuntimeError(
-            "?????????? BLOG_SECRET_KEY??? .env ????????????"
+            "BLOG_SECRET_KEY 仍是默认值或过短，请在 .env 中改为随机的长密钥。"
         )
     if (
         not admin_password
@@ -201,24 +201,24 @@ def validate_launch_config(
         or admin_password in {DEFAULT_ADMIN_PASSWORD, "123", "123456", "admin", "password", "change-me-before-deploy"}
     ):
         raise RuntimeError(
-            "?????????????? BLOG_ADMIN_PASSWORD??? .env ???????????"
+            "BLOG_ADMIN_PASSWORD 太弱或仍是默认值，请在 .env 中改为至少 12 位的强密码。"
         )
     if admin_prefix == "/admin" or not admin_prefix.startswith("/"):
         raise RuntimeError(
-            "??????????? BLOG_ADMIN_PREFIX??? /launch-admin?"
+            "BLOG_ADMIN_PREFIX 不能使用默认的 /admin，请改成不易猜到且以 / 开头的路径。"
         )
     if require_public_base_url and not public_base_url:
         raise RuntimeError(
-            "???????? BLOG_PUBLIC_BASE_URL ???? HTTPS ?????"
+            "上线模式要求配置 BLOG_PUBLIC_BASE_URL 为真实的 HTTPS 公开域名。"
         )
     if public_base_url:
         if not public_base_url.startswith("https://"):
             raise RuntimeError(
-                "???? BLOG_PUBLIC_BASE_URL ???? https://?"
+                "BLOG_PUBLIC_BASE_URL 必须以 https:// 开头。"
             )
         if not cookie_secure:
             raise RuntimeError(
-                "?????? HTTPS ????????? BLOG_COOKIE_SECURE=true?"
+                "站点已使用 HTTPS，必须同时设置 BLOG_COOKIE_SECURE=true。"
             )
 
 
