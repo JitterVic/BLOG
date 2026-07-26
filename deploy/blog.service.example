@@ -1,18 +1,36 @@
-# systemd unit example. deploy.sh can generate and install a unit automatically.
-# Replace /opt/blog, blog, and port values for your server if installing manually.
+# systemd unit example. deploy.sh 可以自动生成并安装服务单元。
+# 手动安装时请替换 /opt/blog、用户、端口等值。
 
 [Unit]
-Description=Personal Blog Flask App
-After=network.target
+Description=个人博客 Flask 应用
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=blog
+Group=blog
 WorkingDirectory=/opt/blog
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/blog/.venv/bin/gunicorn --chdir /opt/blog/backend --bind 127.0.0.1:8000 --workers 2 --access-logfile - --error-logfile - app:app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/blog/.venv/bin/gunicorn --chdir /opt/blog/backend --bind 127.0.0.1:8000 --workers 2 --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - app:app
 Restart=always
 RestartSec=5
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+UMask=0077
+ReadWritePaths=/opt/blog/storage /opt/blog/storage-backups
 
 [Install]
 WantedBy=multi-user.target
