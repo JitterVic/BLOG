@@ -159,9 +159,10 @@ nano .env
 常用部署命令：
 
 ```bash
-chmod +x deploy.sh
 ./deploy.sh
 ```
+
+`deploy.sh` 已自带可执行权限，无需 `chmod +x`。
 
 如果服务器已经安装了 Nginx，并希望脚本同时写入反向代理配置：
 
@@ -169,15 +170,37 @@ chmod +x deploy.sh
 DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
 ```
 
-可选参数通过环境变量传入：`SERVICE_NAME=blog`、`APP_PORT=8000`、`GUNICORN_WORKERS=2`、`SERVICE_USER=blog`、`RUN_TESTS=0`、`INSTALL_SERVICE=0`。Nginx HTTPS 证书仍建议用服务器上的 Certbot/面板单独签发，然后保持 `.env` 中的 `BLOG_PUBLIC_BASE_URL=https://你的域名`。
+同时用 certbot 签发 TLS 证书：
+
+```bash
+DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com ./deploy.sh
+```
+
+可选参数通过环境变量传入：`SERVICE_NAME`、`SERVICE_USER`、`APP_PORT`、`GUNICORN_WORKERS`、`RUN_TESTS`、`INSTALL_SERVICE`、`INSTALL_NGINX`、`INSTALL_TLS`、`TLS_EMAIL`、`BACKUP_KEEP`。详见 `docs/launch-checklist.md`。
+
+deploy.sh 会自动在 `.env` 中写入 `BLOG_TRUSTED_PROXY_COUNT=1`（当 INSTALL_NGINX=1 时），确保 Nginx 反代下的登录限流使用真实客户端 IP 而非 127.0.0.1。
+
+### 备份与恢复
+
+部署后可使用 Linux 备份/恢复脚本：
+
+```bash
+# 手动备份
+bash deploy/backup.sh
+
+# 从备份恢复（会先自动创建回滚点）
+bash deploy/restore.sh storage-backups/blog-backup-<时间戳>.tar.gz --yes
+```
+
+deploy.sh 默认安装每日定时备份 systemd timer（03:20 ±15min，保留 7 份）。
 
 ## 部署前建议
 
-- 修改默认后台密码和 `secret key`
+- 修改默认后台密码和 `secret key`（至少 32 位）
 - 把 `BLOG_ADMIN_PREFIX` 设成不容易猜到的路径
 - 关闭 `BLOG_DEBUG`；如果站点已通过 HTTPS 对外发布，建议将 `BLOG_REQUIRE_PUBLIC_BASE_URL` 设为 `true`，并将 `BLOG_COOKIE_SECURE` 设为 `true`
-- 备份 `storage/blog.db` 和 `storage/` 上传目录
-- 如果是正式服务器，建议使用 Nginx + Gunicorn / Waitress 之类的生产部署方式，而不是 Flask 自带开发服务器
+- 备份 `storage/blog.db` 和 `storage/` 上传目录（可用 `bash deploy/backup.sh`）
+- 如果是正式服务器，建议使用 Nginx + Gunicorn 生产部署方式，而不是 Flask 自带开发服务器
 
 ## 第一阶段上线需求说明
 

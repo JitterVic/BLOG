@@ -1,6 +1,6 @@
-﻿# 上线检查清单
+# 上线检查清单
 
-这份清单用于把仓库从“本地可运行”推进到“可以安全上线”。
+这份清单用于把仓库从"本地可运行"推进到"可以安全上线"。
 
 ## 1. 生产配置
 
@@ -13,6 +13,7 @@
 - `BLOG_REQUIRE_PUBLIC_BASE_URL=true`：上线时启用运行时强校验，防止漏配公开域名
 - `BLOG_COOKIE_SECURE=true`：只要站点对外使用 HTTPS，就必须开启
 - `BLOG_DEBUG=false`
+- `BLOG_TRUSTED_PROXY_COUNT`：使用 Nginx 反向代理时设为 `1`（deploy.sh 会自动写入）
 
 ## 2. 发布前验证
 
@@ -29,9 +30,10 @@ powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch
 生产 `.env` 准备好后，在 Linux 服务器仓库根目录运行（建议用有 sudo 权限的普通管理员账号）：
 
 ```bash
-chmod +x deploy.sh
 ./deploy.sh
 ```
+
+`deploy.sh` 已自带可执行权限（通过 `.gitattributes` 保证），无需 `chmod +x`。
 
 如果要让脚本同时安装 Nginx 反向代理配置：
 
@@ -39,7 +41,28 @@ chmod +x deploy.sh
 DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
 ```
 
-脚本会安装 `requirements-prod.txt`、构建 `frontend/dist/`、执行配置校验，并在有 systemd 的服务器上安装/重启服务。
+同时签发 TLS 证书（需要 certbot）：
+
+```bash
+DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com ./deploy.sh
+```
+
+可选参数（通过环境变量传入）：
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `SERVICE_NAME` | `blog` | systemd 服务名 |
+| `SERVICE_USER` | 当前用户 | 运行服务的系统账号（不存在时自动创建） |
+| `APP_PORT` | `8000` | Gunicorn 监听端口 |
+| `GUNICORN_WORKERS` | `2` | Gunicorn worker 数量 |
+| `RUN_TESTS` | `1` | 部署前是否跑 pytest |
+| `INSTALL_SERVICE` | `1` | 是否安装 systemd 服务 |
+| `INSTALL_NGINX` | `0` | 是否写入 Nginx 配置 |
+| `INSTALL_TLS` | `0` | 是否用 certbot 签发证书 |
+| `TLS_EMAIL` | — | certbot 注册邮箱（INSTALL_TLS=1 时必填） |
+| `BACKUP_KEEP` | `7` | 备份保留份数 |
+
+脚本会：前置环境检查 → 创建虚拟环境 → 跑测试 → 校验生产配置 → 修正文件权限 → 构建前端 → 安装/重启 systemd 服务 → 安装备份 timer → 写入 Nginx 配置 → 签发证书 → 健康检查。
 
 ## 4. 构建与冒烟验证
 
@@ -52,15 +75,32 @@ DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
 
 ## 5. 上线前的人工核对
 
-- 登录后台确认首页资料、关于页、联系方式、头像、精选文章都已更新
+- 登录后台确认首页资料、关于页、联系方式、头像都已更新
 - 确认文章列表、草稿、回收站状态符合预期
-- 确认备份脚本可用，且 `storage/blog.db`、`storage/avatars`、`storage/media` 已备份
-- 确认生产环境使用 Nginx + Gunicorn / Waitress 等方式，而不是 Flask 开发服务器
+- 确认备份脚本可用：`bash deploy/backup.sh`
+- 确认定时备份 timer 运行中：`systemctl status blog-backup.timer`
+- 确认生产环境使用 Nginx + Gunicorn，而不是 Flask 开发服务器
 
-## 6. 回滚准备
+## 6. 备份与恢复
 
-- 保留最近一次数据库备份
+### Linux 备份
+
+```bash
+bash deploy/backup.sh
+```
+
+输出到 `storage-backups/blog-backup-<时间戳>.tar.gz`，包含数据库一致性快照和 avatars/media。定时备份由 deploy.sh 自动安装为 systemd timer（每天 03:20 ±15min）。
+
+### Linux 恢复
+
+```bash
+bash deploy/restore.sh storage-backups/blog-backup-<时间戳>.tar.gz --yes
+```
+
+恢复前会自动创建回滚点。恢复完成后会重启服务并执行健康检查。
+
+## 7. 回滚准备
+
+- 使用 `deploy/restore.sh <回滚文件.tar.gz> --yes` 恢复到上一个备份点
 - 保留最近一次静态构建产物
 - 保留反向代理和服务启动配置的上一版
-
-
