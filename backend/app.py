@@ -72,6 +72,32 @@ def is_safe_admin_next(target: str | None, admin_prefix: str) -> bool:
     )
 
 
+def passwords_match(candidate: str | None, expected: str | None) -> bool:
+    """Constant-time comparison that handles non-ASCII passwords safely."""
+    try:
+        return secrets.compare_digest(
+            str(candidate or "").encode("utf-8"),
+            str(expected or "").encode("utf-8"),
+        )
+    except (UnicodeEncodeError, TypeError):
+        return False
+
+
+def safe_referrer_target(referrer: str | None, admin_prefix: str, host: str) -> str | None:
+    """Return *referrer* only when it points back to our own admin area."""
+    if not referrer:
+        return None
+    parsed = urlsplit(referrer)
+    if parsed.scheme and parsed.scheme not in {"http", "https"}:
+        return None
+    if parsed.netloc and parsed.netloc != host:
+        return None
+    path = parsed.path or ""
+    if path != admin_prefix and not path.startswith(f"{admin_prefix}/"):
+        return None
+    return referrer
+
+
 def summarize_post(post):
     """Public list payload used by the current Vue frontend."""
     return {
@@ -348,7 +374,7 @@ def create_app():
         if is_admin_api_request() or request.is_json:
             return api_error("csrf_failed", "请求校验已失效，请刷新页面后重试。", 400)
         flash("请求校验已失效，请刷新页面后重试。", "error")
-        return redirect(request.referrer or url_for("admin_login"))
+        return redirect(safe_referrer_target(request.referrer, admin_prefix, request.host) or url_for("admin_login"))
 
     @app.after_request
     def apply_security_headers(response):
@@ -381,7 +407,8 @@ def create_app():
         if is_admin_api_request() or request.is_json:
             return api_error("payload_too_large", "上传内容过大，请压缩文件后重试。", 413)
         flash("上传内容过大，请压缩文件后重试。", "error")
-        return redirect(request.referrer or url_for("admin_login"))
+        fallback = url_for("admin_dashboard") if is_authenticated() else url_for("admin_login")
+        return redirect(safe_referrer_target(request.referrer, admin_prefix, request.host) or fallback)
 
     @app.errorhandler(404)
     def handle_not_found(error):
@@ -511,7 +538,7 @@ def create_app():
 
             password = form_value(request.form, "password")
             expected = app.config.get("BLOG_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
-            if secrets.compare_digest(password, expected):
+            if passwords_match(password, expected):
                 login_failures.pop(client_key(), None)
                 session.clear()
                 session.permanent = True

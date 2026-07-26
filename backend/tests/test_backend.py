@@ -1112,3 +1112,132 @@ def test_login_failure_buckets_are_capped(tmp_path, monkeypatch):
 
     failures = application.extensions["blog_login_failures"]
     assert len(failures) <= 4
+
+
+# ---------------------------------------------------------------------------
+# T6 — passwords_match 处理非 ASCII 密码
+# ---------------------------------------------------------------------------
+
+
+def test_password_compare_handles_non_ascii():
+    """passwords_match 必须能安全比较含中文的密码，不抛异常."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+
+    assert app_module.passwords_match("密码密码密码", "密码密码密码") is True
+    assert app_module.passwords_match("密码", "abc") is False
+    assert app_module.passwords_match(None, "abc") is False
+    assert app_module.passwords_match("", "") is True
+
+
+# ---------------------------------------------------------------------------
+# T7 — 非 ASCII 管理密码不会导致 500
+# ---------------------------------------------------------------------------
+
+
+def test_login_with_non_ascii_password_does_not_500(tmp_path, monkeypatch):
+    """管理密码含中文时：错密码→200（非500）、可触发 429、对密码→302."""
+    monkeypatch.setenv("BLOG_DEBUG", "true")
+    monkeypatch.setenv("BLOG_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "正确密码正确密码正确密码")
+    monkeypatch.setenv("BLOG_ADMIN_PREFIX", "/admin")
+    monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
+    monkeypatch.setenv("BLOG_LOGIN_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "60")
+    monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+    store_module = importlib.import_module("store")
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir()
+    monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
+
+    application = app_module.create_app()
+    application.config.update(TESTING=True)
+    client = application.test_client()
+
+    client.get("/admin/login")
+    with client.session_transaction() as session:
+        token = session["_admin_csrf_token"]
+
+    # 错误密码 → 200（非 500）
+    resp = client.post("/admin/login", data={"password": "错", "csrf_token": token})
+    assert resp.status_code == 200
+
+    # 连续错误后触发 429（证明失败被计数，未被 TypeError 跳过）
+    client.post("/admin/login", data={"password": "错", "csrf_token": token})
+    client.post("/admin/login", data={"password": "错", "csrf_token": token})
+    resp = client.post("/admin/login", data={"password": "错", "csrf_token": token})
+    assert resp.status_code == 429
+
+    # 正确密码 → 302（后台首页）
+    application.extensions["blog_login_failures"].clear()  # 重置限流
+    client.get("/admin/login")  # 重新获取 session/token
+    with client.session_transaction() as session:
+        token = session["_admin_csrf_token"]
+    resp = client.post(
+        "/admin/login",
+        data={"password": "正确密码正确密码正确密码", "csrf_token": token},
+    )
+    assert resp.status_code == 302
+
+
+# ---------------------------------------------------------------------------
+# T8 — safe_referrer_target 拒绝跨域 Referer
+# ---------------------------------------------------------------------------
+
+
+def test_safe_referrer_target_rejects_cross_origin():
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    app_module = importlib.import_module("app")
+
+    admin_prefix = "/admin"
+    host = "localhost"
+
+    # 跨域 → None
+    assert app_module.safe_referrer_target("https://evil.example/admin/x", admin_prefix, host) is None
+    # 协议相对 → None
+    assert app_module.safe_referrer_target("//evil.example/admin/x", admin_prefix, host) is None
+    # javascript: → None
+    assert app_module.safe_referrer_target("javascript:alert(1)", admin_prefix, host) is None
+    # 非后台路径 → None
+    assert app_module.safe_referrer_target("/other/path", admin_prefix, host) is None
+    # 同源后台路径 → 原值
+    assert app_module.safe_referrer_target("http://localhost/admin/write", admin_prefix, host) == "http://localhost/admin/write"
+    # 无 Referer → None
+    assert app_module.safe_referrer_target(None, admin_prefix, host) is None
+
+
+# ---------------------------------------------------------------------------
+# T9 — CSRF 失败不跟随外部 Referer
+# ---------------------------------------------------------------------------
+
+
+def test_csrf_failure_does_not_follow_external_referer(client):
+    """无 CSRF token 的 POST 带恶意 Referer → 302 不含 evil 域."""
+    resp = client.post(
+        "/admin/profile",
+        data={"name": "x"},
+        headers={"Referer": "https://evil.example/phish"},
+    )
+    assert resp.status_code == 302
+    assert "evil.example" not in (resp.location or "")
+    assert "/admin/login" in (resp.location or "")
+
+    # 同源 Referer → 保留
+    resp = client.post(
+        "/admin/profile",
+        data={"name": "x"},
+        headers={"Referer": "http://localhost/admin/write"},
+    )
+    assert resp.status_code == 302
+    assert resp.location.endswith("/admin/write")
