@@ -7,7 +7,7 @@ APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SERVICE_NAME="${SERVICE_NAME:-blog}"
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$(id -un)}}"
 SERVICE_GROUP="${SERVICE_GROUP:-}"
-PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/.venv/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/backend/.venv/bin/python}"
 HEALTH_PATH="${HEALTH_PATH:-/api/health}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 APP_HOST="${APP_HOST:-127.0.0.1}"
@@ -134,11 +134,11 @@ if command -v systemctl >/dev/null 2>&1; then
   sudo_cmd systemctl start "$SERVICE_NAME"
 
   log "健康检查"
-  local _url="http://${APP_HOST}:${APP_PORT}${HEALTH_PATH}"
-  local _deadline=$((SECONDS + HEALTH_TIMEOUT))
+  _url="http://${APP_HOST}:${APP_PORT}${HEALTH_PATH}"
+  _deadline=$((SECONDS + HEALTH_TIMEOUT))
   log "健康检查：$_url"
   while ((SECONDS < _deadline)); do
-    if curl -fsS --max-time 3 "$url" 2>/dev/null | grep -q '"status"'; then
+    if curl -fsS --max-time 3 "$_url" 2>/dev/null | grep -q '"status"'; then
       log "恢复完成，服务已正常运行"
       echo ""
       echo "若结果不符合预期，可使用回滚点再次执行本脚本："

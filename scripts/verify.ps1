@@ -5,8 +5,13 @@
 )
 
 $ErrorActionPreference = "Stop"
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
+$BackendPython = Join-Path $Root "backend\.venv\Scripts\python.exe"
 Set-Location $Root
+
+if (-not (Test-Path $BackendPython)) {
+  throw "未找到后端虚拟环境 $BackendPython，请先执行: uv sync --directory backend --group dev --group prod"
+}
 
 function Test-PortInUse {
   param([int]$Port)
@@ -101,12 +106,17 @@ if ($StrictLaunch) {
   Assert-LaunchConfig
 }
 
-$bt = Join-Path $Root "output/pytest-tmp-verify"
-New-Item -ItemType Directory -Path $bt -Force | Out-Null
+# 每次使用全新的时间戳 basetemp，避免 pytest 清理旧目录时遇到 Windows 权限问题
+$bt = Join-Path $Root "output/pytest-tmp-verify-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 
 Write-Host "[1/3] 后端测试 pytest" -ForegroundColor Green
-python -m pytest backend/tests -q -p no:cacheprovider --basetemp="$bt"
+& $BackendPython -m pytest backend/tests -q -p no:cacheprovider --basetemp="$bt"
 if ($LASTEXITCODE -ne 0) { throw "pytest failed" }
+
+# 清理旧的 basetemp 目录（保留本次；删除失败不影响验证结果）
+Get-ChildItem (Join-Path $Root "output") -Directory -Filter "pytest-tmp-verify-*" -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -ne $bt } |
+  ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
 
 if (-not $SkipFrontend) {
   Write-Host "[2/3] 前端生产构建 npm run build" -ForegroundColor Green
@@ -132,16 +142,13 @@ $smokeOutLog = Join-Path $smokeLogDir "backend.out.log"
 $smokeErrLog = Join-Path $smokeLogDir "backend.err.log"
 
 $smokeLauncher = Join-Path $smokeLogDir "launch_smoke_server.py"
-$pythonExe = (Get-Command python).Source
 $launcherContent = @"
 import os
-import runpy
 import sys
 from pathlib import Path
 
 root = Path(r"$Root")
 os.chdir(root)
-sys.path.insert(0, str(root / "backend"))
 sys.stdout = open(r"$smokeOutLog", "a", encoding="utf-8", buffering=1)
 sys.stderr = open(r"$smokeErrLog", "a", encoding="utf-8", buffering=1)
 os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -150,11 +157,12 @@ os.environ["BLOG_HOST"] = "127.0.0.1"
 os.environ["BLOG_PORT"] = "$Port"
 if "$StrictLaunch" == "True":
     os.environ["BLOG_REQUIRE_PUBLIC_BASE_URL"] = "true"
-runpy.run_path(r"backend/app.py", run_name="__main__")
+from blog.app import app
+app.run(host="127.0.0.1", port=int("$Port"), debug=False)
 "@
 Set-Content -Path $smokeLauncher -Value $launcherContent -Encoding UTF8
 
-$serverProcess = Start-Process -FilePath $pythonExe `
+$serverProcess = Start-Process -FilePath $BackendPython `
   -ArgumentList @($smokeLauncher) `
   -WorkingDirectory $Root `
   -PassThru `

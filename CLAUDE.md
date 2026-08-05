@@ -11,9 +11,10 @@ There is also an `AGENTS.md` with coding-style conventions (4-space Python, `<sc
 ## Commands
 
 ```bash
-# Backend
-python -m pip install -r requirements.txt
-python backend/app.py            # serves API + admin on 127.0.0.1:5000, auto-loads root .env
+# Backend (package `blog` under backend/src/, managed with uv)
+uv sync --directory backend --group dev --group prod   # creates backend/.venv
+backend/.venv/bin/python -m blog          # serves API + admin on 127.0.0.1:5000, auto-loads root .env
+                                          # Windows: backend\.venv\Scripts\python.exe -m blog
 
 # Frontend (run from frontend/)
 cd frontend
@@ -23,14 +24,14 @@ npm run build                    # builds frontend/dist/ — REQUIRED for Flask 
 npm run preview
 ```
 
-`.\一键启动.ps1` (Windows/PowerShell) boots both servers detached, health-checks them, and writes logs/PIDs to `.run/`.
+`.\scripts\dev.ps1` (Windows/PowerShell) boots both servers via a foreground watchdog (`scripts/dev_watchdog.py`) that puts them in a KILL_ON_CLOSE job object, health-checks them, and writes logs/PIDs to `.run/`. Closing the terminal or pressing Ctrl+C stops both servers automatically.
 
 ### Test suite
 
-`backend/tests/test_backend.py` — ~53 pytest tests covering API contracts, security boundaries, upload validation, admin auth, and deploy-script encoding guards. Run with:
+`backend/tests/test_backend.py` — 62 pytest tests covering API contracts, security boundaries, upload validation, admin auth, and deploy-script encoding guards. Run with:
 
 ```bash
-python -m pytest backend/tests -q -p no:cacheprovider --basetemp=<clean-dir>
+backend/.venv/bin/python -m pytest backend/tests -q -p no:cacheprovider --basetemp=<clean-dir>
 ```
 
 The `--basetemp` flag is **required on this Windows dev machine** because `C:\Users\22937\AppData\Local\Temp\pytest-of-22937` has a corrupt ACL. The repo's `.pytest_cache/` is also ACL-broken — do not touch it. There is **no frontend test suite**.
@@ -42,13 +43,14 @@ The `--basetemp` flag is **required on this Windows dev machine** because `C:\Us
 
 ## Backend architecture
 
-The whole backend is three flat modules under `backend/` (no package — running `python backend/app.py` puts `backend/` on `sys.path`, so imports are top-level like `from store import ...`). For a WSGI server use `gunicorn --chdir backend app:app`.
+The backend is a standard src-layout Python package `blog` (`backend/src/blog/`, declared in `backend/pyproject.toml`, installed editable into `backend/.venv` by uv). Imports are package-relative (`from .store import ...`). For a WSGI server use `gunicorn blog.app:app`.
 
-- **`app.py`** — `create_app()` app factory; module-level `app = create_app()` is the WSGI entrypoint. Loads root `.env` at import time via `env_loader`. Defines all routes and thin request/response shaping (`summarize_post`, `build_profile_form`, `build_edit_post`). Delegates all persistence and rendering to `BlogStore`. Includes security audit logging (`audit()` helper) and login rate-limiting keyed by `BLOG_TRUSTED_PROXY_COUNT`.
+- **`app.py`** — `create_app()` app factory; module-level `app = create_app()` is the WSGI entrypoint. Loads root `.env` at import time via `env_loader` (repo root resolved by `env_loader.project_root()`, overridable with `BLOG_PROJECT_ROOT`). Defines all routes and thin request/response shaping (`summarize_post`, `build_profile_form`, `build_edit_post`). Delegates all persistence and rendering to `BlogStore`. Includes security audit logging (`audit()` helper) and login rate-limiting keyed by `BLOG_TRUSTED_PROXY_COUNT`.
 - **`store.py`** — `BlogStore`, the single hub for persistence, Markdown rendering, sanitization, uploads, slugs, read-time, and excerpts. **Most logic lives here.**
 - **`content.py`** — default seed data (`POSTS`, `SITE_CONFIG`), inserted only when the tables are empty.
-- **`env_loader.py`** — minimal hand-rolled `.env` parser (no python-dotenv dependency); does not override already-set env vars.
-- **`templates/`** — server-rendered admin pages (`admin_login.html`, `admin_dashboard.html`, `admin_write.html`, `admin_profile.html`, `admin_media.html`, `admin_base.html`). The admin UI is classic Flask+Jinja, NOT Vue.
+- **`env_loader.py`** — minimal hand-rolled `.env` parser (no python-dotenv dependency); does not override already-set env vars. Also provides `project_root()`.
+- **`__main__.py`** — dev-server entrypoint (`python -m blog`).
+- **`templates/`** — server-rendered admin pages (`admin_login.html`, `admin_dashboard.html`, `admin_write.html`, `admin_profile.html`, `admin_media.html`, `admin_base.html`); `static/` holds the admin CSS/JS. The admin UI is classic Flask+Jinja, NOT Vue.
 
 ### Routing model
 
@@ -90,10 +92,10 @@ Root `.env` is auto-loaded (see `.env.example`). Key vars: `BLOG_SECRET_KEY` (�
 
 ## Ops / 部署
 
-- **`deploy.sh`** — Linux 一键部署（preflight、venv、pytest、前端构建、systemd 硬化、Nginx + certbot TLS、健康探测）。以 `set -Eeuo pipefail` 运行，幂等可重跑。
+- **`deploy/deploy.sh`** — Linux 一键部署（preflight、backend/.venv（uv 优先，回退 pip）、pytest、前端构建、systemd 硬化、Nginx + certbot TLS、健康探测）。以 `set -Eeuo pipefail` 运行，幂等可重跑。
 - **`deploy/backup.sh`** — WAL 安全备份（`sqlite3.Connection.backup` + `PRAGMA integrity_check`），白名单拷贝 avatars/media，tar.gz 归档，保留 N 份。
 - **`deploy/restore.sh`** — 从归档恢复（自动回滚点 + 完整性校验 + 删除残留 WAL/SHM + 健康探测）。
 - **`deploy/blog.service.example`** — systemd 单元模板（含安全加固：NoNewPrivileges/ProtectSystem/ReadWritePaths 等）。
-- **`一键验证.ps1`** — Windows 发布前验证（pytest + npm build + API 冒烟 + 可选 StrictLaunch 校验）。
+- **`scripts/verify.ps1`** — Windows 发布前验证（pytest + npm build + API 冒烟 + 可选 StrictLaunch 校验）；`scripts/dev.ps1` 一键启动前后端；`scripts/backup.ps1` Windows 本地备份。
 
 `BLOG_TRUSTED_PROXY_COUNT` 语义：0（默认）= 完全忽略 `X-Forwarded-For`，直接用 `remote_addr`（直连部署安全默认值）；1 = 取 XFF 链最后一段（nginx `$proxy_add_x_forwarded_for` 追加模式下即真实客户端 IP）。部署到反代后端时改为 1，否则登录限流会把所有请求归入 127.0.0.1 桶。`deploy.sh` 在 `INSTALL_NGINX=1` 时会自动写入此值。

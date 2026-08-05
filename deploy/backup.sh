@@ -6,7 +6,7 @@ set -Eeuo pipefail
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BACKUP_DIR="${BACKUP_DIR:-${APP_DIR}/storage-backups}"
 KEEP="${KEEP:-7}"
-PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/.venv/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/backend/.venv/bin/python}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;36m==> %s\033[0m\n' "$*"; }
@@ -30,8 +30,7 @@ import os, sqlite3, sys
 from pathlib import Path
 
 root = Path(os.environ["APP_DIR"]).resolve()
-sys.path.insert(0, str(root / "backend"))
-from env_loader import load_env_file
+from blog.env_loader import load_env_file
 load_env_file(root / ".env")
 
 raw = Path(os.getenv("BLOG_DATABASE_PATH") or (root / "storage" / "blog.db"))

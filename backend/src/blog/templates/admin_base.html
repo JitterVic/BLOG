@@ -25,6 +25,7 @@
         <div class="topbar-actions">
           <a href="{{ url_for('admin_write') }}" class="ghost-link">新建文章</a>
           <a href="/" class="ghost-link" target="_blank" rel="noreferrer">查看前台</a>
+          <button type="button" class="ghost-link help-toggle" id="help-toggle" aria-haspopup="dialog">使用指南</button>
           <form method="post" action="{{ url_for('admin_logout') }}" class="logout-form" data-loading-form>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="logout">退出后台</button>
@@ -55,6 +56,17 @@
 
       {% block content %}{% endblock %}
     </div>
+
+    <dialog id="admin-help-dialog" class="admin-help-dialog" aria-labelledby="admin-help-title">
+      <div class="admin-help-dialog__head">
+        <h2 id="admin-help-title">本页使用指南</h2>
+        <button type="button" class="message-close" id="help-close" aria-label="关闭指南">&times;</button>
+      </div>
+      <div class="admin-help-dialog__body">
+        {% block help_content %}<p>本页暂无说明。</p>{% endblock %}
+      </div>
+    </dialog>
+
     <script src="{{ url_for('static', filename='admin/admin.js') }}" defer></script>
     {% block scripts %}{% endblock %}
   </body>

@@ -5,6 +5,17 @@ import warnings
 from pathlib import Path
 
 
+def project_root() -> Path:
+    """仓库根目录：优先 BLOG_PROJECT_ROOT 环境变量，否则按包位置推导。
+
+    包位于 backend/src/blog/，所以 parents[3] 即仓库根。
+    """
+    configured = os.getenv("BLOG_PROJECT_ROOT", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(__file__).resolve().parents[3]
+
+
 def load_env_file(
     env_path: str | os.PathLike[str] | None = None,
     *,

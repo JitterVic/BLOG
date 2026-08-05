@@ -21,23 +21,25 @@
 ## 目录结构
 
 ```text
-backend/    Flask API、管理后台模板、数据库访问层
-frontend/   Vue 前端页面
-storage/    SQLite 数据库和上传文件
+backend/    服务端：可安装的 Python 包（src/blog），Flask API、管理后台模板、数据库访问层
+frontend/   前端：Vue 3 SPA
+deploy/     Linux 部署脚本（deploy.sh、systemd/Nginx 示例、备份与恢复）
+scripts/    本地开发脚本（dev.ps1、verify.ps1、backup.ps1）
+storage/    SQLite 数据库和上传文件（运行时数据，不入库）
 ```
 
 ## 本地运行
 
-1. 安装后端依赖
+1. 安装后端依赖（使用 [uv](https://docs.astral.sh/uv/)，虚拟环境位于 `backend/.venv`）
 
 ```bash
-python -m pip install -r requirements.txt
+uv sync --directory backend --group dev --group prod
 ```
 
 2. 启动 Flask 后端
 
 ```bash
-python backend/app.py
+backend/.venv/bin/python -m blog        # Windows: backend\.venv\Scripts\python.exe -m blog
 ```
 
 3. 安装前端依赖
@@ -60,7 +62,7 @@ npm run dev
 项目根目录已经支持自动读取 `.env`。你只需要直接运行：
 
 ```bash
-python backend/app.py
+backend/.venv/bin/python -m blog
 ```
 
 后端会自动加载根目录下的 `.env`，不需要额外传参。
@@ -135,7 +137,7 @@ npm run build
 在准备上线或提交前，可以从仓库根目录运行（完整清单见 `docs/launch-checklist.md`）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\一键验证.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
 脚本会依次执行后端 pytest、前端生产构建、临时后端 API 冒烟验证（默认端口 `5055`，并强制 `BLOG_DEBUG=false` 以检查生产启动约束）。如果端口被占用，可以指定 `-Port 5060`；如果只想跳过前端构建，可以加 `-SkipFrontend`。
@@ -143,14 +145,14 @@ powershell -ExecutionPolicy Bypass -File .\一键验证.ps1
 上线前请额外运行严格配置检查：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch
 ```
 
 `-StrictLaunch` 会失败退出，直到 `.env` 中的后台密码足够强、后台路径不是默认 `/admin`、`BLOG_PUBLIC_BASE_URL` 已设置为真实的 HTTPS 公开域名、`BLOG_REQUIRE_PUBLIC_BASE_URL=true`，并且 HTTPS 场景下 `BLOG_COOKIE_SECURE=true`。
 
 ## Linux 服务器一键部署
 
-如果服务器是 Linux，可以使用仓库根目录的 `deploy.sh`。它会创建/更新 `.venv`、安装生产依赖（含 Gunicorn）、构建前端、校验生产 `.env`，并可安装/重启 systemd 服务。建议在有 sudo 权限的普通管理员账号下执行。
+如果服务器是 Linux，可以使用 `deploy/deploy.sh`。它会创建/更新 `backend/.venv`（优先用 uv，未安装时回退 pip）、安装生产依赖（含 Gunicorn）、构建前端、校验生产 `.env`，并可安装/重启 systemd 服务。建议在有 sudo 权限的普通管理员账号下执行。
 
 首次运行前先准备 `.env`：
 
@@ -164,26 +166,26 @@ nano .env
 常用部署命令：
 
 ```bash
-./deploy.sh
+deploy/deploy.sh
 ```
 
-`deploy.sh` 已自带可执行权限，无需 `chmod +x`。
+`deploy/deploy.sh` 已自带可执行权限，无需 `chmod +x`。
 
 如果服务器已经安装了 Nginx，并希望脚本同时写入反向代理配置：
 
 ```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
+DOMAIN=blog.example.com INSTALL_NGINX=1 deploy/deploy.sh
 ```
 
 同时用 certbot 签发 TLS 证书：
 
 ```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com ./deploy.sh
+DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com deploy/deploy.sh
 ```
 
 可选参数通过环境变量传入：`SERVICE_NAME`、`SERVICE_USER`、`APP_PORT`、`GUNICORN_WORKERS`、`RUN_TESTS`、`INSTALL_SERVICE`、`INSTALL_NGINX`、`INSTALL_TLS`、`TLS_EMAIL`、`BACKUP_KEEP`。详见 `docs/launch-checklist.md`。
 
-deploy.sh 会自动在 `.env` 中写入 `BLOG_TRUSTED_PROXY_COUNT=1`（当 INSTALL_NGINX=1 时），确保 Nginx 反代下的登录限流使用真实客户端 IP 而非 127.0.0.1。
+deploy/deploy.sh 会自动在 `.env` 中写入 `BLOG_TRUSTED_PROXY_COUNT=1`（当 INSTALL_NGINX=1 时），确保 Nginx 反代下的登录限流使用真实客户端 IP 而非 127.0.0.1。
 
 ### 备份与恢复
 
@@ -197,7 +199,7 @@ bash deploy/backup.sh
 bash deploy/restore.sh storage-backups/blog-backup-<时间戳>.tar.gz --yes
 ```
 
-deploy.sh 默认安装每日定时备份 systemd timer（03:20 ±15min，保留 7 份）。
+deploy/deploy.sh 默认安装每日定时备份 systemd timer（03:20 ±15min，保留 7 份）。
 
 ## 部署前建议
 
@@ -223,7 +225,7 @@ deploy.sh 默认安装每日定时备份 systemd timer（03:20 ±15min，保留 
 1. 修改 `.env` 中的 `BLOG_SECRET_KEY` 和 `BLOG_ADMIN_PASSWORD`。
 2. 将 `BLOG_ADMIN_PREFIX` 改成不容易猜到的后台路径。
 3. 确认 `BLOG_DEBUG=false`。
-4. 运行 `powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch`，确认后端测试、前端构建、API 冒烟验证和严格上线配置检查全部通过。
+4. 运行 `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch`，确认后端测试、前端构建、API 冒烟验证和严格上线配置检查全部通过。
 5. 确认 `frontend/dist/` 已由最新构建生成。
 6. 备份 `storage/blog.db`、`storage/avatars` 和 `storage/media`。
 7. 登录后台确认首页资料、关于页文案、联系方式和已发布文章内容。

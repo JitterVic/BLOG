@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # ---------------------------------------------------------------------------
 # 可配置变量（均可通过环境变量覆盖）
 # ---------------------------------------------------------------------------
-APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SERVICE_NAME="${SERVICE_NAME:-blog}"
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$(id -un)}}"
 SERVICE_GROUP="${SERVICE_GROUP:-}"
@@ -109,17 +109,21 @@ ensure_trusted_proxy_count() {
 # Python 虚拟环境与依赖
 # ---------------------------------------------------------------------------
 setup_venv() {
-  log "创建/更新 Python 虚拟环境"
-  "$PYTHON_BIN" -m venv .venv
-  .venv/bin/python -m pip install --upgrade pip
-  .venv/bin/python -m pip install -r requirements-prod.txt
+  log "创建/更新后端虚拟环境（backend/.venv）"
+  if command -v uv >/dev/null 2>&1; then
+    uv sync --directory "${APP_DIR}/backend" --group dev --group prod
+  else
+    warn "未检测到 uv，回退到 python venv + pip（安装 uv 可加速部署）"
+    "$PYTHON_BIN" -m venv "${APP_DIR}/backend/.venv"
+    "${APP_DIR}/backend/.venv/bin/python" -m pip install --upgrade pip
+    "${APP_DIR}/backend/.venv/bin/python" -m pip install -e "${APP_DIR}/backend" gunicorn
+  fi
 }
 
 run_tests() {
   if [[ "$RUN_TESTS" == "1" ]]; then
     log "运行 pytest 后端回归测试"
-    .venv/bin/python -m pip install 'pytest>=8,<10'
-    PYTHONPATH="$APP_DIR/backend" .venv/bin/python -m pytest backend/tests -q -p no:cacheprovider
+    "${APP_DIR}/backend/.venv/bin/python" -m pytest "${APP_DIR}/backend/tests" -q -p no:cacheprovider
   else
     warn "已跳过后端测试（RUN_TESTS=$RUN_TESTS）"
   fi
@@ -133,21 +137,19 @@ validate_launch_env() {
   # INSTALL_SERVICE=1 时以服务账号执行，让 import app 的建库副作用创建属于服务账号的文件
   local python_runner
   if [[ "$INSTALL_SERVICE" == "1" ]] && [[ "$SERVICE_USER" != "$(id -un)" ]]; then
-    python_runner=(as_service_user "$APP_DIR/.venv/bin/python")
+    python_runner=(as_service_user "$APP_DIR/backend/.venv/bin/python")
   else
-    python_runner=("$APP_DIR/.venv/bin/python")
+    python_runner=("$APP_DIR/backend/.venv/bin/python")
   fi
 
   "${python_runner[@]}" - <<'PY'
-import sys
 from pathlib import Path
 
 root = Path.cwd()
 if not (root / ".env").exists():
     raise SystemExit("缺少 .env：请先复制 .env.example 并填写生产配置。")
 
-sys.path.insert(0, str(root / "backend"))
-from env_loader import load_env_file, env_bool
+from blog.env_loader import load_env_file, env_bool
 load_env_file(root / ".env")
 
 issues = []
@@ -158,7 +160,7 @@ if not env_bool("BLOG_REQUIRE_PUBLIC_BASE_URL", False):
 if issues:
     raise SystemExit("上线配置检查未通过：\n- " + "\n- ".join(issues))
 
-import app  # 触发密钥/密码/后台路径/HTTPS/Cookie 的运行时校验，并创建数据库结构
+import blog.app  # 触发密钥/密码/后台路径/HTTPS/Cookie 的运行时校验，并创建数据库结构
 print("上线配置校验通过")
 PY
 }
@@ -201,8 +203,8 @@ fix_ownership() {
   # 自检
   as_service_user test -r "$APP_DIR/.env" \
     || fail "服务账号 $SERVICE_USER 无法读取 .env，请把仓库放到 /opt/blog 等可访问目录后重试"
-  as_service_user test -x "$APP_DIR/.venv/bin/gunicorn" \
-    || fail "服务账号 $SERVICE_USER 无法执行 .venv/bin/gunicorn，请检查上级目录权限"
+  as_service_user test -x "$APP_DIR/backend/.venv/bin/gunicorn" \
+    || fail "服务账号 $SERVICE_USER 无法执行 backend/.venv/bin/gunicorn，请检查上级目录权限"
 }
 
 # ---------------------------------------------------------------------------
@@ -224,7 +226,7 @@ Group=${SERVICE_GROUP}
 WorkingDirectory=${APP_DIR}
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=${APP_DIR}/.venv/bin/gunicorn --chdir ${APP_DIR}/backend --bind ${APP_HOST}:${APP_PORT} --workers ${GUNICORN_WORKERS} --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - app:app
+ExecStart=${APP_DIR}/backend/.venv/bin/gunicorn --bind ${APP_HOST}:${APP_PORT} --workers ${GUNICORN_WORKERS} --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - blog.app:app
 Restart=always
 RestartSec=5
 
@@ -321,7 +323,7 @@ install_tls() {
   if ! command -v certbot >/dev/null 2>&1; then
     warn "未检测到 certbot，已跳过证书签发。请执行以下命令后重跑："
     warn "  sudo apt install -y certbot python3-certbot-nginx"
-    warn "  INSTALL_NGINX=1 INSTALL_TLS=1 DOMAIN=$DOMAIN TLS_EMAIL=$TLS_EMAIL ./deploy.sh"
+    warn "  INSTALL_NGINX=1 INSTALL_TLS=1 DOMAIN=$DOMAIN TLS_EMAIL=$TLS_EMAIL deploy/deploy.sh"
     return 0
   fi
   log "使用 certbot 签发 TLS 证书：$DOMAIN"
@@ -451,7 +453,7 @@ main() {
   # TLS 状态提醒
   if [[ "$INSTALL_NGINX" == "1" && "$INSTALL_TLS" != "1" ]]; then
     warn "当前仅配置了 HTTP（80 端口）。如 .env 中 BLOG_COOKIE_SECURE=true，后台将无法登录。"
-    warn "建议执行：INSTALL_TLS=1 DOMAIN=$DOMAIN TLS_EMAIL=你的邮箱 ./deploy.sh"
+    warn "建议执行：INSTALL_TLS=1 DOMAIN=$DOMAIN TLS_EMAIL=你的邮箱 deploy/deploy.sh"
   fi
 }
 

@@ -64,29 +64,16 @@ onMounted(async () => {
           <p class="colophon__headline">{{ site?.headline || "记录成长的点点滴滴" }}</p>
         </div>
 
-        <div class="colophon-block">
-          <h4>Editorial</h4>
-          <ul class="colophon-list">
-            <li>Flask API / Vue Frontend</li>
-            <li>Markdown archive / SQLite store</li>
-            <li>Designed as a printed notebook</li>
-          </ul>
-        </div>
-
-        <div class="colophon-block">
-          <h4>Index</h4>
-          <ul class="colophon-list">
-            <li>Cover / Articles / About</li>
-            <li>Latest updates / Most read</li>
-            <li>Built with code and paper texture</li>
-          </ul>
+        <div class="colophon-block colophon-quote">
+          <h4>Motto</h4>
+          <p class="colophon-quote__text">功不唐捐，玉汝于成。愿每一次记录都成为向上的台阶，时间会把这些点滴装订成属于你的答案。</p>
         </div>
       </div>
 
       <div class="colophon__legal">
         <span>© {{ currentYear }} {{ site?.name || "至知" }}</span>
         <span class="colophon__legal-sep" aria-hidden="true">·</span>
-        <span>本站以报刊式视觉重新装订内容，愿每次打开都有翻阅纸页的停顿感。</span>
+        <span>日拱一卒</span>
       </div>
     </footer>
   </div>

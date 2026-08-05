@@ -1,14 +1,11 @@
 ﻿SITE_CONFIG = {
     "name": "至知",
-    "role": "全栈开发者 / 开源爱好者 / 终身学习者",
     "headline": "记录成长的点点滴滴",
     "summary": (
         "这是一个参考 PaperGrid 气质重新实现的个人博客。"
         "我用 Flask 承载内容接口，用 Vue 搭建前台，让博客既像笔记本，也像作品集。"
     ),
-    "location": "中国 · 热爱技术",
     "email": "hello@papernotes.dev",
-    "hero_note": "在写代码，也在认真生活。",
     "social_links": [
         {
             "label": "邮箱",
@@ -28,35 +25,6 @@
         "我会把自己做过的练习、读过的资料、踩过的坑和解决方式慢慢写下来，让它既是公开文档，也是未来能反复回看的个人知识库。",
         "如果你也在做前端、后端或者个人项目，希望这些记录能给你一点参考，也欢迎通过邮箱或 GitHub 找到我交流。",
     ],
-    "update_calendar": [
-        {"date": "2026-03-21", "title": "首页改版为极简封面页"},
-        {"date": "2026-03-18", "title": "补充文章详情页与相关文章模块"},
-        {"date": "2026-03-15", "title": "新增归档页与标签页"},
-        {"date": "2026-03-12", "title": "整理站点基础信息与内容结构"},
-    ],
-    "navigation": [
-        {"label": "首页", "href": "/"},
-        {"label": "文章", "href": "/posts"},
-        {"label": "归档", "href": "/archive"},
-        {"label": "标签", "href": "/tags"},
-        {"label": "关于", "href": "/about"},
-    ],
-    "stats": [
-        {"label": "已发布文章", "value": "03"},
-        {"label": "正在进行的主题", "value": "05"},
-        {"label": "年内目标", "value": "100 篇笔记"},
-    ],
-    "now_list": [
-        "把博客当作公开成长记录，而不是只放“成品”的橱窗。",
-        "练习把模糊想法写成能复用的工作流。",
-        "尝试用更轻的技术栈做出更有气质的个人网站。",
-    ],
-    "timeline": [
-        {"year": "2026", "text": "开始把个人博客升级为长期写作空间。"},
-        {"year": "2025", "text": "持续记录开发实践与设计拆解。"},
-        {"year": "2024", "text": "重新建立公开表达的习惯。"},
-    ],
-    "featured_slug": "building-a-paper-like-blog",
 }
 
 POSTS = [
@@ -70,8 +38,6 @@ POSTS = [
         "published_at": "2026-03-21",
         "read_time": "8 min",
         "category": "Build in Public",
-        "featured": True,
-        "tone": "amber",
         "tags": ["Flask", "Vue", "Blog", "Design"],
         "hero_quote": "把博客做成一个你愿意反复打开的地方。",
         "sections": [
@@ -108,8 +74,6 @@ POSTS = [
         "published_at": "2026-03-11",
         "read_time": "6 min",
         "category": "Writing System",
-        "featured": False,
-        "tone": "sage",
         "tags": ["Writing", "Information Architecture", "Portfolio"],
         "hero_quote": "首页先传递人格，再承接内容。",
         "sections": [
@@ -138,8 +102,6 @@ POSTS = [
         "published_at": "2026-02-25",
         "read_time": "5 min",
         "category": "Design Notes",
-        "featured": False,
-        "tone": "rose",
         "tags": ["UI", "Visual Design", "Inspiration"],
         "hero_quote": "节奏感，决定了一个博客像不像一本被设计过的刊物。",
         "sections": [

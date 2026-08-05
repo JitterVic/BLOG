@@ -1,12 +1,13 @@
 import io
 import importlib
 import re
-import sys
 import time
 from pathlib import Path
 
 import pytest
 from PIL import Image
+
+from blog.store import PostVersionConflict
 
 
 @pytest.fixture()
@@ -23,11 +24,8 @@ def app_bundle(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_LOGIN_RATE_WINDOW_SECONDS", "60")
     monkeypatch.setenv("BLOG_MAX_IMAGE_BYTES", str(512 * 1024))
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -86,7 +84,7 @@ def test_public_api_excludes_drafts(app_bundle, client):
 
 def test_markdown_sanitizes_dangerous_links_and_tags(app_bundle):
     _application, store = app_bundle
-    html = importlib.import_module("store").render_markdown(
+    html = importlib.import_module("blog.store").render_markdown(
         '[bad](javascript:alert(1)) <script>alert(1)</script>\n\n![x](javascript:alert(1))'
     )
     assert "javascript:" not in html.lower()
@@ -202,9 +200,11 @@ def test_admin_phase_two_pages_render_accessible_controls(client):
 
     profile = client.get("/admin/profile").get_data(as_text=True)
     assert 'id="profile-form"' in profile
-    assert 'id="avatar-preview"' in profile
     assert "field-help" in profile
     assert "data-loading-form" in profile
+    assert "avatar" not in profile
+    assert 'name="hero_note"' not in profile
+    assert 'name="update_calendar"' not in profile
 
 
 def test_write_save_redirect_marks_success_for_local_draft_cleanup(client):
@@ -242,8 +242,8 @@ def test_markdown_import_endpoint_returns_editor_fields(client):
 
 
 def test_writing_editor_phase_three_contract_is_present():
-    template = Path("backend/templates/admin_write.html").read_text(encoding="utf-8")
-    script = Path("backend/static/admin/admin-write.js").read_text(encoding="utf-8")
+    template = Path("backend/src/blog/templates/admin_write.html").read_text(encoding="utf-8")
+    script = Path("backend/src/blog/static/admin/admin-write.js").read_text(encoding="utf-8")
     assert "data-form-saved" in template
     assert "retry-autosave" in template
     for marker in (
@@ -366,10 +366,7 @@ def test_production_rejects_default_secrets(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_DEBUG", "false")
     monkeypatch.setenv("BLOG_DATABASE_PATH", str(tmp_path / "blog.db"))
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
+    app_module = importlib.import_module("blog.app")
 
     monkeypatch.setenv("BLOG_SECRET_KEY", "dev-secret-key-change-me")
     monkeypatch.setenv("BLOG_ADMIN_PASSWORD", "strong-enough-password")
@@ -429,7 +426,7 @@ def test_security_headers_present_on_html_and_api(client):
 
 def test_svg_is_not_served_from_uploads(app_bundle, client):
     _application, _store = app_bundle
-    uploads = Path(importlib.import_module("store").UPLOADS_DIR)
+    uploads = Path(importlib.import_module("blog.store").UPLOADS_DIR)
     media = uploads / "media"
     media.mkdir(parents=True, exist_ok=True)
     target = media / "evil.svg"
@@ -439,7 +436,7 @@ def test_svg_is_not_served_from_uploads(app_bundle, client):
 
 
 def test_env_int_falls_back_on_invalid_values(monkeypatch):
-    env_loader = importlib.import_module("env_loader")
+    env_loader = importlib.import_module("blog.env_loader")
     monkeypatch.setenv("BLOG_PORT", "not-a-number")
     with pytest.warns(RuntimeWarning):
         assert env_loader.env_int("BLOG_PORT", 5000) == 5000
@@ -500,7 +497,7 @@ def test_heic_is_rejected_by_upload_whitelist(app_bundle, client):
 
 
 def test_admin_loading_form_respects_prevented_submit():
-    script = Path("backend/static/admin/admin.js").read_text(encoding="utf-8")
+    script = Path("backend/src/blog/static/admin/admin.js").read_text(encoding="utf-8")
     assert "event.defaultPrevented" in script
     assert 'form.dataset.submitting = "true"' in script
     # loading lock must not run when validation already cancelled submit
@@ -513,12 +510,13 @@ def test_write_page_exposes_publish_status_chrome(client):
     login(client)
     page = client.get("/admin/write").get_data(as_text=True)
     assert "write-status-badge" in page
-    assert "published-autosave-tip" in page
+    assert "autosave-status" in page
     assert "write-status-bar" in page
+    assert "published-autosave-tip" not in page
 
 
 def test_css_contains_no_toc_rule():
-    admin_css = Path("backend/static/admin/admin.css").read_text(encoding="utf-8")
+    admin_css = Path("backend/src/blog/static/admin/admin.css").read_text(encoding="utf-8")
     front_css = Path("frontend/src/styles/editorial.css").read_text(encoding="utf-8")
     assert "write-status-badge" in admin_css
     assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
@@ -595,7 +593,7 @@ def test_post_page_injects_open_graph_meta(app_bundle, client, tmp_path, monkeyp
         "</head><body><div id=\"app\"></div></body></html>",
         encoding="utf-8",
     )
-    import app as app_module
+    import blog.app as app_module
 
     monkeypatch.setattr(app_module, "FRONTEND_DIST", dist)
     monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
@@ -605,7 +603,7 @@ def test_post_page_injects_open_graph_meta(app_bundle, client, tmp_path, monkeyp
     client = application.test_client()
     store = app_module.BlogStore if False else store
     # store still points to tmp db from fixture; need same store path
-    from store import BlogStore
+    from blog.store import BlogStore
     # fixture store already has data path; save via fixture store then hit new app
     # Re-bind: create_app makes new BlogStore from env BLOG_DATABASE_PATH which fixture set.
     store = BlogStore()
@@ -666,7 +664,7 @@ def test_image_pipeline_strips_exif_and_downscales(app_bundle, client):
         stream = buf
 
     relative = store.save_file(FakeStorage(), "media")
-    from store import UPLOADS_DIR
+    from blog.store import UPLOADS_DIR
 
     saved = (UPLOADS_DIR / relative).read_bytes()
     with PILImage.open(io.BytesIO(saved)) as out:
@@ -909,10 +907,7 @@ def test_admin_media_and_revision_surfaces_render(app_bundle, client):
 
 def test_launch_config_messages_are_chinese(tmp_path, monkeypatch):
     """validate_launch_config 的每条 RuntimeError 必须含中文字符且不含乱码."""
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
+    app_module = importlib.import_module("blog.app")
 
     # 6 类非法配置，每类对应一条 RuntimeError
     cases = [
@@ -959,10 +954,9 @@ def test_launch_config_messages_are_chinese(tmp_path, monkeypatch):
 
 
 def test_ops_scripts_are_utf8_without_mojibake():
-    """deploy.sh 和 deploy/*.sh 必须是 UTF-8、含中文、无 ???? 乱码、无 BOM、无 CRLF."""
+    """deploy/*.sh 必须是 UTF-8、含中文、无 ???? 乱码、无 BOM、无 CRLF."""
     repo_root = Path(__file__).resolve().parents[2]
-    scripts = [repo_root / "deploy.sh"]
-    scripts.extend(sorted((repo_root / "deploy").glob("*.sh")))
+    scripts = sorted((repo_root / "deploy").glob("*.sh"))
     assert scripts, "未找到任何 shell 脚本"
 
     for path in scripts:
@@ -1022,11 +1016,8 @@ def test_login_rate_limit_uses_trusted_proxy_chain(tmp_path, monkeypatch):
     monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
     monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -1083,11 +1074,8 @@ def test_login_failure_buckets_are_capped(tmp_path, monkeypatch):
     monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
     monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -1121,10 +1109,7 @@ def test_login_failure_buckets_are_capped(tmp_path, monkeypatch):
 
 def test_password_compare_handles_non_ascii():
     """passwords_match 必须能安全比较含中文的密码，不抛异常."""
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
+    app_module = importlib.import_module("blog.app")
 
     assert app_module.passwords_match("密码密码密码", "密码密码密码") is True
     assert app_module.passwords_match("密码", "abc") is False
@@ -1149,11 +1134,8 @@ def test_login_with_non_ascii_password_does_not_500(tmp_path, monkeypatch):
     monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
     monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -1195,10 +1177,7 @@ def test_login_with_non_ascii_password_does_not_500(tmp_path, monkeypatch):
 
 
 def test_safe_referrer_target_rejects_cross_origin():
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
+    app_module = importlib.import_module("blog.app")
 
     admin_prefix = "/admin"
     host = "localhost"
@@ -1263,11 +1242,8 @@ def test_hsts_header_present_when_secure(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_COOKIE_SECURE", "true")
     monkeypatch.delenv("BLOG_PUBLIC_BASE_URL", raising=False)
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -1288,10 +1264,7 @@ def test_hsts_header_present_when_secure(tmp_path, monkeypatch):
 
 
 def test_short_secret_key_is_rejected():
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
+    app_module = importlib.import_module("blog.app")
 
     base = dict(
         debug_mode=False,
@@ -1325,11 +1298,8 @@ def test_feed_link_attributes_escape_quotes(tmp_path, monkeypatch):
     monkeypatch.setenv("BLOG_COOKIE_SECURE", "false")
     monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", 'https://example.com/a"b')
 
-    backend_dir = Path(__file__).resolve().parents[1]
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    app_module = importlib.import_module("app")
-    store_module = importlib.import_module("store")
+    app_module = importlib.import_module("blog.app")
+    store_module = importlib.import_module("blog.store")
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
@@ -1374,7 +1344,7 @@ def test_audit_log_records_login_events(client, caplog):
     assert "test-password" not in caplog.text
 
 
-def test_published_autosave_uses_working_copy_without_changing_public_post(app_bundle, client):
+def test_published_autosave_updates_post_in_place(app_bundle, client):
     _application, store = app_bundle
     post_id = store.save_post(post_fields(title="Live title", slug="live-title", markdown="# Live\n\n## Section\n\nPublic body"), action="published")
     live = store.get_post_by_id(post_id)
@@ -1384,73 +1354,57 @@ def test_published_autosave_uses_working_copy_without_changing_public_post(app_b
         "/admin/api/autosave",
         json={
             "post_id": post_id,
-            "base_post_updated_at": live["updated_at"],
-            "fields": post_fields(title="Pending title", markdown="# Pending\n\n## Section\n\nPrivate body"),
+            "updated_at": live["updated_at"],
+            "fields": post_fields(title="Updated title", slug="live-title", markdown="# Updated\n\n## Section\n\nPublic body"),
         },
         headers={"X-CSRF-Token": token},
     )
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["edit_source"] == "working_copy"
-    assert payload["pending_changes"] is True
-    assert payload["working_version"] == 1
-    assert store.get_post_by_id(post_id)["title"] == "Live title"
-    assert store.get_working_copy(post_id)["snapshot"]["title"] == "Pending title"
-    assert client.get("/api/posts/live-title").get_json()["title"] == "Live title"
+    assert payload["edit_source"] == "post"
+    assert payload["status"] == "published"
+    assert "pending_changes" not in payload
+    assert store.get_post_by_id(post_id)["title"] == "Updated title"
+    assert client.get("/api/posts/live-title").get_json()["title"] == "Updated title"
 
-
-def test_working_copy_conflict_publish_and_discard(app_bundle, client):
-    _application, store = app_bundle
-    post_id = store.save_post(post_fields(title="Live copy"), action="published")
-    live = store.get_post_by_id(post_id)
-    token = login(client)
-    fields = post_fields(title="Pending copy", markdown="# Pending\n\n## Section\n\nLong enough content")
-
-    first = client.post(
-        "/admin/api/autosave",
-        json={"post_id": post_id, "base_post_updated_at": live["updated_at"], "fields": fields},
-        headers={"X-CSRF-Token": token},
-    )
-    assert first.status_code == 200
-    version = first.get_json()["working_version"]
-    conflict = client.post(
+    stale = client.post(
         "/admin/api/autosave",
         json={
             "post_id": post_id,
-            "base_post_updated_at": live["updated_at"],
-            "expected_working_version": version - 1,
-            "fields": {**fields, "title": "Stale edit"},
+            "updated_at": live["updated_at"],
+            "fields": post_fields(title="Stale edit", slug="live-title"),
         },
         headers={"X-CSRF-Token": token},
     )
-    assert conflict.status_code == 409
+    assert stale.status_code == 409
+
+
+def test_publish_update_preserves_pre_publish_revision(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Live copy"), action="published")
+    token = login(client)
+    fields = post_fields(title="Updated copy", markdown="# Updated\n\n## Section\n\nLong enough content")
 
     publish = client.post(
         "/admin/posts/save",
-        data={
-            "csrf_token": token,
-            "post_id": post_id,
-            "working_copy_version": version,
-            **fields,
-            "action": "published",
-        },
+        data={"csrf_token": token, "post_id": post_id, **fields, "action": "published"},
     )
     assert publish.status_code == 302
-    assert store.get_post_by_id(post_id)["title"] == "Pending copy"
-    assert store.get_working_copy(post_id) is None
+    assert store.get_post_by_id(post_id)["title"] == "Updated copy"
+    assert store.get_post_by_id(post_id)["status"] == "published"
+    revision_types = [item["revision_type"] for item in store.list_post_revisions(post_id)]
+    assert revision_types[:2] == ["published", "pre_publish"]
 
-    updated = store.get_post_by_id(post_id)
-    store.save_working_copy(post_id, {**fields, "title": "Discard me"}, expected_base_updated_at=updated["updated_at"])
-    discard = client.delete(
-        f"/admin/api/posts/{post_id}/working-copy",
-        headers={"X-CSRF-Token": token},
-    )
-    assert discard.status_code == 200
-    assert store.get_working_copy(post_id) is None
-    assert store.list_post_revisions(post_id)[0]["revision_type"] == "discarded_changes"
+    with pytest.raises(PostVersionConflict):
+        store.save_post(
+            post_fields(title="Stale"),
+            post_id=post_id,
+            action="update",
+            expected_updated_at="1999-01-01T00:00:00",
+        )
 
 
-def test_untitled_autosave_and_working_copy_revision_restore(app_bundle, client):
+def test_untitled_autosave_and_revision_restore_updates_post_directly(app_bundle, client):
     _application, store = app_bundle
     token = login(client)
     untitled = client.post(
@@ -1464,72 +1418,37 @@ def test_untitled_autosave_and_working_copy_revision_restore(app_bundle, client)
     assert untitled_post["slug"].startswith("draft-")
 
     post_id = store.save_post(post_fields(title="Version one"), action="published")
-    live = store.get_post_by_id(post_id)
     store.save_post(post_fields(title="Version two"), post_id=post_id, action="published")
     old_revision = store.list_post_revisions(post_id)[-1]
     restored = store.restore_post_revision(post_id, old_revision["id"])
     assert restored["status"] == "published"
-    assert restored["pending_changes"] is True
-    assert store.get_post_by_id(post_id)["title"] == "Version two"
-    assert store.get_working_copy(post_id)["snapshot"]["title"] == "Version one"
+    assert restored["title"] == "Version one"
+    assert store.get_post_by_id(post_id)["title"] == "Version one"
+    assert [item["revision_type"] for item in store.list_post_revisions(post_id)[:2]] == ["restored", "pre_restore"]
 
 
-def test_media_diff_preview_and_dashboard_author_surfaces(app_bundle, client):
+def test_media_references_preview_and_dashboard_author_surfaces(app_bundle, client):
     _application, store = app_bundle
-    relative = store.save_file(type("Upload", (), {"filename": "working.png", "mimetype": "image/png", "stream": image_bytes()})(), "media")
+    relative = store.save_file(type("Upload", (), {"filename": "surface.png", "mimetype": "image/png", "stream": image_bytes()})(), "media")
     url = "/uploads/" + relative
-    post_id = store.save_post(post_fields(title="Surface live"), action="published")
-    live = store.get_post_by_id(post_id)
-    store.save_working_copy(
-        post_id,
-        {**post_fields(title="Surface pending"), "cover_image": url, "markdown_content": f"# Pending\n\n## Section\n\n![alt]({url})"},
-        expected_base_updated_at=live["updated_at"],
+    post_id = store.save_post(
+        {**post_fields(title="Surface live"), "cover_image": url, "markdown_content": f"# Surface\n\n## Section\n\n![alt]({url})"},
+        action="published",
     )
     asset = next(item for item in store.list_media_assets() if item["url"] == url)
-    assert {item["kind"] for item in asset["references"]} >= {"working_cover", "working_body"}
+    assert {item["kind"] for item in asset["references"]} >= {"cover", "body"}
 
     token = login(client)
-    diff = client.get(f"/admin/api/posts/{post_id}/diff")
-    assert diff.status_code == 200
-    assert diff.get_json()["changed"] is True
+    assert client.get(f"/admin/api/posts/{post_id}/diff").status_code == 404
+    assert client.delete(f"/admin/api/posts/{post_id}/working-copy", headers={"X-CSRF-Token": token}).status_code in (404, 405)
     assert client.get(f"/admin/preview/{post_id}").status_code == 200
     assert client.get("/admin/api/media").status_code == 200
     dashboard = client.get("/admin").get_data(as_text=True)
     assert "继续上次的工作" in dashboard
-    assert "待发布修改" in dashboard
-
-def test_working_copy_publish_requires_exact_version_and_preserves_pre_publish(app_bundle, client):
-    _application, store = app_bundle
-    post_id = store.save_post(post_fields(title="Live guarded", slug="live-guarded"), action="published")
-    live = store.get_post_by_id(post_id)
-    working = store.save_working_copy(
-        post_id,
-        post_fields(title="Guarded update", slug="live-guarded", markdown="# Updated\n\n## Section\n\nBody"),
-        expected_base_updated_at=live["updated_at"],
-    )
-    token = login(client)
-    missing_version = client.post(
-        "/admin/posts/save",
-        data={"csrf_token": token, "post_id": post_id, **post_fields(title="Guarded update", slug="live-guarded"), "action": "published"},
-    )
-    assert missing_version.status_code == 400
-    assert store.get_post_by_id(post_id)["title"] == "Live guarded"
-    published = client.post(
-        "/admin/posts/save",
-        data={
-            "csrf_token": token,
-            "post_id": post_id,
-            "working_copy_version": working["version"],
-            **post_fields(title="Guarded update", slug="live-guarded", markdown="# Updated\n\n## Section\n\nBody"),
-            "action": "published",
-        },
-    )
-    assert published.status_code == 302
-    revision_types = [item["revision_type"] for item in store.list_post_revisions(post_id)]
-    assert revision_types[:2] == ["published", "pre_publish"]
+    assert "已发布文章的修改保存后直接生效。" in dashboard
 
 
-def test_temporary_slug_promotes_after_title_and_unpublish_trash_keep_working_content(app_bundle):
+def test_temporary_slug_promotes_and_unpublish_trash_keep_post_content(app_bundle):
     _application, store = app_bundle
     post_id = store.save_post({"title": "", "slug": "", "markdown_content": "idea"}, action="draft", allow_untitled=True)
     assert store.get_post_by_id(post_id)["slug"].startswith("draft-")
@@ -1537,30 +1456,16 @@ def test_temporary_slug_promotes_after_title_and_unpublish_trash_keep_working_co
     assert store.get_post_by_id(post_id)["slug"] == "named-draft"
 
     published_id = store.save_post(post_fields(title="Online base", slug="online-base"), action="published")
-    live = store.get_post_by_id(published_id)
-    store.save_working_copy(
-        published_id,
-        post_fields(title="Pending kept", slug="online-base", markdown="# Pending\n\n## Section\n\nKept"),
-        expected_base_updated_at=live["updated_at"],
-    )
     unpublished = store.unpublish_post(published_id)
     assert unpublished["status"] == "draft"
-    assert unpublished["title"] == "Pending kept"
-    assert store.get_working_copy(published_id) is None
+    assert unpublished["title"] == "Online base"
     assert [item["revision_type"] for item in store.list_post_revisions(published_id)[:2]] == ["unpublished", "pre_unpublish"]
 
     republished_id = store.save_post(post_fields(title="Trash live", slug="trash-live"), action="published")
-    live = store.get_post_by_id(republished_id)
-    store.save_working_copy(
-        republished_id,
-        post_fields(title="Trash pending", slug="trash-live", markdown="# Pending\n\n## Section\n\nTrash body"),
-        expected_base_updated_at=live["updated_at"],
-    )
     store.trash_post(republished_id)
     trashed = store.get_post_by_id(republished_id)
     assert trashed["status"] == "trashed"
-    assert trashed["title"] == "Trash pending"
-    assert store.get_working_copy(republished_id) is None
+    assert trashed["title"] == "Trash live"
     assert [item["revision_type"] for item in store.list_post_revisions(republished_id)[:2]] == ["trashed", "pre_trash"]
 
 
@@ -1588,32 +1493,172 @@ def test_media_original_filename_publish_image_checks_and_health(app_bundle):
     assert health["empty_image_alt"] >= 0
 
 
-def test_arbitrary_revision_diff_attention_and_author_ui_surfaces(app_bundle, client):
+def test_author_attention_and_admin_ui_surfaces(app_bundle, client):
     _application, store = app_bundle
-    post_id = store.save_post(post_fields(title="Diff one", slug="diff-one"), action="draft")
-    store.save_post(post_fields(title="Diff two", slug="diff-one", markdown="# Two\n\n## Section\n\nChanged"), post_id=post_id, action="draft")
-    revisions = store.list_post_revisions(post_id)
-    compared = store.compare_post_versions(post_id, str(revisions[-1]["id"]), str(revisions[0]["id"]))
-    assert compared["changed"] is True
-    assert compared["field_changes"]
-    assert store.author_attention_items()
+    post_id = store.save_post(post_fields(title="Draft one", slug="draft-one"), action="draft")
+    store.save_post(post_fields(title="Draft two", slug="draft-one", markdown="# Two\n\n## Section\n\nChanged"), post_id=post_id, action="draft")
+    assert store.list_post_revisions(post_id)
+    assert store.author_attention_items() is not None
 
     login(client)
     write_html = client.get(f"/admin/write/{post_id}").get_data(as_text=True)
-    assert 'id="diff-left"' in write_html
-    assert 'id="diff-right"' in write_html
+    assert 'id="diff-left"' not in write_html
+    assert 'id="diff-right"' not in write_html
     assert 'id="tag-suggestions"' in write_html
     assert 'id="generate-slug-button"' in write_html
     profile_html = client.get("/admin/profile").get_data(as_text=True)
     assert 'id="profile-preview-home"' in profile_html
     assert 'id="profile-preview-about"' in profile_html
-    assert 'id="avatar-dimensions"' in profile_html
+    assert "avatar" not in profile_html
+    assert 'name="role"' not in profile_html
+    assert 'name="location"' not in profile_html
+    assert 'name="hero_note"' not in profile_html
+    assert 'name="update_calendar"' not in profile_html
 
 
-def test_schema_migrations_for_working_copy_and_media_metadata_are_idempotent(app_bundle):
+def test_schema_migrations_are_idempotent(app_bundle):
     _application, store = app_bundle
     store.init()
     store.init()
     with store.connect() as connection:
         tables = {row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-    assert {"post_working_copies", "media_metadata"} <= tables
+        post_columns = {row["name"] for row in connection.execute("PRAGMA table_info(posts)").fetchall()}
+        profile_columns = {row["name"] for row in connection.execute("PRAGMA table_info(site_profile)").fetchall()}
+    assert "media_metadata" in tables
+    assert "post_working_copies" not in tables
+    assert {"featured", "tone", "locale", "translation_of"}.isdisjoint(post_columns)
+    assert {"role", "location", "hero_note", "update_calendar", "avatar_path"}.isdisjoint(profile_columns)
+
+
+def test_legacy_schema_is_cleaned_up_on_migration(app_bundle):
+    _application, store = app_bundle
+    with store.connect() as connection:
+        connection.execute("ALTER TABLE posts ADD COLUMN featured INTEGER NOT NULL DEFAULT 0")
+        connection.execute("ALTER TABLE posts ADD COLUMN tone TEXT DEFAULT 'amber'")
+        connection.execute("ALTER TABLE posts ADD COLUMN locale TEXT DEFAULT ''")
+        connection.execute("ALTER TABLE posts ADD COLUMN translation_of INTEGER")
+        connection.execute("ALTER TABLE site_profile ADD COLUMN role TEXT DEFAULT ''")
+        connection.execute("ALTER TABLE site_profile ADD COLUMN location TEXT DEFAULT ''")
+        connection.execute("ALTER TABLE site_profile ADD COLUMN hero_note TEXT DEFAULT ''")
+        connection.execute("ALTER TABLE site_profile ADD COLUMN update_calendar TEXT NOT NULL DEFAULT '[]'")
+        connection.execute("ALTER TABLE site_profile ADD COLUMN avatar_path TEXT DEFAULT ''")
+        connection.execute("CREATE TABLE post_working_copies (post_id INTEGER PRIMARY KEY)")
+        post_id = connection.execute("SELECT id FROM posts LIMIT 1").fetchone()[0]
+        connection.execute(
+            "INSERT INTO post_revisions (post_id, revision_type, snapshot_json, created_at) "
+            "VALUES (?, 'discarded_changes', '{}', '2026-01-01T00:00:00')",
+            (post_id,),
+        )
+        connection.commit()
+
+    store.init()
+
+    with store.connect() as connection:
+        tables = {row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        post_columns = {row["name"] for row in connection.execute("PRAGMA table_info(posts)").fetchall()}
+        profile_columns = {row["name"] for row in connection.execute("PRAGMA table_info(site_profile)").fetchall()}
+        legacy_revisions = connection.execute(
+            "SELECT COUNT(*) FROM post_revisions WHERE revision_type IN ('discarded_changes', 'restored_to_working_copy')"
+        ).fetchone()[0]
+    assert "post_working_copies" not in tables
+    assert {"featured", "tone", "locale", "translation_of"}.isdisjoint(post_columns)
+    assert {"role", "location", "hero_note", "update_calendar", "avatar_path"}.isdisjoint(profile_columns)
+    assert legacy_revisions == 0
+    # Cleaned-up database must still serve posts normally.
+    assert store.get_post_by_id(post_id) is not None
+
+
+def test_quick_publish_validates_and_publishes(app_bundle, client):
+    _application, store = app_bundle
+    token = login(client)
+    post_id = store.save_post(
+        {
+            "title": "Quick Post",
+            "slug": "quick-post",
+            "markdown_content": "## Section\n\nEnough body text to pass checks.",
+            "excerpt": "An excerpt.",
+        },
+        action="draft",
+    )
+    response = client.post(f"/admin/posts/{post_id}/quick-publish", data={"csrf_token": token})
+    assert response.status_code == 302
+    assert response.location.endswith("/admin")
+    assert store.get_post_by_id(post_id)["status"] == "published"
+    assert client.get("/api/posts/quick-post").status_code == 200
+
+    # Draft missing required content must be rejected and routed to the editor.
+    bad_id = store.save_post(
+        {"title": "No Body", "slug": "no-body", "markdown_content": ""},
+        action="draft",
+    )
+    response = client.post(f"/admin/posts/{bad_id}/quick-publish", data={"csrf_token": token})
+    assert response.status_code == 302
+    assert f"/admin/write/{bad_id}" in response.location
+    assert store.get_post_by_id(bad_id)["status"] == "draft"
+
+
+def test_bulk_post_actions(app_bundle, client):
+    _application, store = app_bundle
+    token = login(client)
+    ids = [
+        store.save_post(
+            {"title": f"Bulk {i}", "slug": f"bulk-{i}", "markdown_content": "body"},
+            action="draft",
+        )
+        for i in range(3)
+    ]
+
+    response = client.post(
+        "/admin/posts/bulk",
+        data={"csrf_token": token, "action": "trash", "post_ids": [str(item) for item in ids]},
+    )
+    assert response.status_code == 302
+    assert all(store.get_post_by_id(item)["status"] == "trashed" for item in ids)
+
+    client.post("/admin/posts/bulk", data={"csrf_token": token, "action": "restore", "post_ids": [str(ids[0])]})
+    assert store.get_post_by_id(ids[0])["status"] == "draft"
+
+    client.post("/admin/posts/bulk", data={"csrf_token": token, "action": "purge", "post_ids": [str(ids[1])]})
+    assert store.get_post_by_id(ids[1]) is None
+
+    # Purging a non-trashed post fails without affecting it.
+    client.post("/admin/posts/bulk", data={"csrf_token": token, "action": "purge", "post_ids": [str(ids[0])]})
+    assert store.get_post_by_id(ids[0]) is not None
+
+    # Unknown actions and empty selections are rejected gracefully.
+    assert client.post("/admin/posts/bulk", data={"csrf_token": token, "action": "explode", "post_ids": [str(ids[0])]}).status_code == 302
+    assert client.post("/admin/posts/bulk", data={"csrf_token": token, "action": "trash"}).status_code == 302
+    assert store.get_post_by_id(ids[0])["status"] == "draft"
+
+
+def test_dashboard_chrome_includes_bulk_sort_and_help(client):
+    login(client)
+    html = client.get("/admin").get_data(as_text=True)
+    assert 'id="bulk-form"' in html
+    assert 'id="admin-post-sort"' in html
+    assert 'id="admin-help-dialog"' in html
+    assert 'id="help-toggle"' in html
+    for marker in ('data-bulk="trash"', 'data-bulk="restore"', 'data-bulk="purge"'):
+        assert marker in html
+
+
+def test_legacy_excerpts_are_regenerated_on_migration(app_bundle):
+    _application, store = app_bundle
+    with store.connect() as connection:
+        post_id = connection.execute("SELECT id FROM posts LIMIT 1").fetchone()[0]
+        connection.execute(
+            "UPDATE posts SET excerpt = ?, markdown_content = ? WHERE id = ?",
+            ("Intro ![462](old-image.png) body", "## Section\n\nIntro text body here.", post_id),
+        )
+        connection.commit()
+
+    store.init()
+
+    assert "![" not in store.get_post_by_id(post_id)["excerpt"]
+
+
+def test_admin_static_assets_are_not_cached(client):
+    login(client)
+    response = client.get("/static/admin/admin.css")
+    assert response.status_code == 200
+    assert "no-cache" in (response.headers.get("Cache-Control") or "")

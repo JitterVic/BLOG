@@ -4,6 +4,13 @@
 {% block page_title %}媒体资源{% endblock %}
 {% block page_description %}浏览上传图片、复制引用地址，并确认每张图片正在被哪些稿件使用。{% endblock %}
 
+{% block help_content %}
+  <div class="help-item"><strong>图片从哪来</strong><p>媒体库不接受直接上传：在写作页粘贴、拖拽或用「图片」面板上传的图片会自动进入这里。</p></div>
+  <div class="help-item"><strong>引用状态</strong><p>每张卡片显示被多少篇稿件引用，展开「引用详情」能看到具体是哪些文章、作为封面还是正文使用。可按「已引用 / 未引用」筛选，快速找到没人用的图片。</p></div>
+  <div class="help-item"><strong>复制引用</strong><p>「复制 URL」得到图片地址，「复制 Markdown」直接得到可粘贴到正文的图片语法，粘贴后记得修改图片描述。</p></div>
+  <div class="help-item"><strong>为什么不能删除</strong><p>媒体库目前只提供浏览和引用检查，不提供删除，避免误删仍被文章使用的图片；未引用的图片文件会保留在服务器上。</p></div>
+{% endblock %}
+
 {% block content %}
   <main class="admin-main media-main">
     <section class="card media-library" aria-labelledby="media-library-title">

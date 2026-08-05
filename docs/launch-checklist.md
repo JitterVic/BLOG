@@ -13,14 +13,14 @@
 - `BLOG_REQUIRE_PUBLIC_BASE_URL=true`：上线时启用运行时强校验，防止漏配公开域名
 - `BLOG_COOKIE_SECURE=true`：只要站点对外使用 HTTPS，就必须开启
 - `BLOG_DEBUG=false`
-- `BLOG_TRUSTED_PROXY_COUNT`：使用 Nginx 反向代理时设为 `1`（deploy.sh 会自动写入）
+- `BLOG_TRUSTED_PROXY_COUNT`：使用 Nginx 反向代理时设为 `1`（deploy/deploy.sh 会自动写入）
 
 ## 2. 发布前验证
 
 在仓库根目录执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch
 ```
 
 如果任一项不符合上线要求，脚本会直接失败并列出原因；严格模式会要求运行时配置 `BLOG_REQUIRE_PUBLIC_BASE_URL=true`。
@@ -30,21 +30,21 @@ powershell -ExecutionPolicy Bypass -File .\一键验证.ps1 -StrictLaunch
 生产 `.env` 准备好后，在 Linux 服务器仓库根目录运行（建议用有 sudo 权限的普通管理员账号）：
 
 ```bash
-./deploy.sh
+deploy/deploy.sh
 ```
 
-`deploy.sh` 已自带可执行权限（通过 `.gitattributes` 保证），无需 `chmod +x`。
+`deploy/deploy.sh` 已自带可执行权限（通过 `.gitattributes` 保证），无需 `chmod +x`。
 
 如果要让脚本同时安装 Nginx 反向代理配置：
 
 ```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 ./deploy.sh
+DOMAIN=blog.example.com INSTALL_NGINX=1 deploy/deploy.sh
 ```
 
 同时签发 TLS 证书（需要 certbot）：
 
 ```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com ./deploy.sh
+DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com deploy/deploy.sh
 ```
 
 可选参数（通过环境变量传入）：
@@ -62,13 +62,13 @@ DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com 
 | `TLS_EMAIL` | — | certbot 注册邮箱（INSTALL_TLS=1 时必填） |
 | `BACKUP_KEEP` | `7` | 备份保留份数 |
 
-脚本会：前置环境检查 → 创建虚拟环境 → 跑测试 → 校验生产配置 → 修正文件权限 → 构建前端 → 安装/重启 systemd 服务 → 安装备份 timer → 写入 Nginx 配置 → 签发证书 → 健康检查。
+脚本会：前置环境检查 → 创建 `backend/.venv`（uv 优先，未安装时回退 pip）→ 跑测试 → 校验生产配置 → 修正文件权限 → 构建前端 → 安装/重启 systemd 服务 → 安装备份 timer → 写入 Nginx 配置 → 签发证书 → 健康检查。
 
 ## 4. 构建与冒烟验证
 
 严格检查通过后，再确认：
 
-- `python -m pytest backend/tests -q` 通过
+- `backend/.venv/bin/python -m pytest backend/tests -q` 通过
 - `cd frontend && npm run build` 通过
 - `frontend/dist/` 已生成最新产物
 - `/api/health` 和 `/api/posts` 正常返回
@@ -89,7 +89,7 @@ DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com 
 bash deploy/backup.sh
 ```
 
-输出到 `storage-backups/blog-backup-<时间戳>.tar.gz`，包含数据库一致性快照和 avatars/media。定时备份由 deploy.sh 自动安装为 systemd timer（每天 03:20 ±15min）。
+输出到 `storage-backups/blog-backup-<时间戳>.tar.gz`，包含数据库一致性快照和 avatars/media。定时备份由 deploy/deploy.sh 自动安装为 systemd timer（每天 03:20 ±15min）。
 
 ### Linux 恢复
 

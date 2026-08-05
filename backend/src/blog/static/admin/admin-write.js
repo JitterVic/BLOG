@@ -41,8 +41,6 @@ const revisionPreviewTitle = document.getElementById("revision-preview-title");
 const revisionPreviewTime = document.getElementById("revision-preview-time");
 const revisionPreviewBody = document.getElementById("revision-preview-body");
 const revisionRestore = document.getElementById("revision-restore");
-const workingVersionInput = document.getElementById("working-copy-version");
-const pendingBadge = document.getElementById("pending-badge");
 const publishTrigger = document.querySelector(".publish-trigger");
 const writingShell = document.querySelector(".writing-shell");
 const writingStats = document.getElementById("writing-stats");
@@ -54,20 +52,15 @@ const publishCheckErrors = document.getElementById("publish-check-errors");
 const publishCheckWarnings = document.getElementById("publish-check-warnings");
 const publishConfirmButton = document.getElementById("publish-confirm-button");
 const checkpointButton = document.getElementById("checkpoint-button");
-const discardWorkingCopyButton = document.getElementById("discard-working-copy");
 const mediaAltInput = document.getElementById("media-alt-text");
 const drawerMediaSearch = document.getElementById("drawer-media-search");
 const drawerMediaCount = document.getElementById("drawer-media-count");
-const diffLeftSelect = document.getElementById("diff-left");
-const diffRightSelect = document.getElementById("diff-right");
-const compareVersionsButton = document.getElementById("compare-versions");
 const generateSlugButton = document.getElementById("generate-slug-button");
 
 let publishValidationPending = false;
 let selectedRevisionId = null;
 let pendingPublishSubmitter = null;
 let panelReturnFocus = null;
-let currentWorkingVersion = Number(postForm?.dataset.workingVersion || workingVersionInput?.value || 0) || null;
 
 let previewTimer = null;
 let previewController = null;
@@ -127,6 +120,13 @@ function highlightPreview() {
   previewTarget.querySelectorAll("pre code").forEach((code) => window.hljs.highlightElement(code));
 }
 
+function renderPreviewMeta() {
+  if (!previewMeta) return;
+  const readTime = readTimeInput?.value.trim() || previewComputed.readTime || "1 min";
+  const excerpt = excerptInput?.value.trim() || previewComputed.excerpt || "无自动摘要";
+  previewMeta.textContent = `${readTime} \u00b7 ${excerpt}`;
+}
+
 function updateFrontPreview() {
   if (!frontPreviewTitle) return;
   const title = titleInput?.value.trim() || "\u672a\u547d\u540d\u6587\u7ae0";
@@ -168,7 +168,7 @@ async function requestPreview(generation) {
     if (generation !== previewGeneration || controller.signal.aborted) return;
     previewTarget.innerHTML = data.html || `<p>\u6682\u65e0\u9884\u89c8\u5185\u5bb9</p>`;
     previewComputed = { excerpt: data.excerpt || "", readTime: data.read_time || "1 min" };
-    if (previewMeta) previewMeta.textContent = `${data.read_time} \u00b7 ${data.excerpt || "\u65e0\u81ea\u52a8\u6458\u8981"}`;
+    renderPreviewMeta();
     highlightPreview();
     updateFrontPreview();
   } catch (error) {
@@ -439,6 +439,7 @@ insertImageButton?.addEventListener("click", () => {
 const metadataInputs = [titleInput, categoryInput, publishedAtInput, readTimeInput, excerptInput, tagsInput, heroQuoteInput, coverImageInput];
 metadataInputs.forEach((input) => input?.addEventListener("input", () => {
   updateFrontPreview();
+  renderPreviewMeta();
   setSaveState("local");
 }));
 markdownInput?.addEventListener("input", () => {
@@ -500,7 +501,6 @@ function saveLocalDraft({ announce = true, synced = false } = {}) {
   const payload = {
     savedAt: Date.now(),
     serverUpdatedAt: postForm.dataset.serverUpdatedAt || "",
-    workingVersion: currentWorkingVersion,
     synced,
     fields: collectDraftFields(),
   };
@@ -549,8 +549,6 @@ async function persistDraftToServer() {
       body: JSON.stringify({
         post_id: currentPostId() || null,
         updated_at: postForm.dataset.serverUpdatedAt || null,
-        expected_working_version: currentWorkingVersion,
-        base_post_updated_at: postForm.dataset.basePostUpdatedAt || postForm.dataset.serverUpdatedAt || null,
         fields: requestFields,
       }),
     });
@@ -565,24 +563,12 @@ async function persistDraftToServer() {
       if (pageHeading) pageHeading.textContent = "\u7f16\u8f91\u6587\u7ae0";
       migrateLocalDraftKey(oldKey);
     }
-    if (data.edit_source === "working_copy") {
-      currentWorkingVersion = Number(data.working_version || 0) || null;
-      postForm.dataset.workingVersion = String(currentWorkingVersion || "");
-      postForm.dataset.basePostUpdatedAt = data.base_post_updated_at || postForm.dataset.basePostUpdatedAt || "";
-      if (workingVersionInput) workingVersionInput.value = String(currentWorkingVersion || "");
-      if (pendingBadge) pendingBadge.hidden = false;
-      if (discardWorkingCopyButton) discardWorkingCopyButton.hidden = false;
-      if (publishTrigger) { publishTrigger.disabled = false; publishTrigger.textContent = "\u53d1\u5e03\u66f4\u65b0"; }
-    } else {
-      postForm.dataset.serverUpdatedAt = data.updated_at || "";
-    }
+    postForm.dataset.serverUpdatedAt = data.updated_at || "";
     if (draftRevision === requestRevision) {
       dirty = false;
       saveLocalDraft({ announce: false, synced: true });
       showRetryAutosave(false);
-      setSaveState("server", data.edit_source === "working_copy"
-        ? `\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u4fdd\u5b58 ${formatClock()}`
-        : `\u5df2\u4fdd\u5b58\u5230\u670d\u52a1\u5668 ${formatClock()}`);
+      setSaveState("server", `\u5df2\u4fdd\u5b58\u5230\u670d\u52a1\u5668 ${formatClock()}`);
     } else {
       dirty = true;
       serverSaveQueued = true;
@@ -659,8 +645,7 @@ function offerLocalDraftRecovery() {
   if (!payload?.savedAt || !recoveryBanner) return;
   const serverTime = Date.parse(postForm?.dataset.serverUpdatedAt || "") || 0;
   const sameServerVersion = Boolean(payload.serverUpdatedAt) && payload.serverUpdatedAt === (postForm?.dataset.serverUpdatedAt || "");
-  const sameWorkingVersion = String(payload.workingVersion || "") === String(currentWorkingVersion || "");
-  if (payload.synced === true || (sameServerVersion && sameWorkingVersion)) return;
+  if (payload.synced === true || sameServerVersion) return;
   const shouldOffer = !currentPostId() || payload.savedAt > serverTime;
   if (!shouldOffer) return;
   recoveryTime.textContent = `\u672c\u5730\u4fdd\u5b58\u4e8e ${new Date(payload.savedAt).toLocaleString("zh-CN")}`;
@@ -772,7 +757,7 @@ function clearSavedLocalDraft() {
 
 function isSafeCoverUrl(value) {
   if (!value) return true;
-  return /^https?:\/\//i.test(value) || /^\/uploads\/(?:media|avatars)\/[^/?#]+$/.test(value);
+  return /^https?:\/\//i.test(value) || /^\/uploads\/media\/[^/?#]+$/.test(value);
 }
 
 function focusValidationError(field, message) {
@@ -786,8 +771,6 @@ function focusValidationError(field, message) {
 
 function syncWriteStatusUI(status = "draft") {
   const badge = document.getElementById("write-status-badge");
-  const label = document.getElementById("write-status-label");
-  const tip = document.getElementById("published-autosave-tip");
   const normalized = status === "published" ? "published" : "draft";
   if (postForm) postForm.dataset.postStatus = normalized;
   if (badge) {
@@ -796,12 +779,6 @@ function syncWriteStatusUI(status = "draft") {
     badge.classList.toggle("is-draft", normalized !== "published");
     badge.textContent = normalized === "published" ? "已发布" : "草稿";
   }
-  if (label) {
-    label.textContent = normalized === "published"
-      ? "当前线上版本已发布。修改后请再次点击「发布文章」才会更新前台。"
-      : "当前为草稿，前台不可见。确认无误后请点击「发布文章」。";
-  }
-  if (tip) tip.hidden = true;
 }
 
 function updateSlugHint() {
@@ -925,8 +902,6 @@ const REVISION_TYPE_LABELS = {
   pre_restore: "\u6062\u590d\u524d\u5feb\u7167",
   restored: "\u6062\u590d\u5386\u53f2\u7248\u672c",
   checkpoint: "\u624b\u52a8\u4fdd\u5b58\u7248\u672c",
-  discarded_changes: "\u4e22\u5f03\u7684\u4fee\u6539",
-  restored_to_working_copy: "\u6062\u590d\u5230\u5f85\u53d1\u5e03\u4fee\u6539",
   pre_publish: "\u53d1\u5e03\u66f4\u65b0\u524d",
   pre_unpublish: "\u4e0b\u67b6\u524d",
   pre_trash: "\u79fb\u5165\u56de\u6536\u7ad9\u524d",
@@ -981,7 +956,6 @@ async function loadRevisions() {
     const result = await fetchJson(adminApiUrl(`posts/${postForm.dataset.postId}/revisions`));
     if (revisionCount) revisionCount.textContent = `${result.total || 0} \u4e2a\u7248\u672c`;
     renderRevisionList(result.items || []);
-    populateDiffSelectors(result.items || []);
   } catch (error) {
     if (revisionList) revisionList.innerHTML = `<p class="revision-empty">${escapeHtml(error.message || "\u5386\u53f2\u7248\u672c\u52a0\u8f7d\u5931\u8d25")}</p>`;
     if (revisionCount) revisionCount.textContent = "\u52a0\u8f7d\u5931\u8d25";
@@ -1001,7 +975,7 @@ revisionList?.addEventListener("click", async (event) => {
 revisionRestore?.addEventListener("click", async () => {
   const revisionId = revisionRestore.dataset.revisionId;
   const restoreMessage = postForm?.dataset.postStatus === "published"
-    ? "\u6062\u590d\u540e\u4f1a\u751f\u6210\u5f85\u53d1\u5e03\u4fee\u6539\uff0c\u7ebf\u4e0a\u7248\u672c\u4fdd\u6301\u4e0d\u53d8\u3002\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f"
+    ? "\u6062\u590d\u540e\u4f1a\u76f4\u63a5\u66f4\u65b0\u7ebf\u4e0a\u7248\u672c\uff0c\u5e76\u4fdd\u7559\u6062\u590d\u524d\u5feb\u7167\u3002\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f"
     : "\u6062\u590d\u540e\u4f1a\u66ff\u6362\u5f53\u524d\u8349\u7a3f\uff0c\u5e76\u4fdd\u7559\u6062\u590d\u524d\u5feb\u7167\u3002\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f";
   if (!revisionId || !window.confirm(restoreMessage)) return;
   revisionRestore.disabled = true;
@@ -1189,14 +1163,6 @@ function updateWritingAssist() {
 markdownInput?.addEventListener("input", updateWritingAssist);
 updateWritingAssist();
 
-postForm?.addEventListener("input", () => {
-  if (postForm.dataset.postStatus === "published") {
-    if (pendingBadge) pendingBadge.hidden = false;
-    if (discardWorkingCopyButton) discardWorkingCopyButton.hidden = false;
-    if (publishTrigger) { publishTrigger.disabled = false; publishTrigger.textContent = "发布更新"; }
-  }
-});
-
 publishConfirmButton?.addEventListener("click", () => {
   if (!pendingPublishSubmitter || !postForm) return;
   if (publishWarningsAcknowledged) publishWarningsAcknowledged.value = "1";
@@ -1238,20 +1204,6 @@ checkpointButton?.addEventListener("click", async () => {
     setSaveState("error", error.message || "保存版本失败");
   } finally {
     checkpointButton.disabled = false;
-  }
-});
-
-discardWorkingCopyButton?.addEventListener("click", async () => {
-  const postId = currentPostId();
-  if (!postId || !window.confirm("确定丢弃待发布修改吗？系统会先保留一个可恢复版本。")) return;
-  discardWorkingCopyButton.disabled = true;
-  try {
-    await fetchJson(adminApiUrl(`posts/${postId}/working-copy`), { method: "DELETE" });
-    localStorage.removeItem(localDraftKey());
-    window.location.reload();
-  } catch (error) {
-    discardWorkingCopyButton.disabled = false;
-    setSaveState("error", error.message || "丢弃修改失败");
   }
 });
 
@@ -1300,59 +1252,6 @@ document.addEventListener("keydown", (event) => {
     if (publishTrigger && !publishTrigger.disabled) postForm?.requestSubmit(publishTrigger);
   }
 });
-
-if (postForm?.dataset.postStatus === "published" && !postForm.dataset.workingVersion) {
-  if (publishTrigger) { publishTrigger.disabled = true; publishTrigger.textContent = "已是最新"; }
-}
-function populateDiffSelectors(items = []) {
-  if (!diffLeftSelect || !diffRightSelect) return;
-  const leftValue = diffLeftSelect.value || "live";
-  const rightValue = diffRightSelect.value || "working";
-  const revisionOptions = items.map((item) =>
-    `<option value="${item.id}">${escapeHtml(REVISION_TYPE_LABELS[item.revision_type] || item.revision_type)} \u00b7 ${escapeHtml(formatRevisionTime(item.created_at))}</option>`
-  ).join("");
-  diffLeftSelect.innerHTML = `<option value="live">\u7ebf\u4e0a/\u5f53\u524d\u7248\u672c</option>${revisionOptions}`;
-  diffRightSelect.innerHTML = `<option value="working">\u5f53\u524d\u7f16\u8f91/\u5f85\u53d1\u5e03\u4fee\u6539</option>${revisionOptions}`;
-  if (Array.from(diffLeftSelect.options).some((option) => option.value === leftValue)) diffLeftSelect.value = leftValue;
-  if (Array.from(diffRightSelect.options).some((option) => option.value === rightValue)) diffRightSelect.value = rightValue;
-}
-
-function renderVersionDiff(result) {
-  const target = document.getElementById("version-diff");
-  if (!target) return;
-  const fields = (result.field_changes || []).map((item) => `
-    <div class="version-diff__field"><strong>${escapeHtml(item.field)}</strong><br><del>${escapeHtml(Array.isArray(item.before) ? item.before.join(", ") : item.before || "\uff08\u7a7a\uff09")}</del><br><ins>${escapeHtml(Array.isArray(item.after) ? item.after.join(", ") : item.after || "\uff08\u7a7a\uff09")}</ins></div>
-  `).join("");
-  const lines = (result.markdown_diff || []).map((line) => {
-    const cls = line.startsWith("+") && !line.startsWith("+++") ? "diff-add" : line.startsWith("-") && !line.startsWith("---") ? "diff-remove" : "";
-    return `<span class="${cls}">${escapeHtml(line)}</span>`;
-  }).join("\n");
-  target.hidden = false;
-  target.innerHTML = result.changed
-    ? `<div class="version-diff__fields">${fields}</div><pre>${lines || "\u6b63\u6587\u6ca1\u6709\u53d8\u5316"}</pre>`
-    : "\u6240\u9009\u7248\u672c\u5185\u5bb9\u4e00\u81f4\u3002";
-}
-
-compareVersionsButton?.addEventListener("click", async () => {
-  const target = document.getElementById("version-diff");
-  const postId = currentPostId();
-  if (!target || !postId) return;
-  compareVersionsButton.disabled = true;
-  target.hidden = false;
-  target.textContent = "\u6b63\u5728\u6bd4\u8f83\u7248\u672c\u2026\u2026";
-  try {
-    if (dirty) await persistDraftToServer();
-    const left = encodeURIComponent(diffLeftSelect?.value || "live");
-    const right = encodeURIComponent(diffRightSelect?.value || "working");
-    const result = await fetchJson(`${adminApiUrl(`posts/${postId}/diff`)}?left=${left}&right=${right}`);
-    renderVersionDiff(result);
-  } catch (error) {
-    target.textContent = error.message || "\u7248\u672c\u6bd4\u8f83\u5931\u8d25";
-  } finally {
-    compareVersionsButton.disabled = false;
-  }
-});
-
 
 function mediaAssetCard(asset) {
   const name = asset.original_filename || asset.filename || "image";

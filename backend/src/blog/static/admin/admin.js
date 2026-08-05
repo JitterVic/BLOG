@@ -8,12 +8,6 @@ const adminPostItems = Array.from(document.querySelectorAll("[data-post-item]"))
 const profileForm = document.getElementById("profile-form");
 const profileSaveStatus = document.getElementById("profile-save-status");
 const profileSaveState = document.querySelector(".form-save-state");
-const avatarInput = document.getElementById("avatar-input");
-const avatarPreview = document.getElementById("avatar-preview");
-const avatarFallback = document.getElementById("avatar-fallback");
-const avatarFileName = document.getElementById("avatar-file-name");
-const avatarDimensions = document.getElementById("avatar-dimensions");
-let avatarObjectUrl = "";
 
 function escapeAdminHtml(value = "") {
   return String(value).replace(/[&<>"']/g, (char) => ({
@@ -33,6 +27,7 @@ function updateAdminPostFilter() {
     item.hidden = !visible;
     item.classList.toggle("is-hidden", !visible);
     if (visible) visibleCount += 1;
+    else { const check = item.querySelector(".post-check"); if (check) check.checked = false; }
   });
   if (adminPostCount) {
     adminPostCount.textContent = query || status
@@ -40,6 +35,7 @@ function updateAdminPostFilter() {
       : `\u5171 ${adminPostItems.length} \u7bc7\u7a3f\u4ef6`;
   }
   if (adminPostFilterEmpty) adminPostFilterEmpty.hidden = visibleCount !== 0;
+  updateBulkBar();
 }
 
 function markProfileDirty() {
@@ -99,7 +95,6 @@ function bindLoadingForm(form) {
 
 adminPostSearch?.addEventListener("input", updateAdminPostFilter);
 adminPostStatus?.addEventListener("change", updateAdminPostFilter);
-updateAdminPostFilter();
 
 document.querySelectorAll("[data-loading-form]").forEach(bindLoadingForm);
 document.querySelectorAll("[data-confirm-form]").forEach((form) => {
@@ -112,32 +107,15 @@ document.querySelectorAll(".message").forEach((message) => {
   window.setTimeout(() => message.remove(), timeout);
 });
 
+const helpDialog = document.getElementById("admin-help-dialog");
+document.getElementById("help-toggle")?.addEventListener("click", () => helpDialog?.showModal());
+document.getElementById("help-close")?.addEventListener("click", () => helpDialog?.close());
+helpDialog?.addEventListener("click", (event) => {
+  if (event.target === helpDialog) helpDialog.close();
+});
+
 profileForm?.addEventListener("input", markProfileDirty);
 profileForm?.addEventListener("change", markProfileDirty);
-
-avatarInput?.addEventListener("change", () => {
-  const file = avatarInput.files?.[0];
-  if (!file) {
-    if (avatarFileName) avatarFileName.textContent = "\u5c1a\u672a\u9009\u62e9\u65b0\u5934\u50cf";
-    return;
-  }
-  if (avatarFileName) avatarFileName.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
-  if (!file.type.startsWith("image/") || !avatarPreview) return;
-  if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
-  avatarObjectUrl = URL.createObjectURL(file);
-  avatarPreview.src = avatarObjectUrl;
-  avatarPreview.hidden = false;
-  avatarPreview.onload = () => {
-    const width = avatarPreview.naturalWidth || 0;
-    const height = avatarPreview.naturalHeight || 0;
-    const ratio = width && height ? width / height : 1;
-    if (avatarDimensions) {
-      avatarDimensions.textContent = `${width} \u00d7 ${height} \u00b7 ${Math.abs(ratio - 1) < 0.08 ? "\u63a5\u8fd1 1:1\uff0c\u9002\u5408\u5934\u50cf\u88c1\u5207" : "\u524d\u53f0\u4f1a\u6309\u6b63\u65b9\u5f62\u5c45\u4e2d\u88c1\u5207"}`;
-    }
-  };
-  if (avatarFallback) avatarFallback.hidden = true;
-  markProfileDirty();
-});
 
 window.addEventListener("beforeunload", (event) => {
   if (profileForm?.dataset.dirty !== "true" || profileForm.dataset.submitting === "true") return;
@@ -150,18 +128,11 @@ function updateProfilePreview() {
   if (!profileForm) return;
   const value = (name) => profileForm.elements.namedItem(name)?.value?.trim() || "";
   const set = (id, text) => { const node = document.getElementById(id); if (node) node.textContent = text; };
-  const fallback = document.getElementById("avatar-fallback");
-  if (fallback && !avatarInput?.files?.[0]) fallback.textContent = (value("name") || "A").slice(0, 1);
   set("profile-preview-name", value("name") || "站点名称");
-  set("profile-preview-role", value("role"));
-  set("profile-preview-location", value("location"));
   set("profile-preview-headline", value("headline") || value("name") || "首页主标题");
   set("profile-preview-summary", value("summary") || "首页导语会显示在这里。");
-  set("profile-preview-note", value("hero_note") || "关于页题记");
   const intro = document.getElementById("profile-preview-intro");
   if (intro) intro.innerHTML = (value("about_intro").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 4).map((line) => `<p>${escapeAdminHtml(line)}</p>`).join("")) || "<p>\u5173\u4e8e\u9875\u7b80\u4ecb\u4f1a\u663e\u793a\u5728\u8fd9\u91cc\u3002</p>";
-  const calendar = document.getElementById("profile-preview-calendar");
-  if (calendar) calendar.innerHTML = value("update_calendar").split(/\r?\n/).map((line) => line.split("|").map((item) => item.trim())).filter((parts) => parts[0] || parts[1]).slice(0, 3).map((parts) => `<span><time>${escapeAdminHtml(parts[0] || "\u2014")}</time>${escapeAdminHtml(parts[1] || "\u672a\u547d\u540d\u4e8b\u4ef6")}</span>`).join("");
 }
 profilePreviewButtons.forEach((button) => button.addEventListener("click", () => {
   profilePreviewButtons.forEach((item) => item.classList.toggle("is-active", item === button));
@@ -173,3 +144,69 @@ profilePreviewButtons.forEach((button) => button.addEventListener("click", () =>
 }));
 profileForm?.addEventListener("input", updateProfilePreview);
 updateProfilePreview();
+
+/* Dashboard: bulk selection, quick actions and client-side sorting */
+const bulkForm = document.getElementById("bulk-form");
+const bulkActionInput = document.getElementById("bulk-action");
+const bulkCount = document.getElementById("bulk-count");
+const bulkSelectAll = document.getElementById("bulk-select-all");
+const postSort = document.getElementById("admin-post-sort");
+const postList = document.getElementById("admin-post-list");
+
+function visiblePostItems() {
+  return adminPostItems.filter((item) => !item.hidden);
+}
+
+function checkedPostItems() {
+  return visiblePostItems().filter((item) => item.querySelector(".post-check")?.checked);
+}
+
+function updateBulkBar() {
+  if (!bulkForm) return;
+  const checked = checkedPostItems();
+  bulkForm.hidden = checked.length === 0;
+  if (bulkCount) bulkCount.textContent = `已选 ${checked.length} 篇`;
+  if (bulkSelectAll) {
+    const visible = visiblePostItems();
+    bulkSelectAll.checked = visible.length > 0 && checked.length === visible.length;
+  }
+}
+
+bulkSelectAll?.addEventListener("change", () => {
+  visiblePostItems().forEach((item) => {
+    const check = item.querySelector(".post-check");
+    if (check) check.checked = bulkSelectAll.checked;
+  });
+  updateBulkBar();
+});
+
+adminPostItems.forEach((item) => {
+  item.querySelector(".post-check")?.addEventListener("change", updateBulkBar);
+});
+
+document.querySelectorAll("[data-bulk]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!bulkForm || !bulkActionInput) return;
+    if (!checkedPostItems().length) return;
+    if (button.dataset.confirm && !window.confirm(button.dataset.confirm)) return;
+    bulkActionInput.value = button.dataset.bulk;
+    bulkForm.requestSubmit();
+  });
+});
+
+function applyPostSort() {
+  if (!postSort || !postList) return;
+  const mode = postSort.value;
+  const sorted = [...adminPostItems].sort((a, b) => {
+    if (mode === "clicks") return (Number(b.dataset.sortClicks) || 0) - (Number(a.dataset.sortClicks) || 0);
+    if (mode === "title") return (a.dataset.sortTitle || "").localeCompare(b.dataset.sortTitle || "", "zh-CN");
+    if (mode === "published") return (b.dataset.sortPublished || "").localeCompare(a.dataset.sortPublished || "");
+    return (b.dataset.sortUpdated || "").localeCompare(a.dataset.sortUpdated || "");
+  });
+  const emptyState = document.getElementById("admin-post-filter-empty");
+  sorted.forEach((item) => postList.insertBefore(item, emptyState || null));
+}
+
+postSort?.addEventListener("change", applyPostSort);
+updateAdminPostFilter();
+updateBulkBar();

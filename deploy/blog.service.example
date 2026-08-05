@@ -13,7 +13,7 @@ Group=blog
 WorkingDirectory=/opt/blog
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/blog/.venv/bin/gunicorn --chdir /opt/blog/backend --bind 127.0.0.1:8000 --workers 2 --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - app:app
+ExecStart=/opt/blog/backend/.venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 2 --timeout 120 --keep-alive 5 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - blog.app:app
 Restart=always
 RestartSec=5
 
