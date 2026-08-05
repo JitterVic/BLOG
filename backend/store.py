@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import html
 import io
 import json
@@ -7,6 +8,7 @@ import math
 import os
 import re
 import sqlite3
+import uuid
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
@@ -76,6 +78,10 @@ POST_REVISION_FIELDS = (
     "tags", "hero_quote", "cover_image", "markdown_content",
     "html_content", "status",
 )
+POST_EDIT_FIELDS = (
+    "title", "slug", "excerpt", "published_at", "read_time", "category",
+    "tags", "hero_quote", "cover_image", "markdown_content",
+)
 MEDIA_URL_PATTERN = re.compile(r"/uploads/media/([^\s)\]\"\'<>?#]+)", re.IGNORECASE)
 
 
@@ -90,6 +96,16 @@ def _markdown_has_heading_space_issue(markdown_content: str) -> bool:
 
 def _markdown_has_section_heading(markdown_content: str) -> bool:
     return bool(re.search(r"(?:^|\n)##\s+\S", str(markdown_content or "")))
+
+
+MARKDOWN_IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"\'][^)]*[\"\'])?\)")
+
+
+def _markdown_images(markdown_content: str) -> list[tuple[str, str]]:
+    return [
+        (match.group(1).strip(), match.group(2).strip())
+        for match in MARKDOWN_IMAGE_PATTERN.finditer(str(markdown_content or ""))
+    ]
 
 
 def slugify(value: str) -> str:
@@ -591,6 +607,22 @@ class BlogStore:
                 FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS post_working_copies (
+                post_id INTEGER PRIMARY KEY,
+                base_post_updated_at TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS media_metadata (
+                path TEXT PRIMARY KEY,
+                original_filename TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
 
@@ -618,6 +650,22 @@ class BlogStore:
                 snapshot_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS post_working_copies (
+                post_id INTEGER PRIMARY KEY,
+                base_post_updated_at TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS media_metadata (
+                path TEXT PRIMARY KEY,
+                original_filename TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
@@ -988,7 +1036,69 @@ class BlogStore:
                 """,
                 (capped,),
             ).fetchall()
-        return [self._row_to_dict(row) for row in rows]
+            working_rows = connection.execute(
+                "SELECT post_id, snapshot_json, updated_at, version FROM post_working_copies"
+            ).fetchall()
+        working_map: dict[int, dict[str, Any]] = {}
+        for row in working_rows:
+            try:
+                snapshot = json.loads(row["snapshot_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                snapshot = {}
+            working_map[int(row["post_id"])] = {
+                "snapshot": snapshot,
+                "updated_at": row["updated_at"],
+                "version": int(row["version"]),
+            }
+        items = [self._row_to_dict(row) for row in rows]
+        for item in items:
+            working = working_map.get(int(item["id"]))
+            item["pending_changes"] = working is not None
+            item["working_copy_version"] = working.get("version") if working else None
+            item["effective_updated_at"] = working.get("updated_at") if working else item.get("updated_at")
+            pending_snapshot = (working.get("snapshot") or {}) if working else {}
+            pending_title = pending_snapshot.get("title")
+            item["display_title"] = pending_title or item.get("title") or "\u65e0\u6807\u9898\u8349\u7a3f"
+            if working:
+                for field in ("category", "tags", "cover_image", "published_at", "read_time", "excerpt", "slug"):
+                    if field in pending_snapshot:
+                        item[field] = pending_snapshot.get(field)
+        items.sort(
+            key=lambda item: (str(item.get("effective_updated_at") or ""), int(item.get("id") or 0)),
+            reverse=True,
+        )
+        return items[:capped]
+
+    def author_attention_items(self, *, limit: int = 8) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for summary in self.list_admin_posts():
+            if summary.get("status") == "trashed":
+                continue
+            post = self.get_post_by_id(int(summary["id"])) or {}
+            working = self.get_working_copy(int(summary["id"])) if summary.get("pending_changes") else None
+            source = working.get("snapshot") if working else post
+            fields = self._snapshot_as_form(source)
+            validation = self.validate_post_for_publish(fields, post_id=int(summary["id"]))
+            reasons: list[str] = []
+            if summary.get("pending_changes"):
+                reasons.append("\u6709\u5f85\u53d1\u5e03\u4fee\u6539")
+            if not str(source.get("title") or "").strip():
+                reasons.append("\u65e0\u6807\u9898\u8349\u7a3f")
+            if validation["errors"]:
+                reasons.append(f"{len(validation['errors'])} \u4e2a\u53d1\u5e03\u9519\u8bef")
+            if validation["warnings"]:
+                reasons.append(f"{len(validation['warnings'])} \u6761\u53d1\u5e03\u63d0\u9192")
+            if not reasons:
+                continue
+            items.append({
+                "id": summary["id"],
+                "title": summary.get("display_title") or "\u65e0\u6807\u9898\u8349\u7a3f",
+                "status": summary.get("status"),
+                "pending_changes": bool(summary.get("pending_changes")),
+                "updated_at": summary.get("effective_updated_at") or summary.get("updated_at"),
+                "reasons": reasons,
+            })
+        return items[:max(1, int(limit))]
 
     def update_site_profile(self, form_data: dict[str, Any], avatar_file=None) -> None:
         current = self.get_site_profile()
@@ -1108,6 +1218,23 @@ class BlogStore:
         if markdown_content and len(re.sub(r"\s+", "", markdown_content)) < 200:
             add(warnings, "short_content", "markdown_content", '正文较短，请确认内容已经完整。')
 
+        images = _markdown_images(markdown_content)
+        empty_alt_count = sum(
+            1 for alt, _url in images
+            if not alt or alt.lower() in {"image", "img", "\u56fe\u7247"}
+        )
+        if empty_alt_count:
+            add(warnings, "missing_image_alt", "markdown_content", f"\u6709 {empty_alt_count} \u5f20\u6b63\u6587\u56fe\u7247\u7f3a\u5c11\u6709\u610f\u4e49\u7684\u66ff\u4ee3\u6587\u672c\u3002")
+        missing_local_images = []
+        for _alt, url in images:
+            clean_url = unquote(url.split("?", 1)[0].split("#", 1)[0])
+            if clean_url.startswith("/uploads/media/"):
+                candidate = UPLOADS_DIR / "media" / Path(clean_url).name
+                if not candidate.is_file():
+                    missing_local_images.append(clean_url)
+        if missing_local_images:
+            add(errors, "missing_local_image", "markdown_content", f'\u6b63\u6587\u5f15\u7528\u4e86 {len(missing_local_images)} \u5f20\u4e0d\u5b58\u5728\u7684\u672c\u5730\u56fe\u7247\u3002')
+
         normalized_slug = slugify(raw_slug or title) if title or raw_slug else ""
         return {
             "ok": not errors,
@@ -1134,16 +1261,13 @@ class BlogStore:
             snapshot[field] = value
         return snapshot
 
-    def _insert_revision(
+    def _insert_revision_snapshot(
         self,
         connection: sqlite3.Connection,
         post_id: int,
         revision_type: str,
+        snapshot: dict[str, Any],
     ) -> int:
-        row = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
-        if row is None:
-            raise ValueError('稿件不存在。')
-        snapshot = self._revision_snapshot_from_row(row)
         created_at = datetime.now().isoformat(timespec="microseconds")
         cursor = connection.execute(
             """
@@ -1166,6 +1290,266 @@ class BlogStore:
         )
         return int(cursor.lastrowid)
 
+    def _insert_revision(
+        self,
+        connection: sqlite3.Connection,
+        post_id: int,
+        revision_type: str,
+    ) -> int:
+        row = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if row is None:
+            raise ValueError("\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002")
+        return self._insert_revision_snapshot(
+            connection, post_id, revision_type, self._revision_snapshot_from_row(row)
+        )
+
+    def _normalize_edit_snapshot(
+        self,
+        form_data: dict[str, Any],
+        *,
+        fallback: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        fallback = fallback or {}
+        title = validate_text_length("title", form_data.get("title", fallback.get("title", "")))
+        markdown_content = validate_text_length(
+            "markdown_content", form_data.get("markdown_content", fallback.get("markdown_content", ""))
+        )
+        excerpt = validate_text_length("excerpt", form_data.get("excerpt", fallback.get("excerpt", "")))
+        read_time = validate_text_length("read_time", form_data.get("read_time", fallback.get("read_time", "")))
+        raw_tags = form_data.get("tags", fallback.get("tags", []))
+        if isinstance(raw_tags, list):
+            tags = [validate_text_length("tag", item, max_length=80) for item in raw_tags if str(item).strip()]
+        else:
+            tags_text = validate_text_length("tags", raw_tags)
+            tags = [validate_text_length("tag", item, max_length=80) for item in tags_text.split(",") if item.strip()]
+        if len(tags) > 40:
+            raise ValueError("\u6807\u7b7e\u6570\u91cf\u8fc7\u591a\uff0c\u8bf7\u63a7\u5236\u5728 40 \u4e2a\u4ee5\u5185\u3002")
+        cover_image = validate_text_length(
+            "cover_image", form_data.get("cover_image", fallback.get("cover_image", ""))
+        )
+        if cover_image and not _is_safe_image_url(cover_image):
+            raise ValueError("\u5c01\u9762\u56fe\u7247\u5730\u5740\u65e0\u6548\u3002")
+        return {
+            "title": title,
+            "slug": validate_text_length("slug", form_data.get("slug", fallback.get("slug", ""))),
+            "excerpt": excerpt or self.build_excerpt(markdown_content),
+            "published_at": validate_text_length(
+                "published_at", form_data.get("published_at", fallback.get("published_at", ""))
+            ),
+            "read_time": read_time or estimate_read_time(markdown_content),
+            "category": validate_text_length(
+                "category", form_data.get("category", fallback.get("category", ""))
+            ),
+            "tags": tags,
+            "hero_quote": validate_text_length(
+                "hero_quote", form_data.get("hero_quote", fallback.get("hero_quote", ""))
+            ),
+            "cover_image": cover_image,
+            "markdown_content": markdown_content,
+        }
+
+    def get_working_copy(self, post_id: int) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM post_working_copies WHERE post_id = ?", (post_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            snapshot = json.loads(row["snapshot_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            snapshot = {}
+        snapshot["html_content"] = render_markdown(str(snapshot.get("markdown_content") or ""))
+        return {
+            "post_id": row["post_id"],
+            "base_post_updated_at": row["base_post_updated_at"],
+            "version": int(row["version"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "snapshot": snapshot,
+        }
+
+    def save_working_copy(
+        self,
+        post_id: int,
+        form_data: dict[str, Any],
+        *,
+        expected_version: int | None = None,
+        expected_base_updated_at: str | None = None,
+    ) -> dict[str, Any]:
+        live_post = self.get_post_by_id(post_id)
+        if live_post is None:
+            raise ValueError("\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002")
+        if live_post.get("status") != "published":
+            raise ValueError("\u53ea\u6709\u5df2\u53d1\u5e03\u6587\u7ae0\u4f7f\u7528\u5de5\u4f5c\u526f\u672c\u3002")
+        snapshot = self._normalize_edit_snapshot(form_data, fallback=live_post)
+        now = datetime.now().isoformat(timespec="microseconds")
+        with self.connect() as connection:
+            current = connection.execute(
+                "SELECT updated_at, status FROM posts WHERE id = ?", (post_id,)
+            ).fetchone()
+            if current is None or current["status"] != "published":
+                raise PostVersionConflict("\u7ebf\u4e0a\u6587\u7ae0\u72b6\u6001\u5df2\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+            existing = connection.execute(
+                "SELECT * FROM post_working_copies WHERE post_id = ?", (post_id,)
+            ).fetchone()
+            if existing is None:
+                if expected_base_updated_at and current["updated_at"] != expected_base_updated_at:
+                    raise PostVersionConflict("\u7ebf\u4e0a\u6587\u7ae0\u5df2\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+                version = 1
+                connection.execute(
+                    """
+                    INSERT INTO post_working_copies (
+                        post_id, base_post_updated_at, snapshot_json, version, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (post_id, current["updated_at"], json.dumps(snapshot, ensure_ascii=False), version, now, now),
+                )
+            else:
+                if expected_version is None or int(expected_version) != int(existing["version"]):
+                    raise PostVersionConflict("\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u5728\u5176\u4ed6\u9875\u9762\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+                if current["updated_at"] != existing["base_post_updated_at"]:
+                    raise PostVersionConflict("\u7ebf\u4e0a\u7248\u672c\u5df2\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+                version = int(existing["version"]) + 1
+                connection.execute(
+                    """
+                    UPDATE post_working_copies
+                    SET snapshot_json = ?, version = ?, updated_at = ?
+                    WHERE post_id = ?
+                    """,
+                    (json.dumps(snapshot, ensure_ascii=False), version, now, post_id),
+                )
+            connection.commit()
+        return self.get_working_copy(post_id) or {}
+
+    def discard_working_copy(self, post_id: int, *, archive: bool = True) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM post_working_copies WHERE post_id = ?", (post_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if archive:
+                try:
+                    snapshot = json.loads(row["snapshot_json"] or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    snapshot = {}
+                snapshot["html_content"] = render_markdown(str(snapshot.get("markdown_content") or ""))
+                snapshot["status"] = "draft"
+                self._insert_revision_snapshot(connection, post_id, "discarded_changes", snapshot)
+            connection.execute("DELETE FROM post_working_copies WHERE post_id = ?", (post_id,))
+            connection.commit()
+        return True
+
+    def create_checkpoint(self, post_id: int) -> int:
+        with self.connect() as connection:
+            row = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if row is None:
+                raise ValueError("\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002")
+            copy_row = connection.execute(
+                "SELECT snapshot_json FROM post_working_copies WHERE post_id = ?", (post_id,)
+            ).fetchone()
+            if copy_row is not None:
+                snapshot = json.loads(copy_row["snapshot_json"] or "{}")
+                snapshot["html_content"] = render_markdown(str(snapshot.get("markdown_content") or ""))
+                snapshot["status"] = "draft"
+            else:
+                snapshot = self._revision_snapshot_from_row(row)
+            revision_id = self._insert_revision_snapshot(connection, post_id, "checkpoint", snapshot)
+            connection.commit()
+        return revision_id
+
+    @staticmethod
+    def _snapshot_as_form(snapshot: dict[str, Any]) -> dict[str, Any]:
+        result = {field: snapshot.get(field, "") for field in POST_EDIT_FIELDS}
+        tags = snapshot.get("tags", [])
+        result["tags"] = ", ".join(tags) if isinstance(tags, list) else str(tags or "")
+        return result
+
+    def _prepare_snapshot_for_post(
+        self,
+        source: dict[str, Any],
+        *,
+        fallback: dict[str, Any],
+        post_id: int,
+    ) -> dict[str, Any]:
+        snapshot = self._normalize_edit_snapshot(source, fallback=fallback)
+        desired_slug = snapshot.get("slug") or snapshot.get("title") or fallback.get("slug") or f"draft-{uuid.uuid4().hex[:12]}"
+        snapshot["slug"] = self.ensure_unique_slug(str(desired_slug), post_id=post_id)
+        return snapshot
+
+    @staticmethod
+    def _update_post_from_snapshot(
+        connection: sqlite3.Connection,
+        post_id: int,
+        snapshot: dict[str, Any],
+        *,
+        status: str,
+        updated_at: str,
+        deleted_at: str | None = None,
+    ) -> None:
+        tags = snapshot.get("tags") if isinstance(snapshot.get("tags"), list) else []
+        markdown_content = str(snapshot.get("markdown_content") or "")
+        connection.execute(
+            """
+            UPDATE posts
+            SET title = ?, slug = ?, excerpt = ?, published_at = ?, read_time = ?,
+                category = ?, tags = ?, hero_quote = ?, cover_image = ?,
+                markdown_content = ?, html_content = ?, status = ?, deleted_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                snapshot.get("title", ""),
+                snapshot.get("slug", ""),
+                snapshot.get("excerpt", ""),
+                snapshot.get("published_at", ""),
+                snapshot.get("read_time", "") or estimate_read_time(markdown_content),
+                snapshot.get("category", ""),
+                json.dumps(tags, ensure_ascii=False),
+                snapshot.get("hero_quote", ""),
+                snapshot.get("cover_image", ""),
+                markdown_content,
+                render_markdown(markdown_content),
+                status,
+                deleted_at,
+                updated_at,
+                post_id,
+            ),
+        )
+
+    def unpublish_post(self, post_id: int) -> dict[str, Any]:
+        post = self.get_post_by_id(post_id)
+        if post is None:
+            raise ValueError("\u6587\u7ae0\u4e0d\u5b58\u5728\u3002")
+        if post.get("status") != "published":
+            raise ValueError("\u53ea\u6709\u5df2\u53d1\u5e03\u6587\u7ae0\u53ef\u4ee5\u4e0b\u67b6\u3002")
+        working = self.get_working_copy(post_id)
+        working_version = working.get("version") if working else None
+        snapshot = self._prepare_snapshot_for_post(
+            working.get("snapshot") if working else post,
+            fallback=post,
+            post_id=post_id,
+        )
+        now = datetime.now().isoformat(timespec="microseconds")
+        with self.connect() as connection:
+            current = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if current is None or current["status"] != "published":
+                raise PostVersionConflict("\u6587\u7ae0\u72b6\u6001\u5df2\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+            if working_version is not None:
+                current_copy = connection.execute(
+                    "SELECT version FROM post_working_copies WHERE post_id = ?", (post_id,)
+                ).fetchone()
+                if current_copy is None or int(current_copy["version"]) != int(working_version):
+                    raise PostVersionConflict("\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+            self._insert_revision(connection, post_id, "pre_unpublish")
+            self._update_post_from_snapshot(
+                connection, post_id, snapshot, status="draft", updated_at=now, deleted_at=None
+            )
+            connection.execute("DELETE FROM post_working_copies WHERE post_id = ?", (post_id,))
+            self._insert_revision(connection, post_id, "unpublished")
+            connection.commit()
+        return self.get_post_by_id(post_id) or {}
+
     def save_post(
         self,
         form_data: dict[str, Any],
@@ -1173,7 +1557,9 @@ class BlogStore:
         post_id: int | None = None,
         action: str = "draft",
         expected_updated_at: str | None = None,
+        expected_working_version: int | None = None,
         create_revision: bool = True,
+        allow_untitled: bool = False,
     ) -> int:
         if action not in {"draft", "published"}:
             raise ValueError('文章状态无效。')
@@ -1183,13 +1569,24 @@ class BlogStore:
                 raise ValueError(validation["errors"][0]["message"])
 
         title = validate_text_length("title", form_data.get("title", ""))
-        if not title:
+        if not title and not allow_untitled:
             raise ValueError('文章标题不能为空。')
         markdown_content = validate_text_length("markdown_content", form_data.get("markdown_content", ""))
         html_content = render_markdown(markdown_content)
         excerpt = validate_text_length("excerpt", form_data.get("excerpt", "")) or self.build_excerpt(markdown_content)
         raw_slug = validate_text_length("slug", form_data.get("slug", ""))
-        slug = self.ensure_unique_slug(raw_slug or title, post_id=post_id)
+        existing_for_slug = self.get_post_by_id(post_id) if post_id else None
+        if raw_slug:
+            desired_slug = raw_slug
+        elif existing_for_slug and title and str(existing_for_slug.get("slug") or "").startswith("draft-"):
+            desired_slug = title
+        elif existing_for_slug:
+            desired_slug = existing_for_slug.get("slug") or f"draft-{uuid.uuid4().hex[:12]}"
+        elif title:
+            desired_slug = title
+        else:
+            desired_slug = f"draft-{uuid.uuid4().hex[:12]}"
+        slug = self.ensure_unique_slug(desired_slug, post_id=post_id)
         published = action == "published"
         status = "published" if published else "draft"
         published_at = validate_text_length("published_at", form_data.get("published_at", ""))
@@ -1219,6 +1616,17 @@ class BlogStore:
                 if current_row is None:
                     raise ValueError('稿件不存在。')
                 previous_status = current_row["status"] or "draft"
+                working_row = connection.execute(
+                    "SELECT base_post_updated_at, version FROM post_working_copies WHERE post_id = ?",
+                    (post_id,),
+                ).fetchone()
+                if action == "published" and previous_status == "published" and working_row is not None:
+                    if expected_working_version is None or int(expected_working_version) != int(working_row["version"]):
+                        raise PostVersionConflict("\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u5728\u5176\u4ed6\u9875\u9762\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u540e\u518d\u53d1\u5e03\u3002")
+                    if current_row["updated_at"] != working_row["base_post_updated_at"]:
+                        raise PostVersionConflict("\u7ebf\u4e0a\u7248\u672c\u5df2\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u540e\u518d\u53d1\u5e03\u3002")
+                if action == "published" and previous_status == "published":
+                    self._insert_revision(connection, post_id, "pre_publish")
                 if expected_updated_at is not None and current_row["updated_at"] != expected_updated_at:
                     raise PostVersionConflict('文章已在其他页面更新，请重新加载后再保存。')
                 connection.execute(
@@ -1258,21 +1666,40 @@ class BlogStore:
                 else:
                     revision_type = "draft_saved"
                 self._insert_revision(connection, saved_id, revision_type)
+            if action == "published":
+                connection.execute("DELETE FROM post_working_copies WHERE post_id = ?", (saved_id,))
             connection.commit()
         return saved_id
 
     def trash_post(self, post_id: int) -> None:
+        post = self.get_post_by_id(post_id)
+        if post is None:
+            raise ValueError("\u6587\u7ae0\u4e0d\u5b58\u5728\u6216\u5df2\u7ecf\u88ab\u5220\u9664\u3002")
+        if post.get("status") == "trashed":
+            raise ValueError("\u6587\u7ae0\u5df2\u7ecf\u5728\u56de\u6536\u7ad9\u4e2d\u3002")
+        working = self.get_working_copy(post_id)
+        working_version = working.get("version") if working else None
+        snapshot = self._prepare_snapshot_for_post(
+            working.get("snapshot") if working else post,
+            fallback=post,
+            post_id=post_id,
+        )
         now = datetime.now().isoformat(timespec="microseconds")
         with self.connect() as connection:
-            row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
-            if row is None:
-                raise ValueError('文章不存在或已经被删除。')
-            if row["status"] == "trashed":
-                raise ValueError('文章已经在回收站中。')
-            connection.execute(
-                "UPDATE posts SET status = 'trashed', deleted_at = ?, updated_at = ? WHERE id = ?",
-                (now, now, post_id),
+            current = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if current is None or current["status"] == "trashed":
+                raise PostVersionConflict("\u6587\u7ae0\u72b6\u6001\u5df2\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+            if working_version is not None:
+                current_copy = connection.execute(
+                    "SELECT version FROM post_working_copies WHERE post_id = ?", (post_id,)
+                ).fetchone()
+                if current_copy is None or int(current_copy["version"]) != int(working_version):
+                    raise PostVersionConflict("\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u66f4\u65b0\uff0c\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002")
+            self._insert_revision(connection, post_id, "pre_trash")
+            self._update_post_from_snapshot(
+                connection, post_id, snapshot, status="trashed", updated_at=now, deleted_at=now
             )
+            connection.execute("DELETE FROM post_working_copies WHERE post_id = ?", (post_id,))
             self._insert_revision(connection, post_id, "trashed")
             connection.commit()
 
@@ -1368,6 +1795,32 @@ class BlogStore:
         markdown_content = validate_text_length("markdown_content", snapshot.get("markdown_content", ""))
         if not title:
             raise ValueError('历史版本缺少文章标题，无法恢复。')
+        current_post = self.get_post_by_id(post_id)
+        if current_post is None:
+            raise ValueError("\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002")
+        if current_post.get("status") == "published":
+            working = self.get_working_copy(post_id)
+            restored = self.save_working_copy(
+                post_id,
+                self._snapshot_as_form(snapshot),
+                expected_version=working.get("version") if working else None,
+                expected_base_updated_at=current_post.get("updated_at"),
+            )
+            archived = dict(snapshot)
+            archived["html_content"] = render_markdown(markdown_content)
+            archived["status"] = "draft"
+            with self.connect() as connection:
+                self._insert_revision_snapshot(
+                    connection, post_id, "restored_to_working_copy", archived
+                )
+                connection.commit()
+            return {
+                **current_post,
+                **restored.get("snapshot", {}),
+                "status": "published",
+                "pending_changes": True,
+                "working_copy_version": restored.get("version"),
+            }
         tags = snapshot.get("tags") if isinstance(snapshot.get("tags"), list) else []
         tags = [validate_text_length("tag", item, max_length=80) for item in tags[:40]]
         cover_image = validate_text_length("cover_image", snapshot.get("cover_image", ""))
@@ -1413,6 +1866,53 @@ class BlogStore:
             connection.commit()
         return self.get_post_by_id(post_id) or {}
 
+    def compare_post_versions(self, post_id: int, left: str = "live", right: str = "working") -> dict[str, Any]:
+        post = self.get_post_by_id(post_id)
+        if post is None:
+            raise ValueError("\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002")
+
+        def resolve(selector: str) -> tuple[str, dict[str, Any]]:
+            if selector in {"live", "current"}:
+                return ("\u7ebf\u4e0a\u7248\u672c" if post.get("status") == "published" else "\u5f53\u524d\u8349\u7a3f", post)
+            if selector == "working":
+                working = self.get_working_copy(post_id)
+                if working is None:
+                    return ("\u5f53\u524d\u7f16\u8f91\u5185\u5bb9", post)
+                return ("\u5f85\u53d1\u5e03\u4fee\u6539", working.get("snapshot") or {})
+            try:
+                revision_id = int(selector)
+            except (TypeError, ValueError):
+                raise ValueError("\u7248\u672c\u9009\u62e9\u65e0\u6548\u3002")
+            revision = self.get_post_revision(post_id, revision_id)
+            if revision is None:
+                raise ValueError("\u5386\u53f2\u7248\u672c\u4e0d\u5b58\u5728\u3002")
+            return (f"Revision {revision_id}", revision.get("snapshot") or {})
+
+        left_label, left_snapshot = resolve(left)
+        right_label, right_snapshot = resolve(right)
+        field_changes = []
+        for field in ("title", "slug", "excerpt", "published_at", "read_time", "category", "tags", "hero_quote", "cover_image"):
+            before = left_snapshot.get(field, "")
+            after = right_snapshot.get(field, "")
+            if before != after:
+                field_changes.append({"field": field, "before": before, "after": after})
+        before_lines = str(left_snapshot.get("markdown_content") or "").splitlines()
+        after_lines = str(right_snapshot.get("markdown_content") or "").splitlines()
+        markdown_diff = list(difflib.unified_diff(
+            before_lines,
+            after_lines,
+            fromfile=left_label,
+            tofile=right_label,
+            lineterm="",
+        ))
+        return {
+            "left": {"selector": left, "label": left_label},
+            "right": {"selector": right, "label": right_label},
+            "field_changes": field_changes,
+            "markdown_diff": markdown_diff,
+            "changed": bool(field_changes or markdown_diff),
+        }
+
     def list_media_assets(self) -> list[dict[str, Any]]:
         media_dir = UPLOADS_DIR / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
@@ -1421,6 +1921,19 @@ class BlogStore:
             rows = connection.execute(
                 "SELECT id, title, slug, status, cover_image, markdown_content FROM posts"
             ).fetchall()
+            working_rows = connection.execute(
+                """
+                SELECT p.id, p.title, p.slug, w.snapshot_json
+                FROM post_working_copies w
+                JOIN posts p ON p.id = w.post_id
+                """
+            ).fetchall()
+            media_names = {
+                str(row["path"]): str(row["original_filename"] or "")
+                for row in connection.execute(
+                    "SELECT path, original_filename FROM media_metadata"
+                ).fetchall()
+            }
         for row in rows:
             found: set[tuple[str, str]] = set()
             cover_url = str(row["cover_image"] or "")
@@ -1434,6 +1947,26 @@ class BlogStore:
                     "title": row["title"],
                     "slug": row["slug"],
                     "status": row["status"],
+                    "kind": kind,
+                })
+
+        for row in working_rows:
+            try:
+                snapshot = json.loads(row["snapshot_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                snapshot = {}
+            found: set[tuple[str, str]] = set()
+            cover_url = str(snapshot.get("cover_image") or "")
+            if cover_url.startswith("/uploads/media/"):
+                found.add((unquote(cover_url.split("?", 1)[0].split("#", 1)[0]), "working_cover"))
+            for match in MEDIA_URL_PATTERN.finditer(str(snapshot.get("markdown_content") or "")):
+                found.add(("/uploads/media/" + unquote(match.group(1)), "working_body"))
+            for url, kind in found:
+                references.setdefault(url, []).append({
+                    "post_id": row["id"],
+                    "title": snapshot.get("title") or row["title"] or "\u65e0\u6807\u9898\u8349\u7a3f",
+                    "slug": snapshot.get("slug") or row["slug"],
+                    "status": "working_copy",
                     "kind": kind,
                 })
 
@@ -1451,9 +1984,11 @@ class BlogStore:
                 pass
             url = "/uploads/media/" + path.name
             refs = references.get(url, [])
+            fallback_name = re.sub(r"^(?:\d{20}-)+", "", path.name) or path.name
             assets.append({
                 "url": url,
                 "filename": path.name,
+                "original_filename": media_names.get(f"media/{path.name}", "") or fallback_name,
                 "size": stat.st_size,
                 "width": width,
                 "height": height,
@@ -1499,7 +2034,20 @@ class BlogStore:
         destination = UPLOADS_DIR / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(raw_bytes)
-        return relative_path.as_posix()
+        relative_text = relative_path.as_posix()
+        if folder == "media":
+            now = datetime.now().isoformat(timespec="microseconds")
+            with self.connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO media_metadata (path, original_filename, created_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(path) DO UPDATE SET original_filename = excluded.original_filename
+                    """,
+                    (relative_text, original_filename, now),
+                )
+                connection.commit()
+        return relative_text
 
     def import_markdown(self, file_storage) -> dict[str, Any]:
         validate_extension(file_storage.filename or "", ALLOWED_MARKDOWN_EXTENSIONS, "Markdown 文件")
@@ -1543,6 +2091,54 @@ class BlogStore:
         return {
             "path": relative_path,
             "url": "/uploads/" + relative_path,
+            "filename": Path(relative_path).name,
+            "original_filename": (file_storage.filename or Path(relative_path).name).strip(),
+        }
+
+    def list_taxonomy(self) -> dict[str, list[str]]:
+        with self.connect() as connection:
+            rows = connection.execute("SELECT category, tags FROM posts WHERE status != 'trashed'").fetchall()
+        categories: set[str] = set()
+        tags: set[str] = set()
+        for row in rows:
+            category = str(row["category"] or "").strip()
+            if category:
+                categories.add(category)
+            try:
+                values = json.loads(row["tags"] or "[]")
+            except (TypeError, json.JSONDecodeError):
+                values = []
+            tags.update(str(item).strip() for item in values if str(item).strip())
+        return {"categories": sorted(categories), "tags": sorted(tags)}
+
+    def content_health(self) -> dict[str, Any]:
+        active = [item for item in self.list_admin_posts() if item.get("status") != "trashed"]
+        without_sections = 0
+        missing_images = 0
+        empty_alt = 0
+        for item in active:
+            post = self.get_post_by_id(int(item["id"])) or {}
+            working = self.get_working_copy(int(item["id"])) if item.get("pending_changes") else None
+            source = working.get("snapshot") if working else post
+            markdown_content = str(source.get("markdown_content") or "")
+            if markdown_content and not _markdown_has_section_heading(markdown_content):
+                without_sections += 1
+            for alt, url in _markdown_images(markdown_content):
+                if not alt or alt.lower() in {"image", "img", "\u56fe\u7247"}:
+                    empty_alt += 1
+                clean_url = unquote(url.split("?", 1)[0].split("#", 1)[0])
+                if clean_url.startswith("/uploads/media/"):
+                    candidate = UPLOADS_DIR / "media" / Path(clean_url).name
+                    if not candidate.is_file():
+                        missing_images += 1
+        media_assets = self.list_media_assets()
+        return {
+            "missing_cover": sum(1 for item in active if not item.get("cover_image")),
+            "missing_taxonomy": sum(1 for item in active if not item.get("category") or not item.get("tags")),
+            "missing_sections": without_sections,
+            "missing_images": missing_images,
+            "empty_image_alt": empty_alt,
+            "unreferenced_media": sum(1 for item in media_assets if not item.get("reference_count")),
         }
 
     def stats(self) -> dict[str, Any]:
@@ -1551,12 +2147,14 @@ class BlogStore:
             draft_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'draft'").fetchone()[0]
             published_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'published'").fetchone()[0]
             trashed_count = connection.execute("SELECT COUNT(*) FROM posts WHERE status = 'trashed'").fetchone()[0]
+            pending_changes_count = connection.execute("SELECT COUNT(*) FROM post_working_copies").fetchone()[0]
         return {
             "db_path": str(self.db_path),
             "post_count": post_count,
             "published_count": published_count,
             "draft_count": draft_count,
             "trashed_count": trashed_count,
+            "pending_changes_count": pending_changes_count,
             "upload_dir": str(UPLOADS_DIR),
         }
 

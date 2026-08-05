@@ -3,14 +3,14 @@
 
 {% block title %}{{ '编辑文章' if edit_post.id else '新建文章' }} · 至知 Journal{% endblock %}
 {% block page_title %}{{ '编辑文章' if edit_post.id else '新建文章' }}{% endblock %}
-{% block page_description %}在全宽双栏写作台中完成 Markdown 编辑、实时预览与前台字段核对。{% endblock %}
+{% block page_description %}专注写作，修改会自动保存；发布前再集中检查文章设置。{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='admin/vendor/highlight-github.css') }}" />
 {% endblock %}
 
 {% block content %}
-  <main class="write-studio">
+  <main class="write-studio write-studio--compact">
     <form
       id="post-form"
       class="write-form"
@@ -19,212 +19,194 @@
       data-post-id="{{ edit_post.id }}"
       data-post-status="{{ edit_post.status }}"
       data-server-updated-at="{{ edit_post.updated_at|default('') }}"
+      data-base-post-updated-at="{{ edit_post.base_post_updated_at|default(edit_post.updated_at|default('')) }}"
+      data-working-version="{{ edit_post.working_copy_version|default('') }}"
       data-loading-form
       data-form-saved="{{ 'true' if request.args.get('saved') == '1' else 'false' }}"
     >
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" id="post-id" name="post_id" value="{{ edit_post.id }}" />
+      <input type="hidden" id="working-copy-version" name="working_copy_version" value="{{ edit_post.working_copy_version|default('') }}" />
       <input type="hidden" id="publish-warnings-acknowledged" name="publish_warnings_acknowledged" value="0" />
 
-      <div class="write-status-bar" aria-live="polite">
-        <span
-          id="write-status-badge"
-          class="write-status-badge {% if edit_post.status == 'published' %}is-published{% else %}is-draft{% endif %}"
-          data-status="{{ edit_post.status or 'draft' }}"
-        >
-          {% if edit_post.status == 'published' %}已发布{% else %}草稿{% endif %}
-        </span>
-        <strong id="write-status-label">
-          {% if edit_post.status == 'published' %}
-            当前线上版本已发布。修改后请再次点击「发布文章」才会更新前台。
-          {% else %}
-            当前为草稿，前台不可见。确认无误后请点击「发布文章」。
-          {% endif %}
-        </strong>
-      </div>
-
-      <div
-        id="published-autosave-tip"
-        class="published-autosave-tip"
-        role="status"
-        {% if edit_post.status != 'published' %}hidden{% endif %}
-      >
-        <strong>已发布文章提示</strong>
-        <span>自动保存仅在本地生效，不会覆盖线上正文。需要更新前台时，请点击「发布文章」。</span>
-      </div>
-
-      <div id="import-warning" class="import-warning" role="status" hidden></div>
-
-      <div id="draft-recovery-banner" class="draft-recovery-banner" hidden>
-        <div>
-          <strong>发现更新的本地草稿</strong>
-          <span id="draft-recovery-time"></span>
+      <header class="write-command-bar write-status-bar">
+        <div class="write-command-bar__identity">
+          <a href="{{ url_for('admin_dashboard') }}" class="write-back" aria-label="返回稿件总览">←</a>
+          <span
+            id="write-status-badge"
+            class="write-status-badge {% if edit_post.status == 'published' %}is-published{% else %}is-draft{% endif %}"
+            data-status="{{ edit_post.status or 'draft' }}"
+          >
+            {% if edit_post.status == 'published' %}已发布{% else %}草稿{% endif %}
+          </span>
+          {% if edit_post.pending_changes %}<span class="pending-badge" id="pending-badge">待发布修改</span>{% else %}<span class="pending-badge" id="pending-badge" hidden>待发布修改</span>{% endif %}<span id="published-autosave-tip" hidden>已发布文章使用服务器工作副本保存修改。</span>
         </div>
-        <div class="toolbar">
-          <button type="button" id="restore-local-draft" class="primary">恢复草稿</button>
-          <button type="button" id="discard-local-draft">丢弃本地版本</button>
-        </div>
-      </div>
 
-      <details class="metadata-drawer" open>
-        <summary>
-          <span>01 / Metadata</span>
-          <strong>文章信息与前台核对</strong>
-          <small>点击收起或展开</small>
-        </summary>
-        <div class="metadata-drawer__content">
-          <section class="metadata-fields" aria-label="文章元信息">
-            <div class="form-grid">
-              <label class="field">
-                <span>文章标题</span>
-                <input type="text" id="title" name="title" value="{{ edit_post.title }}" placeholder="Article title" maxlength="240" required />
-              </label>
-              <label class="field">
-                <span>栏目</span>
-                <input type="text" name="category" value="{{ edit_post.category }}" placeholder="e.g. Build in Public" maxlength="120" />
-              </label>
-              <label class="field">
-                <span>Slug</span>
-                <input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" />
-                <small id="slug-hint" class="field-hint" hidden>检测到中文或特殊字符：分享链接会变成百分号编码，建议改成英文短链。</small>
-              </label>
-              <label class="field">
-                <span>发布日期</span>
-                <input type="date" name="published_at" value="{{ edit_post.published_at }}" />
-              </label>
-              <label class="field">
-                <span>阅读时间</span>
-                <input type="text" id="read_time" name="read_time" value="{{ edit_post.read_time }}" placeholder="留空自动估算" maxlength="32" />
-              </label>
-              <label class="field">
-                <span>标签</span>
-                <input type="text" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" maxlength="1200" />
-              </label>
-              <label class="field-wide">
-                <span>摘要</span>
-                <textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="留空自动生成" maxlength="1200">{{ edit_post.excerpt }}</textarea>
-              </label>
-              <label class="field-wide">
-                <span>题记</span>
-                <input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="Short line shown below the title" maxlength="1000" />
-              </label>
-              <label class="field-wide">
-                <span>文章封面图</span>
-                <input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" maxlength="2048" />
-              </label>
+        <label class="write-title-field">
+          <span class="sr-only">文章标题</span>
+          <input type="text" id="title" name="title" value="{{ edit_post.title }}" placeholder="无标题草稿" maxlength="240" autocomplete="off" />
+        </label>
+
+        <div class="write-command-bar__tools">
+          <div class="view-switcher" role="group" aria-label="编辑视图">
+            <button type="button" data-view-mode="write">写作</button>
+            <button type="button" data-view-mode="split">分栏</button>
+            <button type="button" data-view-mode="preview">预览</button>
+          </div>
+          <button type="button" class="command-button" data-toggle-panel="outline-panel" aria-controls="outline-panel">目录</button>
+          <button type="button" class="command-button" data-toggle-panel="metadata-panel" aria-controls="metadata-panel">文章设置</button>
+          <button type="button" class="command-button" data-toggle-panel="media-panel" aria-controls="media-panel">图片</button>
+          {% if edit_post.id %}<button type="button" class="command-button" data-toggle-panel="history-panel" aria-controls="history-panel">版本</button>{% endif %}
+        </div>
+
+        <div class="write-command-bar__status">
+          <div class="write-save-state" role="status" aria-live="polite">
+            <span class="status-dot"></span>
+            <strong id="autosave-status">{% if edit_post.pending_changes %}待发布修改已保存{% else %}尚未修改{% endif %}</strong>
+            <button type="button" id="retry-autosave" class="write-retry" hidden>重试同步</button>
+          </div>
+          <small id="writing-stats">0 字 · 1 min</small>
+        </div>
+
+        <div class="write-primary-actions">
+          {% if edit_post.slug and edit_post.status == 'published' %}<a href="/posts/{{ edit_post.live_slug or edit_post.slug }}" target="_blank" rel="noreferrer" class="command-button command-button--quiet">查看线上</a>{% endif %}
+          <details class="write-more-menu">
+            <summary class="command-button" aria-label="更多文章操作">更多</summary>
+            <div class="write-more-menu__popover"><button type="button" class="mobile-only-action" data-toggle-panel="metadata-panel">文章设置</button><button type="button" class="mobile-only-action" data-toggle-panel="media-panel">图片与封面</button>{% if edit_post.id %}<button type="button" class="mobile-only-action" data-toggle-panel="history-panel">版本历史</button>{% endif %}
+              {% if edit_post.id %}<a href="{{ url_for('admin_full_preview', post_id=edit_post.id) }}" target="_blank" rel="noreferrer">全页预览</a><button type="button" id="checkpoint-button">保存版本</button>{% endif %}
+              {% if edit_post.status == 'published' %}
+                <button type="button" id="discard-working-copy" {% if not edit_post.pending_changes %}hidden{% endif %}>丢弃待发布修改</button>
+                <button type="submit" class="danger-button" form="unpublish-form">下架文章</button>
+              {% endif %}
+              {% if edit_post.id %}<button type="submit" class="danger-button" form="delete-form">移入回收站</button>{% endif %}
             </div>
+          </details>
+          <button type="submit" name="action" value="published" class="primary publish-trigger">
+            {% if edit_post.status == 'published' %}{{ '发布更新' if edit_post.pending_changes else '已是最新' }}{% else %}发布{% endif %}
+          </button>
+        </div>
+      </header>
+
+      <div id="draft-recovery-banner" class="draft-recovery-banner compact-banner" hidden>
+        <div><strong>发现更新的本地草稿</strong><span id="draft-recovery-time"></span></div>
+        <div class="toolbar"><button type="button" id="restore-local-draft" class="primary">恢复</button><button type="button" id="discard-local-draft">丢弃</button></div>
+      </div>
+      <div id="import-warning" class="import-warning compact-banner" role="status" hidden></div>
+
+      <div class="writing-shell" data-view="split">
+        <aside class="outline-panel" id="outline-panel" hidden aria-label="文章目录">
+          <div class="panel-mini-head"><strong>文章目录</strong><button type="button" data-close-panel="outline-panel" aria-label="关闭目录">×</button></div>
+          <nav id="writing-outline"><p>添加二级标题后会在这里生成目录。</p></nav>
+        </aside>
+
+        <div class="writing-workspace" id="writing-workspace">
+          <section class="writing-pane writing-pane--editor">
+            <div class="writing-pane__head">
+              <div><span>Markdown</span><strong>正文</strong></div>
+              <label class="inline-action" for="markdown-file">导入文稿</label>
+              <input type="file" id="markdown-file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
+            </div>
+            <div class="markdown-toolbar" role="toolbar" aria-label="Markdown 格式工具">
+              <button type="button" data-command="bold" title="Ctrl+B"><strong>B</strong></button>
+              <button type="button" data-command="italic" title="Ctrl+I"><em>I</em></button>
+              <button type="button" data-command="h2">H2</button>
+              <button type="button" data-command="h3">H3</button>
+              <button type="button" data-command="quote">引用</button>
+              <button type="button" data-command="code">代码块</button>
+              <button type="button" data-command="link" title="Ctrl+K">链接</button>
+              <button type="button" data-toggle-panel="media-panel">图片</button>
+              <button type="button" data-command="table">表格</button>
+              <button type="button" id="focus-mode-button">专注</button>
+            </div>
+            <textarea id="markdown_content" name="markdown_content" class="editor-textarea studio-textarea" placeholder="从这里开始写作……" maxlength="500000">{{ edit_post.markdown_content }}</textarea>
+            <p class="writing-drop-hint">可粘贴或拖入图片；拖入 Markdown 文件可直接导入。Ctrl/Cmd+S 立即保存，Ctrl/Cmd+Enter 发布。</p>
           </section>
 
+          <div id="workspace-divider" class="workspace-divider" role="separator" aria-label="调整编辑与预览宽度" aria-orientation="vertical" tabindex="0"><span></span></div>
+
+          <section class="writing-pane writing-pane--preview">
+            <div class="writing-pane__head">
+              <div><span>Preview</span><strong>实时预览</strong></div>
+              <small id="preview-meta">正在准备预览……</small>
+            </div>
+            <article class="markdown-body studio-preview" id="preview-target">{{ edit_post.html_content | safe }}</article>
+          </section>
+        </div>
+      </div>
+
+      <aside class="author-drawer" id="metadata-panel" hidden aria-labelledby="metadata-panel-title">
+        <div class="author-drawer__head"><div><span>Article settings</span><h2 id="metadata-panel-title">文章设置</h2></div><button type="button" data-close-panel="metadata-panel" aria-label="关闭文章设置">×</button></div>
+        <div class="author-drawer__body">
+          <div class="form-grid">
+            <label class="field"><span>栏目</span><input type="text" name="category" value="{{ edit_post.category }}" placeholder="例如：Build in Public" maxlength="120" list="category-suggestions" /></label>
+            <label class="field"><span>标签</span><input type="text" id="tags" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" maxlength="1200" /><small class="field-hint">从已有标签中选择，或继续输入新标签。</small><div class="tag-suggestions" id="tag-suggestions">{% for item in taxonomy.tags %}<button type="button" data-suggest-tag="{{ item }}">#{{ item }}</button>{% endfor %}</div></label>
+            <label class="field"><span>Slug</span><div class="field-inline"><input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" /><button type="button" id="generate-slug-button">生成短链</button></div><small id="slug-hint" class="field-hint" hidden>中文链接会被编码，建议使用英文短链。</small></label>
+            <label class="field"><span>发布日期</span><input type="date" name="published_at" value="{{ edit_post.published_at }}" /></label>
+            <label class="field"><span>阅读时间</span><input type="text" id="read_time" name="read_time" value="{{ edit_post.read_time }}" placeholder="自动估算" maxlength="32" /></label>
+            <label class="field-wide"><span>摘要</span><textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="留空自动生成" maxlength="1200">{{ edit_post.excerpt }}</textarea></label>
+            <label class="field-wide"><span>题记</span><input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="显示在标题下方的短句" maxlength="1000" /></label>
+            <label class="field-wide"><span>文章封面图</span><input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" maxlength="2048" /></label>
+          </div>
+          <datalist id="category-suggestions">{% for item in taxonomy.categories %}<option value="{{ item }}"></option>{% endfor %}</datalist>
           <section class="front-preview" aria-label="前台文章展示核对">
-            <p class="front-preview__label">Frontend Fields Check</p>
+            <p class="front-preview__label">Frontend card</p>
             <div class="front-preview__shell">
-              <div class="front-preview__cover" id="front-preview-cover">无封面图时，前台显示文字卡片。</div>
-              <div class="front-preview__body">
-                <div class="front-preview__meta" id="front-preview-meta"></div>
-                <h5 id="front-preview-title">未命名文章</h5>
-                <p class="front-preview__excerpt" id="front-preview-excerpt">这篇文章暂时还没有摘要。</p>
-                <p class="front-preview__quote" id="front-preview-quote" hidden></p>
-                <div class="front-preview__tags" id="front-preview-tags"></div>
-              </div>
+              <div class="front-preview__cover" id="front-preview-cover">无封面图时显示文字卡片。</div>
+              <div class="front-preview__body"><div class="front-preview__meta" id="front-preview-meta"></div><h5 id="front-preview-title">未命名文章</h5><p class="front-preview__excerpt" id="front-preview-excerpt"></p><p class="front-preview__quote" id="front-preview-quote" hidden></p><div class="front-preview__tags" id="front-preview-tags"></div></div>
             </div>
           </section>
+        </div>
+      </aside>
 
-          <section class="media-station" aria-label="图片与封面">
-            <div>
-              <p class="front-preview__label">Uploads</p>
-              <h3>图片与封面</h3>
-              <p class="helper">上传后可设为封面或插入 Markdown 正文。</p>
-            </div>
+      <aside class="author-drawer author-drawer--wide" id="media-panel" hidden aria-labelledby="media-panel-title">
+        <div class="author-drawer__head"><div><span>Media</span><h2 id="media-panel-title">图片与封面</h2></div><button type="button" data-close-panel="media-panel" aria-label="关闭图片面板">×</button></div>
+        <div class="author-drawer__body">
+          <section class="media-upload-box">
             <input type="file" id="media-file" accept="image/*" />
-            <div class="toolbar">
-              <button type="button" id="upload-image-button">上传图片</button>
-              <button type="button" id="insert-image-button">插入到正文</button>
-            </div>
+            <label class="field"><span>图片替代文本</span><input type="text" id="media-alt-text" placeholder="简要描述图片内容" maxlength="240" /></label>
+            <div class="toolbar"><button type="button" id="upload-image-button">上传图片</button><button type="button" id="insert-image-button">插入正文</button></div>
             <div class="result-box" id="media-result"><div class="result-copy">上传结果会显示在这里。</div></div>
           </section>
+          <div class="drawer-filter"><input type="search" id="drawer-media-search" placeholder="搜索已有图片" autocomplete="off" /><span id="drawer-media-count">{{ media_assets|length }} 张</span></div>
+          <div class="drawer-media-grid" id="drawer-media-grid">
+            {% for asset in media_assets %}
+              <article class="drawer-media-card" data-drawer-media data-search="{{ (asset.original_filename ~ ' ' ~ asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}">
+                <img src="{{ asset.url }}" alt="{{ asset.original_filename }}" loading="lazy" />
+                <div><strong title="{{ asset.original_filename }}">{{ asset.original_filename }}</strong><small>{% if asset.width and asset.height %}{{ asset.width }} × {{ asset.height }} · {% endif %}{{ asset.reference_count }} 处引用 · {{ '%.1f'|format(asset.size / 1024) }} KB</small></div>
+                <div class="drawer-media-card__actions"><button type="button" data-insert-media="{{ asset.url }}" data-media-name="{{ asset.original_filename }}">插入</button><button type="button" data-set-cover="{{ asset.url }}">设为封面</button></div>
+              </article>
+            {% endfor %}
+          </div>
         </div>
-      </details>
+      </aside>
 
-      <div class="writing-workspace" id="writing-workspace">
-        <section class="writing-pane writing-pane--editor">
-          <div class="writing-pane__head">
-            <div><span>02 / Markdown</span><strong>正文编辑</strong></div>
-            <label class="inline-action" for="markdown-file">导入文稿</label>
-            <input type="file" id="markdown-file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
-          </div>
-          <div class="markdown-toolbar" role="toolbar" aria-label="Markdown 格式工具">
-            <button type="button" data-command="bold" title="Ctrl+B"><strong>B</strong></button>
-            <button type="button" data-command="italic" title="Ctrl+I"><em>I</em></button>
-            <button type="button" data-command="h2">H2</button>
-            <button type="button" data-command="h3">H3</button>
-            <button type="button" data-command="quote">引用</button>
-            <button type="button" data-command="code">代码块</button>
-            <button type="button" data-command="link" title="Ctrl+K">链接</button>
-            <button type="button" data-command="image">图片</button>
-            <button type="button" data-command="table">表格</button>
-          </div>
-          <textarea id="markdown_content" name="markdown_content" class="editor-textarea studio-textarea" placeholder="# Title&#10;&#10;Start writing here..." maxlength="500000">{{ edit_post.markdown_content }}</textarea>
-          <p class="writing-drop-hint">可粘贴或拖入图片；拖入 Markdown 文件可直接导入。</p>
-        </section>
-
-        <div id="workspace-divider" class="workspace-divider" role="separator" aria-label="调整编辑与预览宽度" aria-orientation="vertical" tabindex="0"><span></span></div>
-
-        <section class="writing-pane writing-pane--preview">
-          <div class="writing-pane__head">
-            <div><span>03 / Preview</span><strong>实时预览</strong></div>
-            <small id="preview-meta">正在准备预览……</small>
-          </div>
-          <article class="markdown-body studio-preview" id="preview-target">{{ edit_post.html_content | safe }}</article>
-        </section>
-      </div>
+      <aside class="author-drawer" id="publish-panel" hidden aria-labelledby="publish-panel-title">
+        <div class="author-drawer__head"><div><span>Preflight</span><h2 id="publish-panel-title">发布检查</h2></div><button type="button" data-close-panel="publish-panel" aria-label="关闭发布检查">×</button></div>
+        <div class="author-drawer__body">
+          <div id="publish-check-summary" class="publish-check-summary">正在检查文章……</div>
+          <div id="publish-check-errors" class="publish-check-list"></div>
+          <div id="publish-check-warnings" class="publish-check-list"></div>
+        </div>
+        <div class="author-drawer__footer"><button type="button" data-close-panel="publish-panel">继续编辑</button><button type="button" id="publish-confirm-button" class="primary" hidden>确认发布</button></div>
+      </aside>
 
       {% if edit_post.id %}
-        <section class="revision-panel card" id="revision-panel" data-post-id="{{ edit_post.id }}" aria-labelledby="revision-title">
-          <div class="card-head">
-            <div>
-              <span class="eyebrow">History</span>
-              <h3 id="revision-title">关键节点版本</h3>
-              <p>自动保存不会制造历史记录；手动保存、发布、下架和恢复时会保留版本。</p>
-            </div>
+        <aside class="author-drawer author-drawer--wide" id="history-panel" hidden aria-labelledby="revision-title">
+          <div class="author-drawer__head"><div><span>History</span><h2 id="revision-title">关键版本</h2></div><button type="button" data-close-panel="history-panel" aria-label="关闭版本面板">×</button></div>
+          <div class="author-drawer__body revision-panel" id="revision-panel" data-post-id="{{ edit_post.id }}">
+            <p>自动保存不会制造历史记录；“保存版本”、发布、下架和恢复会保留节点。</p><div class="revision-compare-controls"><label>左侧版本<select id="diff-left"><option value="live">线上/当前版本</option></select></label><label>右侧版本<select id="diff-right"><option value="working">当前编辑/待发布修改</option></select></label><button type="button" id="compare-versions">比较版本</button></div><div id="version-diff" class="version-diff" hidden></div>
             <span class="revision-count" id="revision-count">加载中…</span>
+            <div class="revision-layout"><div class="revision-list" id="revision-list" aria-live="polite"><p class="revision-empty">正在加载历史版本……</p></div><div class="revision-preview" id="revision-preview" hidden><div class="revision-preview__head"><div><span class="eyebrow" id="revision-preview-type">Revision</span><strong id="revision-preview-title">选择一个历史版本</strong><small id="revision-preview-time"></small></div><button type="button" class="post-action" id="revision-restore" hidden>恢复到编辑区</button></div><article class="markdown-body revision-preview__body" id="revision-preview-body"></article></div></div>
           </div>
-          <div class="revision-layout">
-            <div class="revision-list" id="revision-list" aria-live="polite">
-              <p class="revision-empty">正在加载历史版本……</p>
-            </div>
-            <div class="revision-preview" id="revision-preview" hidden>
-              <div class="revision-preview__head">
-                <div>
-                  <span class="eyebrow" id="revision-preview-type">Revision</span>
-                  <strong id="revision-preview-title">选择一个历史版本</strong>
-                  <small id="revision-preview-time"></small>
-                </div>
-                <button type="button" class="post-action" id="revision-restore" hidden>恢复为草稿</button>
-              </div>
-              <article class="markdown-body revision-preview__body" id="revision-preview-body"></article>
-            </div>
-          </div>
-        </section>
+        </aside>
       {% endif %}
-      <footer class="write-action-bar">
-        <div class="write-save-state">
-          <span class="status-dot"></span>
-          <strong id="autosave-status">尚未修改</strong>
-          <button type="button" id="retry-autosave" class="write-retry" hidden>重试同步</button>
-        </div>
-        <div class="write-action-bar__buttons">
-          {% if edit_post.slug and edit_post.status == 'published' %}<a href="/posts/{{ edit_post.slug }}" target="_blank" rel="noreferrer">查看前台</a>{% endif %}
-          {% if edit_post.id %}<button type="submit" class="danger-button" form="delete-form">移入回收站</button>{% endif %}
-          <button type="submit" name="action" value="draft">存草稿 / 下架</button>
-          <button type="submit" name="action" value="published" class="primary">发布文章</button>
-        </div>
-      </footer>
+
+      <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
     </form>
 
     {% if edit_post.id %}
-      <form id="delete-form" method="post" action="{{ url_for('admin_delete_post', post_id=edit_post.id) }}" onsubmit="return confirm('确定将这篇文章移入回收站吗？30 天内可以恢复。');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      </form>
+      <form id="delete-form" method="post" action="{{ url_for('admin_delete_post', post_id=edit_post.id) }}" data-confirm="确定将这篇文章移入回收站吗？当前待发布修改会保留，30 天内可以恢复。"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /></form>
+      {% if edit_post.status == 'published' %}<form id="unpublish-form" method="post" action="{{ url_for('admin_unpublish_post', post_id=edit_post.id) }}" data-confirm="确定下架文章吗？当前编辑内容会保留为草稿，前台将立即不可见。"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /></form>{% endif %}
     {% endif %}
   </main>
 {% endblock %}

@@ -1,71 +1,38 @@
-﻿{% extends "admin_base.html" %}
+{% extends "admin_base.html" %}
 {% set admin_page = "dashboard" %}
 
 {% block page_title %}编辑台{% endblock %}
-{% block page_description %}把发行状态与全部稿件集中在一页；写作和站点资料已拆到独立工作区。{% endblock %}
+{% block page_description %}继续最近写作，处理待发布修改，并检查内容健康状态。{% endblock %}
 
 {% block content %}
   <main class="admin-main dashboard-main">
     <section class="dashboard-overview" aria-labelledby="dashboard-overview-title">
-      <div class="dashboard-overview__copy">
-        <span class="eyebrow">Editorial Desk / Posts</span>
-        <h2 id="dashboard-overview-title">发行总览</h2>
-        <p>先确认稿件状态，再进入写作台继续编辑。草稿不会出现在公开文章目录中。</p>
-      </div>
-      <div class="dashboard-overview__actions">
-        <a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a>
-        <a class="button button--quiet" href="{{ url_for('admin_profile_page') }}">维护封面资料</a>
-      </div>
+      <div class="dashboard-overview__copy"><span class="eyebrow">Editorial Desk / Posts</span><h2 id="dashboard-overview-title">作者工作台</h2><p>优先继续未完成内容；已发布文章的待发布修改不会影响线上版本。</p></div>
+      <div class="dashboard-overview__actions"><a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a><a class="button button--quiet" href="{{ url_for('admin_profile_page') }}">维护站点资料</a></div>
       <div class="dashboard-stats" aria-label="文章统计">
-        <div class="dashboard-stat">
-          <span>文章总数</span>
-          <strong>{{ stats.post_count }}</strong>
-          <small>全部稿件</small>
-        </div>
-        <div class="dashboard-stat dashboard-stat--published">
-          <span>已发布</span>
-          <strong>{{ stats.published_count }}</strong>
-          <small>当前对外可见</small>
-        </div>
-        <div class="dashboard-stat dashboard-stat--draft">
-          <span>草稿</span>
-          <strong>{{ stats.draft_count }}</strong>
-          <small>仅后台可见</small>
-        </div>
-        <div class="dashboard-stat dashboard-stat--trashed">
-          <span>回收站</span>
-          <strong>{{ stats.trashed_count }}</strong>
-          <small>保留 30 天</small>
-        </div>
+        <div class="dashboard-stat"><span>文章总数</span><strong>{{ stats.post_count }}</strong><small>全部稿件</small></div>
+        <div class="dashboard-stat dashboard-stat--published"><span>已发布</span><strong>{{ stats.published_count }}</strong><small>当前对外可见</small></div>
+        <div class="dashboard-stat dashboard-stat--draft"><span>草稿</span><strong>{{ stats.draft_count }}</strong><small>仅后台可见</small></div>
+        <div class="dashboard-stat dashboard-stat--pending"><span>待发布修改</span><strong>{{ stats.pending_changes_count }}</strong><small>线上内容未改变</small></div>
+        <div class="dashboard-stat dashboard-stat--trashed"><span>回收站</span><strong>{{ stats.trashed_count }}</strong><small>保留 30 天</small></div>
       </div>
     </section>
+
+    {% if continue_post %}
+      <section class="continue-writing-card" aria-labelledby="continue-writing-title">
+        <div><span class="eyebrow">Continue writing</span><h3 id="continue-writing-title">继续上次的工作</h3><p>{{ continue_post.display_title }}{% if continue_post.pending_changes %} · 有待发布修改{% elif continue_post.status == 'draft' %} · 草稿{% endif %}</p></div>
+        <a class="button button--primary" href="{{ url_for('admin_write', post_id=continue_post.id) }}">继续写作</a>
+      </section>
+    {% endif %}
 
     <div class="layout dashboard-layout">
       <div class="main-column">
         <section class="card dashboard-posts" aria-labelledby="posts-title">
-          <div class="card-head">
-            <div>
-              <h3 id="posts-title">全部稿件</h3>
-              <p>按标题、slug、栏目、标签或状态查找文章；编辑和删除操作保持分离。</p>
-            </div>
-            <span class="eyebrow">Posts</span>
-          </div>
-
+          <div class="card-head"><div><h3 id="posts-title">全部稿件</h3><p>按标题、slug、栏目、标签或状态查找文章。</p></div><span class="eyebrow">Posts</span></div>
           {% if admin_posts %}
             <div class="admin-post-tools" aria-label="后台稿件筛选">
-              <label class="filter-control">
-                <span>查找稿件</span>
-                <input type="search" id="admin-post-search" placeholder="搜索标题、slug、栏目或标签" autocomplete="off" />
-              </label>
-              <label class="filter-control">
-                <span>发布状态</span>
-                <select id="admin-post-status" aria-label="按发布状态筛选">
-                  <option value="">全部状态</option>
-                  <option value="published">已发布</option>
-                  <option value="draft">草稿</option>
-                  <option value="trashed">回收站</option>
-                </select>
-              </label>
+              <label class="filter-control"><span>查找稿件</span><input type="search" id="admin-post-search" placeholder="搜索标题、slug、栏目或标签" autocomplete="off" /></label>
+              <label class="filter-control"><span>发布状态</span><select id="admin-post-status" aria-label="按发布状态筛选"><option value="">全部状态</option><option value="published">已发布</option><option value="draft">草稿</option><option value="pending">待发布修改</option><option value="trashed">回收站</option></select></label>
             </div>
             <p class="admin-post-count" id="admin-post-count" role="status" aria-live="polite">共 {{ admin_posts|length }} 篇稿件</p>
           {% endif %}
@@ -73,108 +40,38 @@
           <div class="post-list" id="admin-post-list">
             {% if admin_posts %}
               {% for item in admin_posts %}
-                <article
-                  class="post-item"
-                  data-post-item
-                  data-status="{{ item.status }}"
-                  data-search="{{ (item.title ~ ' ' ~ item.slug ~ ' ' ~ (item.category or '') ~ ' ' ~ (item.tags|join(' ')))|lower }}"
-                >
+                <article class="post-item" data-post-item data-status="{{ 'pending' if item.pending_changes else item.status }}" data-search="{{ ((item.display_title or '') ~ ' ' ~ item.slug ~ ' ' ~ (item.category or '') ~ ' ' ~ (item.tags|join(' ')))|lower }}">
                   <a class="post-link__main" href="{{ url_for('admin_write', post_id=item.id) }}">
-                    <div class="post-link__title-line">
-                      <strong>{{ item.title }}</strong>
-                      <em class="status-badge {{ item.status }}">{% if item.status == 'published' %}已发布{% elif item.status == 'trashed' %}回收站{% else %}草稿{% endif %}</em>
-                    </div>
-                    <span class="post-link__meta">
-                      <span>{{ item.category or 'Article' }}</span>
-                      <span>{{ item.published_at or '未设置发布日期' }}</span>
-                      <span>{{ item.read_time or '1 min' }}</span>
-                      <span>{{ item.click_count or 0 }} 次阅读</span>
-                    </span>
-                    {% if item.tags %}
-                      <span class="post-link__tags" aria-label="文章标签">
-                        {% for tag in item.tags[:4] %}<span>#{{ tag }}</span>{% endfor %}
-                      </span>
-                    {% endif %}
-                    <span class="post-link__actions">
-                      <span>最近更新：{{ item.updated_at }}</span>
-                      {% if item.status == 'trashed' and item.deleted_at %}<span>移入回收站：{{ item.deleted_at }}</span>{% endif %}
-                      {% if item.status == 'published' and item.slug %}
-                        <span>前台：/posts/{{ item.slug }}</span>
-                      {% endif %}
-                    </span>
+                    <div class="post-link__title-line"><strong>{{ item.display_title }}</strong><em class="status-badge {{ item.status }}">{% if item.status == 'published' %}已发布{% elif item.status == 'trashed' %}回收站{% else %}草稿{% endif %}</em>{% if item.pending_changes %}<em class="status-badge pending">待发布修改</em>{% endif %}</div>
+                    <span class="post-link__meta"><span>{{ item.category or '未分类' }}</span><span>{{ item.published_at or '未设置发布日期' }}</span><span>{{ item.read_time or '1 min' }}</span><span>{{ item.click_count or 0 }} 次阅读</span></span>
+                    {% if item.tags %}<span class="post-link__tags" aria-label="文章标签">{% for tag in item.tags[:4] %}<span>#{{ tag }}</span>{% endfor %}</span>{% endif %}
+                    <span class="post-link__actions"><span>最近更新：{{ item.updated_at }}</span>{% if item.status == 'trashed' and item.deleted_at %}<span>移入回收站：{{ item.deleted_at }}</span>{% endif %}{% if item.status == 'published' and item.slug %}<span>前台：/posts/{{ item.slug }}</span>{% endif %}</span>
                   </a>
-                  <div class="post-item__actions" aria-label="{{ item.title }} 操作">
+                  <div class="post-item__actions" aria-label="{{ item.display_title }} 操作">
                     {% if item.status == 'trashed' %}
-                      <form method="post" action="{{ url_for('admin_restore_post', post_id=item.id) }}" data-confirm-form data-confirm="确定将《{{ item.title|e }}》恢复为草稿吗？">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                        <button type="submit" class="post-action" data-loading-label="恢复中…">恢复为草稿</button>
-                      </form>
+                      <form method="post" action="{{ url_for('admin_restore_post', post_id=item.id) }}" data-confirm-form data-confirm="确定恢复为草稿吗？"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button type="submit" class="post-action" data-loading-label="恢复中…">恢复为草稿</button></form>
                     {% else %}
-                      <a class="post-action" href="{{ url_for('admin_write', post_id=item.id) }}">编辑</a>
-                      {% if item.status == 'published' and item.slug %}
-                        <a class="post-action" href="/posts/{{ item.slug }}" target="_blank" rel="noreferrer">查看</a>
-                      {% endif %}
-                      <form
-                        method="post"
-                        action="{{ url_for('admin_delete_post', post_id=item.id) }}"
-                        data-confirm-form
-                        data-confirm="确定将《{{ item.title|e }}》移入回收站吗？30 天内可以恢复。"
-                      >
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                        <button type="submit" class="post-action post-action--danger" data-loading-label="移动中…">移入回收站</button>
-                      </form>
+                      <a class="post-action" href="{{ url_for('admin_write', post_id=item.id) }}">{{ '继续修改' if item.pending_changes else '编辑' }}</a>
+                      {% if item.status == 'published' and item.slug %}<a class="post-action" href="/posts/{{ item.slug }}" target="_blank" rel="noreferrer">查看线上</a>{% endif %}
+                      <form method="post" action="{{ url_for('admin_delete_post', post_id=item.id) }}" data-confirm-form data-confirm="确定移入回收站吗？待发布修改会保留，30 天内可以恢复。"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><button type="submit" class="post-action post-action--danger" data-loading-label="移动中…">移入回收站</button></form>
                     {% endif %}
                   </div>
                 </article>
               {% endfor %}
-              <div class="filter-empty" id="admin-post-filter-empty" hidden>
-                <strong>没有匹配的稿件</strong>
-                <span>试试清空搜索词或切换发布状态。</span>
-              </div>
+              <div class="filter-empty" id="admin-post-filter-empty" hidden><strong>没有匹配的稿件</strong><span>试试清空搜索词或切换发布状态。</span></div>
             {% else %}
-              <div class="empty-state empty-state--large">
-                <span class="empty-state__mark">01</span>
-                <div>
-                  <strong>还没有文章</strong>
-                  <p>从一篇草稿开始，把想法写进你的 Journal。</p>
-                </div>
-                <a class="button button--primary" href="{{ url_for('admin_write') }}">新建第一篇文章</a>
-              </div>
+              <div class="empty-state empty-state--large"><span class="empty-state__mark">01</span><div><strong>还没有文章</strong><p>从一篇草稿开始，把想法写进你的 Journal。</p></div><a class="button button--primary" href="{{ url_for('admin_write') }}">新建第一篇文章</a></div>
             {% endif %}
           </div>
         </section>
       </div>
 
       <aside class="side-column">
-        <section class="card">
-          <div class="dashboard-lede">
-            <span class="eyebrow">Workflow</span>
-            <strong>写作区已经独立成页</strong>
-            <p>新建、编辑、预览、媒体上传都从写作台完成；这里保持为安静的发行总览。</p>
-            <div class="dashboard-actions">
-              <a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a>
-              <a class="button button--quiet" href="{{ url_for('admin_profile_page') }}">维护封面资料</a>
-            </div>
-          </div>
-        </section>
-
-        <section class="card" aria-labelledby="system-status-title">
-          <div class="card-head">
-            <div>
-              <h3 id="system-status-title">发行状态</h3>
-              <p>方便你核对当前后台入口和数据存储位置。</p>
-            </div>
-            <span class="eyebrow">System</span>
-          </div>
-          <ul class="meta-list">
-            <li><span>数据库路径</span><strong><code>{{ stats.db_path }}</code></strong></li>
-            <li><span>文章总数</span><strong>{{ stats.post_count }}</strong></li>
-            <li><span>已发布</span><strong>{{ stats.published_count }}</strong></li>
-            <li><span>草稿数量</span><strong>{{ stats.draft_count }}</strong></li>
-            <li><span>上传目录</span><strong><code>{{ stats.upload_dir }}</code></strong></li>
-            <li><span>后台入口</span><strong><code>{{ stats.admin_prefix }}</code></strong></li>
-          </ul>
-        </section>
+        {% if attention_items %}
+          <section class="card attention-card" aria-labelledby="attention-title"><div class="card-head"><div><h3 id="attention-title">待处理</h3><p>优先处理待发布修改、无标题草稿和发布检查问题。</p></div><span class="eyebrow">Attention</span></div><div class="attention-list">{% for item in attention_items %}<a href="{{ url_for('admin_write', post_id=item.id) }}"><strong>{{ item.title }}</strong><span>{% for reason in item.reasons %}<em>{{ reason }}</em>{% endfor %}</span><small>{{ item.updated_at }}</small></a>{% endfor %}</div></section>
+        {% endif %}
+        <section class="card"><div class="dashboard-lede"><span class="eyebrow">Content health</span><strong>内容健康</strong><ul class="meta-list compact-meta-list"><li><span>缺少封面</span><strong>{{ content_health.missing_cover }}</strong></li><li><span>缺少栏目或标签</span><strong>{{ content_health.missing_taxonomy }}</strong></li><li><span>缺少章节</span><strong>{{ content_health.missing_sections }}</strong></li><li><span>缺图引用</span><strong>{{ content_health.missing_images }}</strong></li><li><span>图片 alt 待补</span><strong>{{ content_health.empty_image_alt }}</strong></li><li><span>未引用图片</span><strong>{{ content_health.unreferenced_media }}</strong></li></ul><div class="dashboard-actions"><a class="button button--primary" href="{{ url_for('admin_write') }}">开始新文章</a><a class="button button--quiet" href="{{ url_for('admin_media') }}">整理图片</a></div></div></section>
+        <section class="card" aria-labelledby="system-status-title"><div class="card-head"><div><h3 id="system-status-title">系统信息</h3><p>部署和存储信息收进折叠区域。</p></div><span class="eyebrow">System</span></div><details class="system-details"><summary>查看系统信息</summary><ul class="meta-list"><li><span>数据库路径</span><strong><code>{{ stats.db_path }}</code></strong></li><li><span>上传目录</span><strong><code>{{ stats.upload_dir }}</code></strong></li><li><span>后台入口</span><strong><code>{{ stats.admin_prefix }}</code></strong></li></ul></details></section>
       </aside>
     </div>
   </main>

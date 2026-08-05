@@ -1372,3 +1372,248 @@ def test_audit_log_records_login_events(client, caplog):
         client.post("/admin/login", data={"password": "test-password", "csrf_token": token})
     assert "audit login.success" in caplog.text
     assert "test-password" not in caplog.text
+
+
+def test_published_autosave_uses_working_copy_without_changing_public_post(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Live title", slug="live-title", markdown="# Live\n\n## Section\n\nPublic body"), action="published")
+    live = store.get_post_by_id(post_id)
+    token = login(client)
+
+    response = client.post(
+        "/admin/api/autosave",
+        json={
+            "post_id": post_id,
+            "base_post_updated_at": live["updated_at"],
+            "fields": post_fields(title="Pending title", markdown="# Pending\n\n## Section\n\nPrivate body"),
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["edit_source"] == "working_copy"
+    assert payload["pending_changes"] is True
+    assert payload["working_version"] == 1
+    assert store.get_post_by_id(post_id)["title"] == "Live title"
+    assert store.get_working_copy(post_id)["snapshot"]["title"] == "Pending title"
+    assert client.get("/api/posts/live-title").get_json()["title"] == "Live title"
+
+
+def test_working_copy_conflict_publish_and_discard(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Live copy"), action="published")
+    live = store.get_post_by_id(post_id)
+    token = login(client)
+    fields = post_fields(title="Pending copy", markdown="# Pending\n\n## Section\n\nLong enough content")
+
+    first = client.post(
+        "/admin/api/autosave",
+        json={"post_id": post_id, "base_post_updated_at": live["updated_at"], "fields": fields},
+        headers={"X-CSRF-Token": token},
+    )
+    assert first.status_code == 200
+    version = first.get_json()["working_version"]
+    conflict = client.post(
+        "/admin/api/autosave",
+        json={
+            "post_id": post_id,
+            "base_post_updated_at": live["updated_at"],
+            "expected_working_version": version - 1,
+            "fields": {**fields, "title": "Stale edit"},
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert conflict.status_code == 409
+
+    publish = client.post(
+        "/admin/posts/save",
+        data={
+            "csrf_token": token,
+            "post_id": post_id,
+            "working_copy_version": version,
+            **fields,
+            "action": "published",
+        },
+    )
+    assert publish.status_code == 302
+    assert store.get_post_by_id(post_id)["title"] == "Pending copy"
+    assert store.get_working_copy(post_id) is None
+
+    updated = store.get_post_by_id(post_id)
+    store.save_working_copy(post_id, {**fields, "title": "Discard me"}, expected_base_updated_at=updated["updated_at"])
+    discard = client.delete(
+        f"/admin/api/posts/{post_id}/working-copy",
+        headers={"X-CSRF-Token": token},
+    )
+    assert discard.status_code == 200
+    assert store.get_working_copy(post_id) is None
+    assert store.list_post_revisions(post_id)[0]["revision_type"] == "discarded_changes"
+
+
+def test_untitled_autosave_and_working_copy_revision_restore(app_bundle, client):
+    _application, store = app_bundle
+    token = login(client)
+    untitled = client.post(
+        "/admin/api/autosave",
+        json={"fields": {"title": "", "slug": "", "markdown_content": "an idea"}},
+        headers={"X-CSRF-Token": token},
+    )
+    assert untitled.status_code == 200
+    untitled_post = store.get_post_by_id(untitled.get_json()["id"])
+    assert untitled_post["title"] == ""
+    assert untitled_post["slug"].startswith("draft-")
+
+    post_id = store.save_post(post_fields(title="Version one"), action="published")
+    live = store.get_post_by_id(post_id)
+    store.save_post(post_fields(title="Version two"), post_id=post_id, action="published")
+    old_revision = store.list_post_revisions(post_id)[-1]
+    restored = store.restore_post_revision(post_id, old_revision["id"])
+    assert restored["status"] == "published"
+    assert restored["pending_changes"] is True
+    assert store.get_post_by_id(post_id)["title"] == "Version two"
+    assert store.get_working_copy(post_id)["snapshot"]["title"] == "Version one"
+
+
+def test_media_diff_preview_and_dashboard_author_surfaces(app_bundle, client):
+    _application, store = app_bundle
+    relative = store.save_file(type("Upload", (), {"filename": "working.png", "mimetype": "image/png", "stream": image_bytes()})(), "media")
+    url = "/uploads/" + relative
+    post_id = store.save_post(post_fields(title="Surface live"), action="published")
+    live = store.get_post_by_id(post_id)
+    store.save_working_copy(
+        post_id,
+        {**post_fields(title="Surface pending"), "cover_image": url, "markdown_content": f"# Pending\n\n## Section\n\n![alt]({url})"},
+        expected_base_updated_at=live["updated_at"],
+    )
+    asset = next(item for item in store.list_media_assets() if item["url"] == url)
+    assert {item["kind"] for item in asset["references"]} >= {"working_cover", "working_body"}
+
+    token = login(client)
+    diff = client.get(f"/admin/api/posts/{post_id}/diff")
+    assert diff.status_code == 200
+    assert diff.get_json()["changed"] is True
+    assert client.get(f"/admin/preview/{post_id}").status_code == 200
+    assert client.get("/admin/api/media").status_code == 200
+    dashboard = client.get("/admin").get_data(as_text=True)
+    assert "继续上次的工作" in dashboard
+    assert "待发布修改" in dashboard
+
+def test_working_copy_publish_requires_exact_version_and_preserves_pre_publish(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Live guarded", slug="live-guarded"), action="published")
+    live = store.get_post_by_id(post_id)
+    working = store.save_working_copy(
+        post_id,
+        post_fields(title="Guarded update", slug="live-guarded", markdown="# Updated\n\n## Section\n\nBody"),
+        expected_base_updated_at=live["updated_at"],
+    )
+    token = login(client)
+    missing_version = client.post(
+        "/admin/posts/save",
+        data={"csrf_token": token, "post_id": post_id, **post_fields(title="Guarded update", slug="live-guarded"), "action": "published"},
+    )
+    assert missing_version.status_code == 400
+    assert store.get_post_by_id(post_id)["title"] == "Live guarded"
+    published = client.post(
+        "/admin/posts/save",
+        data={
+            "csrf_token": token,
+            "post_id": post_id,
+            "working_copy_version": working["version"],
+            **post_fields(title="Guarded update", slug="live-guarded", markdown="# Updated\n\n## Section\n\nBody"),
+            "action": "published",
+        },
+    )
+    assert published.status_code == 302
+    revision_types = [item["revision_type"] for item in store.list_post_revisions(post_id)]
+    assert revision_types[:2] == ["published", "pre_publish"]
+
+
+def test_temporary_slug_promotes_after_title_and_unpublish_trash_keep_working_content(app_bundle):
+    _application, store = app_bundle
+    post_id = store.save_post({"title": "", "slug": "", "markdown_content": "idea"}, action="draft", allow_untitled=True)
+    assert store.get_post_by_id(post_id)["slug"].startswith("draft-")
+    store.save_post({"title": "Named draft", "slug": "", "markdown_content": "idea"}, post_id=post_id, action="draft", create_revision=False)
+    assert store.get_post_by_id(post_id)["slug"] == "named-draft"
+
+    published_id = store.save_post(post_fields(title="Online base", slug="online-base"), action="published")
+    live = store.get_post_by_id(published_id)
+    store.save_working_copy(
+        published_id,
+        post_fields(title="Pending kept", slug="online-base", markdown="# Pending\n\n## Section\n\nKept"),
+        expected_base_updated_at=live["updated_at"],
+    )
+    unpublished = store.unpublish_post(published_id)
+    assert unpublished["status"] == "draft"
+    assert unpublished["title"] == "Pending kept"
+    assert store.get_working_copy(published_id) is None
+    assert [item["revision_type"] for item in store.list_post_revisions(published_id)[:2]] == ["unpublished", "pre_unpublish"]
+
+    republished_id = store.save_post(post_fields(title="Trash live", slug="trash-live"), action="published")
+    live = store.get_post_by_id(republished_id)
+    store.save_working_copy(
+        republished_id,
+        post_fields(title="Trash pending", slug="trash-live", markdown="# Pending\n\n## Section\n\nTrash body"),
+        expected_base_updated_at=live["updated_at"],
+    )
+    store.trash_post(republished_id)
+    trashed = store.get_post_by_id(republished_id)
+    assert trashed["status"] == "trashed"
+    assert trashed["title"] == "Trash pending"
+    assert store.get_working_copy(republished_id) is None
+    assert [item["revision_type"] for item in store.list_post_revisions(republished_id)[:2]] == ["trashed", "pre_trash"]
+
+
+def test_media_original_filename_publish_image_checks_and_health(app_bundle):
+    _application, store = app_bundle
+    upload = type("Upload", (), {"filename": "meaningful-name.png", "mimetype": "image/png", "stream": image_bytes()})()
+    payload = store.upload_media(upload)
+    assert payload["original_filename"] == "meaningful-name.png"
+    asset = next(item for item in store.list_media_assets() if item["url"] == payload["url"])
+    assert asset["original_filename"] == "meaningful-name.png"
+
+    validation = store.validate_post_for_publish(
+        post_fields(
+            title="Images",
+            slug="images",
+            markdown=f"# Images\n\n## Section\n\n![image]({payload['url']})\n\n![](/uploads/media/missing.png)",
+        )
+    )
+    assert {item["code"] for item in validation["warnings"]} >= {"missing_image_alt"}
+    assert {item["code"] for item in validation["errors"]} >= {"missing_local_image"}
+
+    store.save_post(post_fields(title="No section", slug="no-section", markdown="# Only title\n\nText"), action="draft")
+    health = store.content_health()
+    assert health["missing_sections"] >= 1
+    assert health["empty_image_alt"] >= 0
+
+
+def test_arbitrary_revision_diff_attention_and_author_ui_surfaces(app_bundle, client):
+    _application, store = app_bundle
+    post_id = store.save_post(post_fields(title="Diff one", slug="diff-one"), action="draft")
+    store.save_post(post_fields(title="Diff two", slug="diff-one", markdown="# Two\n\n## Section\n\nChanged"), post_id=post_id, action="draft")
+    revisions = store.list_post_revisions(post_id)
+    compared = store.compare_post_versions(post_id, str(revisions[-1]["id"]), str(revisions[0]["id"]))
+    assert compared["changed"] is True
+    assert compared["field_changes"]
+    assert store.author_attention_items()
+
+    login(client)
+    write_html = client.get(f"/admin/write/{post_id}").get_data(as_text=True)
+    assert 'id="diff-left"' in write_html
+    assert 'id="diff-right"' in write_html
+    assert 'id="tag-suggestions"' in write_html
+    assert 'id="generate-slug-button"' in write_html
+    profile_html = client.get("/admin/profile").get_data(as_text=True)
+    assert 'id="profile-preview-home"' in profile_html
+    assert 'id="profile-preview-about"' in profile_html
+    assert 'id="avatar-dimensions"' in profile_html
+
+
+def test_schema_migrations_for_working_copy_and_media_metadata_are_idempotent(app_bundle):
+    _application, store = app_bundle
+    store.init()
+    store.init()
+    with store.connect() as connection:
+        tables = {row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    assert {"post_working_copies", "media_metadata"} <= tables

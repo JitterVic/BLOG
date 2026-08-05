@@ -1,4 +1,4 @@
-﻿{% extends "admin_base.html" %}
+{% extends "admin_base.html" %}
 {% set admin_page = "profile" %}
 
 {% block title %}封面资料 · 至知 Journal{% endblock %}
@@ -122,6 +122,11 @@
             </section>
           </div>
 
+          <aside class="profile-live-preview" aria-labelledby="profile-preview-title">
+            <div class="profile-preview-switcher" role="group" aria-label="资料预览模式"><button type="button" class="is-active" data-profile-preview="home">首页</button><button type="button" data-profile-preview="about">关于页</button></div>
+            <section class="profile-preview-surface" id="profile-preview-home"><span class="eyebrow">Homepage preview</span><h3 id="profile-preview-headline">{{ profile_form.headline or profile_form.name }}</h3><p id="profile-preview-summary">{{ profile_form.summary or '首页导语会显示在这里。' }}</p><div class="profile-preview-identity"><strong id="profile-preview-name">{{ profile_form.name }}</strong><span id="profile-preview-role">{{ profile_form.role }}</span><small id="profile-preview-location">{{ profile_form.location }}</small></div></section>
+            <section class="profile-preview-surface" id="profile-preview-about" hidden><span class="eyebrow">About preview</span><h3 id="profile-preview-note">{{ profile_form.hero_note or '关于页题记' }}</h3><div id="profile-preview-intro">{% for paragraph in profile_form.about_intro %}<p>{{ paragraph }}</p>{% else %}<p>关于页简介会显示在这里。</p>{% endfor %}</div><div id="profile-preview-calendar" class="profile-preview-calendar">{% for item in profile_form.update_calendar[:3] %}<span><time>{{ item.date }}</time>{{ item.title }}</span>{% endfor %}</div></section>
+          </aside>
           <aside class="avatar-panel" aria-labelledby="avatar-title">
             <div>
               <span class="section-index">04 / Avatar</span>
@@ -141,7 +146,7 @@
               <span>选择头像文件</span>
               <input type="file" id="avatar-input" name="avatar" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" />
             </label>
-            <output class="file-name" id="avatar-file-name">尚未选择新头像</output>
+            <output class="file-name" id="avatar-file-name">尚未选择新头像</output><output class="file-name" id="avatar-dimensions">建议使用接近 1:1 的图片；前台会按正方形区域裁切。</output>
             <p class="field-help">支持 PNG、JPG、GIF、WEBP 和 BMP。服务端会继续检查真实图片格式、大小和尺寸。</p>
           </aside>
         </div>

@@ -177,7 +177,7 @@ def form_value(source, key: str, default: str = "") -> str:
     return str(value).strip()
 
 
-def build_edit_post(post):
+def build_edit_post(post, working_copy=None):
     if not post:
         return {
             "id": "",
@@ -193,12 +193,31 @@ def build_edit_post(post):
             "markdown_content": "",
             "html_content": "",
             "status": "draft",
+            "pending_changes": False,
+            "working_copy_version": "",
+            "working_copy_updated_at": "",
+            "base_post_updated_at": "",
         }
 
-    return {
-        **post,
-        "tags_text": ", ".join(post.get("tags", [])),
-    }
+    editable = dict(post)
+    if working_copy:
+        editable.update(working_copy.get("snapshot") or {})
+    tags = editable.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+    editable["tags"] = tags
+    editable["tags_text"] = ", ".join(tags)
+    editable["pending_changes"] = bool(working_copy)
+    editable["working_copy_version"] = working_copy.get("version", "") if working_copy else ""
+    editable["working_copy_updated_at"] = working_copy.get("updated_at", "") if working_copy else ""
+    editable["base_post_updated_at"] = (
+        working_copy.get("base_post_updated_at", "") if working_copy else post.get("updated_at", "")
+    )
+    editable["live_title"] = post.get("title", "")
+    editable["live_slug"] = post.get("slug", "")
+    if not editable.get("title") and str(editable.get("slug") or "").startswith("draft-"):
+        editable["slug"] = ""
+    return editable
 
 
 DEFAULT_SECRET_KEY = "dev-secret-key-change-me"
@@ -593,9 +612,20 @@ def create_app():
     @admin_required
     def admin_dashboard():
         store.purge_expired_trash(retention_days=30)
+        admin_posts = store.list_admin_posts()
+        continue_post = next(
+            (item for item in admin_posts if item.get("pending_changes") or item.get("status") == "draft"),
+            admin_posts[0] if admin_posts else None,
+        )
+        health = store.content_health()
         return render_template(
             "admin_dashboard.html",
-            **build_admin_context(admin_posts=store.list_admin_posts()),
+            **build_admin_context(
+                admin_posts=admin_posts,
+                continue_post=continue_post,
+                content_health=health,
+                attention_items=store.author_attention_items(),
+            ),
         )
 
     @app.get(f"{admin_prefix}/write", defaults={"post_id": None})
@@ -608,9 +638,14 @@ def create_app():
         if post and post.get("status") == "trashed":
             flash("请先从稿件总览恢复文章，再继续编辑。", "error")
             return redirect(url_for("admin_dashboard"))
+        working_copy = store.get_working_copy(post_id) if post_id and post and post.get("status") == "published" else None
         return render_template(
             "admin_write.html",
-            **build_admin_context(edit_post=build_edit_post(post)),
+            **build_admin_context(
+                edit_post=build_edit_post(post, working_copy),
+                media_assets=store.list_media_assets(),
+                taxonomy=store.list_taxonomy(),
+            ),
         )
 
     @app.get(f"{admin_prefix}/media")
@@ -651,11 +686,17 @@ def create_app():
         post_id = request.form.get("post_id", type=int)
         action = form_value(request.form, "action", "draft") or "draft"
         existing = store.get_post_by_id(post_id) if post_id else None
+        expected_working_version = request.form.get("working_copy_version", type=int)
         if existing and existing.get("status") == "trashed":
             flash("回收站文章不能直接保存，请先恢复为草稿。", "error")
             return redirect(url_for("admin_dashboard"))
         try:
-            saved_id = store.save_post(request.form, post_id=post_id, action=action)
+            saved_id = store.save_post(
+                request.form,
+                post_id=post_id,
+                action=action,
+                expected_working_version=expected_working_version,
+            )
         except ValueError as exc:
             flash(str(exc), "error")
             submitted = build_edit_post(existing)
@@ -674,9 +715,16 @@ def create_app():
                 "html_content": render_markdown(str(request.form.get("markdown_content") or "")),
                 "status": (existing or {}).get("status", "draft"),
             })
+            working_copy = store.get_working_copy(post_id) if post_id and existing and existing.get("status") == "published" else None
+            submitted["pending_changes"] = bool(working_copy)
+            submitted["working_copy_version"] = working_copy.get("version", "") if working_copy else ""
             return render_template(
                 "admin_write.html",
-                **build_admin_context(edit_post=submitted),
+                **build_admin_context(
+                    edit_post=submitted,
+                    media_assets=store.list_media_assets(),
+                    taxonomy=store.list_taxonomy(),
+                ),
             ), 400
 
         message = ('已保存为草稿（前台不可见）。若要上线，请点击「发布文章」。' if action == "draft" else '文章已发布，前台现在可以看到。')
@@ -718,18 +766,47 @@ def create_app():
         except (TypeError, ValueError):
             return api_error("invalid_post_id", "\u7a3f\u4ef6 ID \u65e0\u6548\u3002", 400)
 
-        if post_id:
-            existing = store.get_post_by_id(post_id)
-            if existing is None:
-                return api_error("post_not_found", "\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002", 404)
-            if existing.get("status") != "draft":
-                return api_error("published_autosave_blocked", "\u5df2\u53d1\u5e03\u6587\u7ae0\u4ec5\u4fdd\u5b58\u5728\u672c\u5730\uff0c\u4e0d\u4f1a\u81ea\u52a8\u8986\u76d6\u7ebf\u4e0a\u5185\u5bb9\u3002", 409)
-
         form_data = payload.get("fields") or {}
         if not isinstance(form_data, dict):
             return api_error("invalid_payload", "\u81ea\u52a8\u4fdd\u5b58\u6570\u636e\u683c\u5f0f\u65e0\u6548\u3002", 400)
-        if not str(form_data.get("title") or "").strip():
-            return api_error("title_required", "\u586b\u5199\u6807\u9898\u540e\u624d\u4f1a\u81ea\u52a8\u4fdd\u5b58\u5230\u670d\u52a1\u5668\u3002", 400)
+
+        existing = store.get_post_by_id(post_id) if post_id else None
+        if post_id and existing is None:
+            return api_error("post_not_found", "\u7a3f\u4ef6\u4e0d\u5b58\u5728\u3002", 404)
+        if existing and existing.get("status") == "trashed":
+            return api_error("trashed_autosave_blocked", "\u56de\u6536\u7ad9\u6587\u7ae0\u4e0d\u80fd\u81ea\u52a8\u4fdd\u5b58\u3002", 409)
+
+        if existing and existing.get("status") == "published":
+            raw_version = payload.get("expected_working_version")
+            try:
+                expected_version = int(raw_version) if raw_version not in (None, "") else None
+            except (TypeError, ValueError):
+                return api_error("invalid_working_version", "\u5de5\u4f5c\u526f\u672c\u7248\u672c\u65e0\u6548\u3002", 400)
+            try:
+                working_copy = store.save_working_copy(
+                    post_id,
+                    form_data,
+                    expected_version=expected_version,
+                    expected_base_updated_at=payload.get("base_post_updated_at") or existing.get("updated_at"),
+                )
+            except PostVersionConflict as exc:
+                return api_error("version_conflict", str(exc), 409)
+            except ValueError as exc:
+                return api_error("validation_error", str(exc), 400)
+            snapshot = working_copy.get("snapshot") or {}
+            return jsonify({
+                "id": post_id,
+                "slug": snapshot.get("slug", existing.get("slug", "")),
+                "status": "published",
+                "edit_source": "working_copy",
+                "updated_at": existing.get("updated_at", ""),
+                "working_version": working_copy.get("version"),
+                "working_updated_at": working_copy.get("updated_at", ""),
+                "base_post_updated_at": working_copy.get("base_post_updated_at", ""),
+                "pending_changes": True,
+                "read_time": snapshot.get("read_time", ""),
+                "excerpt": snapshot.get("excerpt", ""),
+            })
 
         expected_updated_at = payload.get("updated_at")
         try:
@@ -739,6 +816,7 @@ def create_app():
                 action="draft",
                 expected_updated_at=expected_updated_at,
                 create_revision=False,
+                allow_untitled=True,
             )
         except PostVersionConflict as exc:
             return api_error("version_conflict", str(exc), 409)
@@ -746,16 +824,67 @@ def create_app():
             return api_error("validation_error", str(exc), 400)
 
         saved_post = store.get_post_by_id(saved_id)
-        return jsonify(
-            {
-                "id": saved_id,
-                "slug": saved_post.get("slug", ""),
-                "status": saved_post.get("status", "draft"),
-                "updated_at": saved_post.get("updated_at", ""),
-                "read_time": saved_post.get("read_time", ""),
-                "excerpt": saved_post.get("excerpt", ""),
-            }
-        )
+        return jsonify({
+            "id": saved_id,
+            "slug": saved_post.get("slug", ""),
+            "status": saved_post.get("status", "draft"),
+            "edit_source": "post",
+            "updated_at": saved_post.get("updated_at", ""),
+            "working_version": None,
+            "pending_changes": False,
+            "read_time": saved_post.get("read_time", ""),
+            "excerpt": saved_post.get("excerpt", ""),
+        })
+
+    @app.delete(f"{admin_prefix}/api/posts/<int:post_id>/working-copy")
+    @admin_required
+    def admin_discard_working_copy(post_id):
+        removed = store.discard_working_copy(post_id, archive=True)
+        if not removed:
+            return api_error("working_copy_not_found", "\u6ca1\u6709\u5f85\u53d1\u5e03\u4fee\u6539\u3002", 404)
+        audit("working_copy.discarded", post_id=post_id)
+        return jsonify({"ok": True, "message": "\u5f85\u53d1\u5e03\u4fee\u6539\u5df2\u4e22\u5f03\uff0c\u5e76\u4fdd\u7559\u4e86\u53ef\u6062\u590d\u7248\u672c\u3002"})
+
+    @app.post(f"{admin_prefix}/api/posts/<int:post_id>/checkpoint")
+    @admin_required
+    def admin_create_checkpoint(post_id):
+        try:
+            revision_id = store.create_checkpoint(post_id)
+        except ValueError as exc:
+            return api_error("checkpoint_failed", str(exc), 400)
+        audit("revision.checkpoint", post_id=post_id, revision_id=revision_id)
+        return jsonify({"ok": True, "revision_id": revision_id, "message": "\u5df2\u4fdd\u5b58\u4e00\u4e2a\u5173\u952e\u7248\u672c\u3002"})
+
+    @app.post(f"{admin_prefix}/posts/<int:post_id>/unpublish")
+    @admin_required
+    def admin_unpublish_post(post_id):
+        try:
+            store.unpublish_post(post_id)
+        except ValueError as exc:
+            flash(str(exc), "error")
+        else:
+            audit("post.unpublished", post_id=post_id)
+            flash("\u6587\u7ae0\u5df2\u4e0b\u67b6\uff0c\u5f53\u524d\u4fee\u6539\u5df2\u4fdd\u7559\u4e3a\u8349\u7a3f\u3002", "success")
+        return redirect(url_for("admin_write", post_id=post_id))
+
+    @app.get(f"{admin_prefix}/api/media")
+    @admin_required
+    def admin_media_api():
+        query = (request.args.get("q") or "").strip().lower()
+        reference_state = (request.args.get("reference_state") or "").strip()
+        items = store.list_media_assets()
+        if query:
+            items = [
+                item for item in items
+                if query in item.get("filename", "").lower()
+                or query in item.get("original_filename", "").lower()
+                or any(query in ref.get("title", "").lower() for ref in item.get("references", []))
+            ]
+        if reference_state == "referenced":
+            items = [item for item in items if item.get("reference_count")]
+        elif reference_state == "unreferenced":
+            items = [item for item in items if not item.get("reference_count")]
+        return jsonify({"items": items, "total": len(items)})
 
     @app.post(f"{admin_prefix}/api/preview-markdown")
     @admin_required
@@ -813,6 +942,29 @@ def create_app():
         result = store.validate_post_for_publish(fields, post_id=post_id)
         return jsonify(result), (200 if result["ok"] else 400)
 
+    @app.get(f"{admin_prefix}/api/posts/<int:post_id>/diff")
+    @admin_required
+    def admin_post_diff(post_id):
+        try:
+            result = store.compare_post_versions(
+                post_id,
+                left=request.args.get("left") or "live",
+                right=request.args.get("right") or "working",
+            )
+        except ValueError as exc:
+            return api_error("diff_failed", str(exc), 400)
+        return jsonify(result)
+
+    @app.get(f"{admin_prefix}/preview/<int:post_id>")
+    @admin_required
+    def admin_full_preview(post_id):
+        post = store.get_post_by_id(post_id)
+        if post is None:
+            abort(404)
+        working_copy = store.get_working_copy(post_id) if post.get("status") == "published" else None
+        preview_post = build_edit_post(post, working_copy)
+        return render_template("admin_preview.html", preview_post=preview_post)
+
     @app.get(f"{admin_prefix}/api/posts/<int:post_id>/revisions")
     @admin_required
     def admin_post_revisions(post_id):
@@ -838,12 +990,14 @@ def create_app():
         except ValueError as exc:
             return api_error("revision_restore_failed", str(exc), 400)
         audit("revision.restored", post_id=post_id, revision_id=revision_id)
+        pending = bool(post.get("pending_changes"))
         return jsonify({
             "ok": True,
             "post_id": post_id,
             "status": post.get("status", "draft"),
             "updated_at": post.get("updated_at", ""),
-            "message": "历史版本已恢复为草稿。",
+            "pending_changes": pending,
+            "message": "\u5386\u53f2\u7248\u672c\u5df2\u6062\u590d\u5230\u5f85\u53d1\u5e03\u4fee\u6539\u3002" if pending else "\u5386\u53f2\u7248\u672c\u5df2\u6062\u590d\u4e3a\u8349\u7a3f\u3002",
         })
 
 

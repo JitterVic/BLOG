@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ preview_post.title or '无标题草稿' }} · 后台预览</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin/admin.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin/vendor/highlight-github.css') }}" />
+</head>
+<body class="admin-preview-page">
+  <header class="admin-preview-toolbar"><a href="{{ url_for('admin_write', post_id=preview_post.id) }}">← 返回写作台</a><span>{% if preview_post.pending_changes %}待发布修改预览{% elif preview_post.status == 'published' %}线上版本预览{% else %}草稿预览{% endif %}</span></header>
+  <main class="admin-preview-article">
+    {% if preview_post.cover_image %}<img class="admin-preview-cover" src="{{ preview_post.cover_image }}" alt="" />{% endif %}
+    <div class="admin-preview-meta"><span>{{ preview_post.category or '未分类' }}</span><span>{{ preview_post.read_time or '1 min' }}</span><span>{{ preview_post.published_at or '未发布' }}</span></div>
+    <h1>{{ preview_post.title or '无标题草稿' }}</h1>
+    {% if preview_post.hero_quote %}<blockquote>{{ preview_post.hero_quote }}</blockquote>{% endif %}
+    {% if preview_post.tags %}<div class="front-preview__tags">{% for tag in preview_post.tags %}<span>#{{ tag }}</span>{% endfor %}</div>{% endif %}
+    <article class="markdown-body">{{ preview_post.html_content | safe }}</article>
+  </main>
+  <script src="{{ url_for('static', filename='admin/vendor/highlight.min.js') }}"></script>
+  <script>document.querySelectorAll('pre code').forEach((node) => window.hljs?.highlightElement(node));</script>
+</body>
+</html>

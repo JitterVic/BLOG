@@ -1,4 +1,4 @@
-﻿{% extends "admin_base.html" %}
+{% extends "admin_base.html" %}
 {% set admin_page = "media" %}
 
 {% block page_title %}媒体资源{% endblock %}
@@ -39,14 +39,14 @@
               class="media-card"
               data-media-card
               data-reference-state="{{ 'referenced' if asset.reference_count else 'unreferenced' }}"
-              data-search="{{ (asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}"
+              data-search="{{ (asset.original_filename ~ ' ' ~ asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}"
             >
               <a class="media-card__preview" href="{{ asset.url }}" target="_blank" rel="noreferrer">
-                <img src="{{ asset.url }}" alt="{{ asset.filename }}" loading="lazy" />
+                <img src="{{ asset.url }}" alt="{{ asset.original_filename }}" loading="lazy" />
               </a>
               <div class="media-card__body">
                 <div class="media-card__title">
-                  <strong title="{{ asset.filename }}">{{ asset.filename }}</strong>
+                  <strong title="{{ asset.original_filename }}">{{ asset.original_filename }}</strong>
                   <span class="status-badge {{ 'published' if asset.reference_count else 'draft' }}">
                     {{ asset.reference_count }} 处引用
                   </span>
