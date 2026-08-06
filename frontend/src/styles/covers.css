@@ -1,0 +1,93 @@
+/* 封面图：特色卡/详情头图/列表缩略图（cover_image 可选） */
+/* ============================================================
+   COVER IMAGES — feature card, detail hero, list thumbnails
+   (cover_image is optional; without it these rules are inert)
+   ============================================================ */
+
+.mimg__img {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mimg__img.is-broken {
+  display: none;
+}
+
+/* Stronger scrim keeps the light feature text legible over photos. */
+.mimg--has-image::before {
+  background: linear-gradient(180deg, rgba(23, 20, 17, 0.32), rgba(23, 20, 17, 0.62));
+}
+
+/* With a real cover image, show it clean: drop the noise texture and heavy
+   vignette, keep only a soft bottom gradient for text legibility. */
+.mimg--has-image::after {
+  display: none;
+}
+
+.mimg--has-image.print-feature-image::before,
+.home-latest-feature .print-feature-image.mimg--has-image::before {
+  box-shadow: none;
+  background: linear-gradient(180deg, rgba(23, 20, 17, 0.08) 38%, rgba(23, 20, 17, 0.62) 100%);
+}
+
+.post-cover {
+  margin: 1.6rem 0 0;
+}
+
+.post-cover.is-broken {
+  display: none;
+}
+
+.post-cover img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border: 1px solid var(--rule-light);
+}
+
+.article-item--has-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  column-gap: 1.1rem;
+  align-items: start;
+}
+
+.article-item--has-cover > :not(.article-item__thumb) {
+  grid-column: 1;
+}
+
+.article-item__thumb {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--rule-light);
+}
+
+.article-item__thumb.is-broken {
+  display: none;
+}
+
+/* A broken thumbnail collapses the card back to the plain layout. */
+.article-item--has-cover:has(.article-item__thumb.is-broken) {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .article-item--has-cover {
+    grid-template-columns: minmax(0, 1fr) 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-reading-progress {
+    transition: none;
+  }
+}
+

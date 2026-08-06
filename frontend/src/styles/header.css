@@ -1,0 +1,342 @@
+/* 顶栏：单行导航条、导航手绘圈悬停、移动端菜单、CTA */
+/* ==========================================================================
+   HOTFIX — lead copy, header bar, about title, SVG cat
+   ========================================================================== */
+
+/* 1) Home lead article layout */
+.home-latest-feature.g2 {
+  align-items: stretch;
+}
+
+.home-latest-feature .print-feature-image {
+  min-height: 360px;
+  height: 100%;
+}
+
+.home-latest-feature .print-lead-copy {
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: clamp(1.1rem, 2.5vw, 1.8rem) 0.2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-bottom: 0;
+}
+
+.home-latest-feature .print-lead-copy__inner {
+  display: grid;
+  gap: 0.85rem;
+  align-content: center;
+  min-width: 0;
+}
+
+.home-latest-feature .print-lead-copy .art__t {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: clamp(1.55rem, 2.6vw, 2.45rem);
+  line-height: 1.18;
+}
+
+.home-latest-feature .print-lead-copy .art__p {
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.75;
+}
+
+.home-latest-feature .print-lead-copy .art__meta {
+  margin-top: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+
+.home-latest-feature .print-lead-copy .art__meta span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.home-latest-feature .print-lead-copy .art__meta span::before {
+  content: "·";
+  margin-right: 0.85rem;
+  color: var(--accent);
+}
+
+.home-latest-feature .print-lead-copy .art__meta span:first-child::before {
+  content: none;
+  margin: 0;
+}
+
+.home-latest-feature .print-lead-copy .print-read-more {
+  margin-top: 0.35rem;
+  justify-self: start;
+}
+
+/* Header mobile panel anchor retained from the earlier layout pass. */
+.print-mobile-nav {
+  top: 100%;
+}
+
+/* 3) About contact title stays one line when possible */
+.quiet-about-card--contact .about-contact-title,
+.quiet-about-card--contact h2 {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  line-height: 1.15;
+  font-size: clamp(1.55rem, 3.2vw, 2.6rem);
+}
+
+.quiet-about-card--contact > p:not(.section-label) {
+  max-width: 34em;
+}
+
+@media (max-width: 420px) {
+  .quiet-about-card--contact .about-contact-title,
+  .quiet-about-card--contact h2 {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 920px) {
+  .home-latest-feature.g2 {
+    grid-template-columns: 1fr;
+  }
+
+  .home-latest-feature .print-lead-copy {
+    padding-top: 0.4rem;
+  }
+}
+
+/* ==========================================================================
+   NAV ONE-ROW + CAT HOVER + TRAIL VISIBILITY
+   ========================================================================== */
+
+/* Force header into a clean single-row flex bar */
+.print-shell .print-nav.site-header,
+.page-shell .print-nav.site-header {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 1000 !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: linear-gradient(180deg, rgba(244, 239, 230, 0.98) 55%, rgba(244, 239, 230, 0)) !important;
+  backdrop-filter: none !important;
+  box-sizing: border-box;
+}
+
+.print-nav__inner {
+  width: 100% !important;
+  min-height: 4.25rem !important;
+  padding: 0.85rem clamp(1.2rem, 3.5vw, 2.5rem) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1.2rem !important;
+  box-sizing: border-box !important;
+}
+
+.print-nav.site-header.scrolled .print-nav__inner {
+  min-height: 3.55rem !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.55rem !important;
+}
+
+.print-nav__brand {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.print-nav__right {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.75rem !important;
+  min-width: 0 !important;
+}
+
+.print-nav__links.desktop-nav,
+.print-nav__links {
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: clamp(0.85rem, 2.2vw, 1.8rem) !important;
+  min-width: 0 !important;
+}
+
+.print-nav__item {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.print-nav__num {
+  display: inline-block;
+  line-height: 1 !important;
+  transform: none !important;
+}
+
+.print-nav__item:hover .print-nav__num,
+.print-nav__item.active .print-nav__num {
+  transform: none !important;
+  font-size: 0.9rem !important;
+}
+
+.print-nav__label {
+  display: inline-block;
+  line-height: 1 !important;
+}
+
+.print-nav__item {
+  position: relative !important;
+}
+
+.print-nav__label {
+  position: relative;
+  z-index: 1;
+}
+
+.print-nav__label-text {
+  position: relative;
+  z-index: 2;
+}
+
+.nav-circle {
+  position: absolute;
+  inset: -0.72em -0.95em -0.62em;
+  z-index: 1;
+  width: calc(100% + 1.9em);
+  height: calc(100% + 1.34em);
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transform: rotate(-2deg) scale(0.96);
+  transform-origin: 50% 50%;
+  transition:
+    opacity 0.18s ease,
+    transform 0.34s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.nav-circle__stroke {
+  fill: none;
+  stroke: var(--accent, #8b2500);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-dashoffset 0.48s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.nav-circle__stroke--first {
+  opacity: 0.9;
+}
+
+.nav-circle__stroke--second {
+  opacity: 0.54;
+  stroke-width: 1.45;
+  transition-delay: 0.055s;
+}
+
+.print-nav__item:hover .nav-circle,
+.print-nav__item.active .nav-circle,
+.print-nav__item.router-link-active .nav-circle {
+  opacity: 1;
+  transform: rotate(-2deg) scale(1);
+}
+
+.print-nav__item:hover .nav-circle__stroke,
+.print-nav__item.active .nav-circle__stroke,
+.print-nav__item.router-link-active .nav-circle__stroke {
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-circle,
+  .nav-circle__stroke {
+    transition: none !important;
+  }
+
+  .nav-circle__stroke {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* CTA sits in the same nav row, same baseline as 封面/文章/关于 */
+.print-nav__cta {
+  margin-left: 0.35rem;
+  padding-bottom: 0.15rem !important;
+  border-bottom: 1px solid var(--rule-light) !important;
+  color: var(--ink-light) !important;
+}
+
+.print-nav__cta .print-nav__label {
+  letter-spacing: 0.14em;
+}
+
+.print-nav__cta:hover,
+.print-nav__cta.router-link-active {
+  color: var(--accent) !important;
+  border-bottom-color: var(--accent) !important;
+}
+
+.print-nav__progress {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: 2px !important;
+}
+
+.print-menu-button {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .print-nav__links.desktop-nav {
+    display: none !important;
+  }
+
+  .print-menu-button {
+    display: inline-flex !important;
+  }
+}
+
+/* Stronger cursor trail canvas visibility */
+.cursor-effects {
+  opacity: 0.95 !important;
+  mix-blend-mode: multiply;
+}
+
+.cursor-effects[data-disabled="true"] {
+  display: none !important;
+}
+
+.cursor-effects.active {
+  opacity: 1 !important;
+}
+

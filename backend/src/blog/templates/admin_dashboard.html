@@ -1,6 +1,8 @@
 {% extends "admin_base.html" %}
 {% set admin_page = "dashboard" %}
 
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='admin/css/dashboard.css') }}" />{% endblock %}
+
 {% block page_title %}编辑台{% endblock %}
 {% block page_description %}{% endblock %}
 

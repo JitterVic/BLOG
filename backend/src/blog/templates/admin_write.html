@@ -1,6 +1,8 @@
 {% extends "admin_base.html" %}
 {% set admin_page = "write" %}
 
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='admin/css/write.css') }}" />{% endblock %}
+
 {% block title %}{{ '编辑文章' if edit_post.id else '新建文章' }} · 至知 Journal{% endblock %}
 {% block page_title %}{{ '编辑文章' if edit_post.id else '新建文章' }}{% endblock %}
 {% block page_description %}专注写作，修改会自动保存；发布前再集中检查文章设置。{% endblock %}
@@ -137,71 +139,14 @@
         </div>
       </div>
 
-      <aside class="author-drawer" id="metadata-panel" hidden aria-labelledby="metadata-panel-title">
-        <div class="author-drawer__head"><div><span>Article settings</span><h2 id="metadata-panel-title">文章设置</h2></div><button type="button" data-close-panel="metadata-panel" aria-label="关闭文章设置">×</button></div>
-        <div class="author-drawer__body">
-          <div class="form-grid">
-            <label class="field"><span>栏目</span><input type="text" name="category" value="{{ edit_post.category }}" placeholder="例如：Build in Public" maxlength="120" list="category-suggestions" /></label>
-            <label class="field"><span>标签</span><input type="text" id="tags" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" maxlength="1200" /><small class="field-hint">从已有标签中选择，或继续输入新标签。</small><div class="tag-suggestions" id="tag-suggestions">{% for item in taxonomy.tags %}<button type="button" data-suggest-tag="{{ item }}">#{{ item }}</button>{% endfor %}</div></label>
-            <label class="field-wide"><span>Slug</span><div class="field-inline"><input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" /><button type="button" id="generate-slug-button">生成短链</button></div><small id="slug-hint" class="field-hint" hidden>中文链接会被编码，建议使用英文短链。</small></label>
-            <label class="field"><span>发布日期</span><input type="date" name="published_at" value="{{ edit_post.published_at }}" /></label>
-            <label class="field"><span>阅读时间</span><input type="text" id="read_time" name="read_time" value="{{ edit_post.read_time }}" placeholder="自动估算" maxlength="32" /></label>
-            <label class="field-wide"><span>摘要</span><textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="留空自动生成" maxlength="1200">{{ edit_post.excerpt }}</textarea></label>
-            <label class="field-wide"><span>题记</span><input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="显示在标题下方的短句" maxlength="1000" /></label>
-            <label class="field-wide"><span>文章封面图</span><input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" maxlength="2048" /></label>
-          </div>
-          <datalist id="category-suggestions">{% for item in taxonomy.categories %}<option value="{{ item }}"></option>{% endfor %}</datalist>
-          <section class="front-preview" aria-label="前台文章展示核对">
-            <p class="front-preview__label">Frontend card</p>
-            <div class="front-preview__shell">
-              <div class="front-preview__cover" id="front-preview-cover">无封面图时显示文字卡片。</div>
-              <div class="front-preview__body"><div class="front-preview__meta" id="front-preview-meta"></div><h5 id="front-preview-title">未命名文章</h5><p class="front-preview__excerpt" id="front-preview-excerpt"></p><p class="front-preview__quote" id="front-preview-quote" hidden></p><div class="front-preview__tags" id="front-preview-tags"></div></div>
-            </div>
-          </section>
-        </div>
-      </aside>
+      {% include "admin/partials/write_metadata_panel.html" %}
 
-      <aside class="author-drawer author-drawer--wide" id="media-panel" hidden aria-labelledby="media-panel-title">
-        <div class="author-drawer__head"><div><span>Media</span><h2 id="media-panel-title">图片与封面</h2></div><button type="button" data-close-panel="media-panel" aria-label="关闭图片面板">×</button></div>
-        <div class="author-drawer__body">
-          <section class="media-upload-box">
-            <input type="file" id="media-file" accept="image/*" />
-            <label class="field"><span>图片替代文本</span><input type="text" id="media-alt-text" placeholder="简要描述图片内容" maxlength="240" /></label>
-            <div class="toolbar"><button type="button" id="upload-image-button">上传图片</button><button type="button" id="insert-image-button">插入正文</button></div>
-            <div class="result-box" id="media-result"><div class="result-copy">上传结果会显示在这里。</div></div>
-          </section>
-          <div class="drawer-filter"><input type="search" id="drawer-media-search" placeholder="搜索已有图片" autocomplete="off" /><span id="drawer-media-count">{{ media_assets|length }} 张</span></div>
-          <div class="drawer-media-grid" id="drawer-media-grid">
-            {% for asset in media_assets %}
-              <article class="drawer-media-card" data-drawer-media data-search="{{ (asset.original_filename ~ ' ' ~ asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}">
-                <img src="{{ asset.url }}" alt="{{ asset.original_filename }}" loading="lazy" />
-                <div><strong title="{{ asset.original_filename }}">{{ asset.original_filename }}</strong><small>{% if asset.width and asset.height %}{{ asset.width }} × {{ asset.height }} · {% endif %}{{ asset.reference_count }} 处引用 · {{ '%.1f'|format(asset.size / 1024) }} KB</small></div>
-                <div class="drawer-media-card__actions"><button type="button" data-insert-media="{{ asset.url }}" data-media-name="{{ asset.original_filename }}">插入</button><button type="button" data-set-cover="{{ asset.url }}">设为封面</button></div>
-              </article>
-            {% endfor %}
-          </div>
-        </div>
-      </aside>
+      {% include "admin/partials/write_media_panel.html" %}
 
-      <aside class="author-drawer" id="publish-panel" hidden aria-labelledby="publish-panel-title">
-        <div class="author-drawer__head"><div><span>Preflight</span><h2 id="publish-panel-title">发布检查</h2></div><button type="button" data-close-panel="publish-panel" aria-label="关闭发布检查">×</button></div>
-        <div class="author-drawer__body">
-          <div id="publish-check-summary" class="publish-check-summary">正在检查文章……</div>
-          <div id="publish-check-errors" class="publish-check-list"></div>
-          <div id="publish-check-warnings" class="publish-check-list"></div>
-        </div>
-        <div class="author-drawer__footer"><button type="button" data-close-panel="publish-panel">继续编辑</button><button type="button" id="publish-confirm-button" class="primary" hidden>确认发布</button></div>
-      </aside>
+      {% include "admin/partials/write_publish_panel.html" %}
 
       {% if edit_post.id %}
-        <aside class="author-drawer author-drawer--wide" id="history-panel" hidden aria-labelledby="revision-title">
-          <div class="author-drawer__head"><div><span>History</span><h2 id="revision-title">关键版本</h2></div><button type="button" data-close-panel="history-panel" aria-label="关闭版本面板">×</button></div>
-          <div class="author-drawer__body revision-panel" id="revision-panel" data-post-id="{{ edit_post.id }}">
-            <p>自动保存不会制造历史记录；“保存版本”、发布、下架和恢复会保留节点。</p>
-            <span class="revision-count" id="revision-count">加载中…</span>
-            <div class="revision-layout"><div class="revision-list" id="revision-list" aria-live="polite"><p class="revision-empty">正在加载历史版本……</p></div><div class="revision-preview" id="revision-preview" hidden><div class="revision-preview__head"><div><span class="eyebrow" id="revision-preview-type">Revision</span><strong id="revision-preview-title">选择一个历史版本</strong><small id="revision-preview-time"></small></div><button type="button" class="post-action" id="revision-restore" hidden>恢复到编辑区</button></div><article class="markdown-body revision-preview__body" id="revision-preview-body"></article></div></div>
-          </div>
-        </aside>
+        {% include "admin/partials/write_history_panel.html" %}
       {% endif %}
 
       <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
@@ -216,5 +161,5 @@
 
 {% block scripts %}
   <script src="{{ url_for('static', filename='admin/vendor/highlight.min.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='admin/admin-write.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='admin/js/write/main.js') }}"></script>
 {% endblock %}

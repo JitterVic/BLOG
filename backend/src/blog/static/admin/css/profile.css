@@ -1,0 +1,16 @@
+/* 站点资料：表单布局与实时预览 */
+      .profile-card { width: min(1180px, 100%); margin: 0 auto; }
+/* Profile live preview */
+.profile-shell { grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); }
+.profile-live-preview { grid-column: 2; grid-row: 1; padding: .85rem; display: grid; align-content: start; gap: .7rem; border: 1px solid var(--rule-light); background: rgba(255,251,240,.48); }
+.profile-preview-switcher { display: flex; border: 1px solid var(--rule-light); }
+.profile-preview-switcher button { flex: 1; min-height: 2.2rem; border: 0; border-right: 1px solid var(--rule-light); background: transparent; cursor: pointer; font-size: .62rem; }
+.profile-preview-switcher button:last-child { border-right: 0; }
+.profile-preview-switcher button.is-active { color: var(--paper); background: var(--ink); }
+.profile-preview-surface { padding: .9rem; border: 1px solid var(--rule-light); background: var(--paper); }
+.profile-preview-surface h3 { margin: .35rem 0; font-family: var(--f-display); font-size: 1.55rem; line-height: 1.05; }
+.profile-preview-surface p { margin: .45rem 0; color: var(--ink-light); font-size: .7rem; }
+.profile-preview-identity { margin-top: 1rem; padding-top: .75rem; display: grid; gap: .12rem; border-top: 1px solid var(--rule-light); }
+.profile-preview-identity span,
+.profile-preview-identity small { color: var(--ink-faded); font-size: .6rem; }
+@media (max-width: 980px) { .profile-live-preview { grid-column: 1; } }

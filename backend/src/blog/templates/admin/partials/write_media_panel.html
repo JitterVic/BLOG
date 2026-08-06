@@ -1,0 +1,21 @@
+<aside class="author-drawer author-drawer--wide" id="media-panel" hidden aria-labelledby="media-panel-title">
+  <div class="author-drawer__head"><div><span>Media</span><h2 id="media-panel-title">图片与封面</h2></div><button type="button" data-close-panel="media-panel" aria-label="关闭图片面板">×</button></div>
+  <div class="author-drawer__body">
+    <section class="media-upload-box">
+      <input type="file" id="media-file" accept="image/*" />
+      <label class="field"><span>图片替代文本</span><input type="text" id="media-alt-text" placeholder="简要描述图片内容" maxlength="240" /></label>
+      <div class="toolbar"><button type="button" id="upload-image-button">上传图片</button><button type="button" id="insert-image-button">插入正文</button></div>
+      <div class="result-box" id="media-result"><div class="result-copy">上传结果会显示在这里。</div></div>
+    </section>
+    <div class="drawer-filter"><input type="search" id="drawer-media-search" placeholder="搜索已有图片" autocomplete="off" /><span id="drawer-media-count">{{ media_assets|length }} 张</span></div>
+    <div class="drawer-media-grid" id="drawer-media-grid">
+      {% for asset in media_assets %}
+        <article class="drawer-media-card" data-drawer-media data-search="{{ (asset.original_filename ~ ' ' ~ asset.filename ~ ' ' ~ (asset.references|map(attribute='title')|join(' ')))|lower }}">
+          <img src="{{ asset.url }}" alt="{{ asset.original_filename }}" loading="lazy" />
+          <div><strong title="{{ asset.original_filename }}">{{ asset.original_filename }}</strong><small>{% if asset.width and asset.height %}{{ asset.width }} × {{ asset.height }} · {% endif %}{{ asset.reference_count }} 处引用 · {{ '%.1f'|format(asset.size / 1024) }} KB</small></div>
+          <div class="drawer-media-card__actions"><button type="button" data-insert-media="{{ asset.url }}" data-media-name="{{ asset.original_filename }}">插入</button><button type="button" data-set-cover="{{ asset.url }}">设为封面</button></div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</aside>

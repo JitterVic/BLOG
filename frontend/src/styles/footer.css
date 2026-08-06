@@ -1,0 +1,394 @@
+/* 页脚与页面主题：colophon 版式、页面色调、章节编号与角标 */
+/* ==========================================================================
+   FOOTER + PAGE TONES + SECTION NUMBERING — user feedback pass
+   ========================================================================== */
+
+/* Footer: override legacy flex rules that broke the print colophon */
+.print-shell > .print-colophon.site-footer,
+.page-shell > .print-colophon.site-footer {
+  position: relative;
+  z-index: 2;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: clamp(2.4rem, 5vw, 3.6rem) clamp(1.5rem, 4vw, 2.5rem) clamp(1.8rem, 3vw, 2.6rem) !important;
+  display: block !important;
+  flex-direction: unset !important;
+  align-items: unset !important;
+  justify-content: unset !important;
+  gap: 0 !important;
+  color: var(--ink-faded);
+  background:
+    linear-gradient(180deg, rgba(244, 239, 230, 0.15), rgba(235, 229, 216, 0.55));
+  border-top: 3px double var(--rule);
+  font-family: var(--f-mono);
+  font-size: 0.58rem;
+  line-height: 1.9;
+  overflow: hidden;
+}
+
+.print-colophon.site-footer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, transparent, var(--accent), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.colophon-grid {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+  gap: clamp(1.4rem, 3vw, 2.4rem);
+  align-items: start;
+}
+
+.colophon-brand {
+  min-width: 0;
+  padding-right: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+.colophon__mark {
+  margin: 0 0 0.45rem;
+  color: var(--ink);
+  font-family: var(--f-display);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  transition: letter-spacing 0.35s ease;
+}
+
+.print-colophon:hover .colophon__mark {
+  letter-spacing: 0.18em;
+}
+
+.colophon__issn {
+  margin: 0 0 0.55rem;
+  color: var(--ink-light);
+  font-family: var(--f-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.colophon__headline {
+  margin: 0 !important;
+  max-width: 28rem;
+  color: var(--ink-faded) !important;
+  font-weight: 400 !important;
+  font-size: 0.62rem;
+  line-height: 1.85;
+}
+
+.colophon-block h4 {
+  margin: 0 0 0.7rem;
+  padding-bottom: 0.35rem;
+  color: var(--ink-light);
+  border-bottom: 1px solid var(--rule-light);
+  font-family: var(--f-mono);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.colophon-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.colophon-list li {
+  margin: 0;
+  color: var(--ink-faded);
+  font-size: 0.58rem;
+  line-height: 1.75;
+}
+
+.colophon__legal {
+  width: min(1180px, 100%);
+  margin: 1.6rem auto 0 !important;
+  padding-top: 1.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule-light);
+  color: var(--ink-faded);
+  text-align: center;
+  font-size: 0.54rem;
+  letter-spacing: 0.04em;
+  line-height: 1.7;
+  grid-column: unset !important;
+}
+
+.colophon__legal-sep {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.colophon-quote {
+  grid-column: span 2;
+  align-self: center;
+}
+
+.colophon-quote__text {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--ink-mid);
+  font-size: 0.74rem;
+  font-style: italic;
+  line-height: 2.05;
+}
+
+/* ---- Page theme differentiation ---- */
+.page-theme-home .print-main {
+  --page-tint: rgba(139, 37, 0, 0.028);
+}
+
+.page-theme-articles .print-main {
+  --page-tint: rgba(42, 36, 28, 0.025);
+}
+
+.page-theme-about .print-main {
+  --page-tint: rgba(78, 98, 82, 0.035);
+}
+
+/* Home: dramatic cover paper */
+.page-theme-home .focused-home .print-cover {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(139, 37, 0, 0.05), transparent 42%),
+    linear-gradient(180deg, rgba(244, 239, 230, 0.2), rgba(235, 229, 216, 0.35));
+}
+
+.page-theme-home .home-latest-section {
+  background:
+    linear-gradient(180deg, rgba(244, 239, 230, 0.12), rgba(235, 229, 216, 0.48));
+}
+
+.page-theme-home .home-hot-section {
+  background:
+    radial-gradient(circle at 90% 8%, rgba(139, 37, 0, 0.07), transparent 30%),
+    linear-gradient(180deg, rgba(244, 239, 230, 0.18), rgba(232, 224, 208, 0.55));
+}
+
+/* Articles: catalog / ledger feel */
+.page-theme-articles .unified-posts-page .print-section,
+.page-theme-articles .print-post-view .print-article-detail {
+  border-right: 1px solid rgba(42, 36, 28, 0.08);
+  border-left: 1px solid rgba(42, 36, 28, 0.08);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 31px,
+      rgba(42, 36, 28, 0.025) 32px
+    ),
+    rgba(244, 239, 230, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 253, 247, 0.2);
+}
+
+.page-theme-articles .article-toolbox {
+  background: rgba(255, 253, 247, 0.35);
+  border: 1px solid var(--rule-light);
+  padding: 0.85rem;
+  margin-bottom: 1.4rem;
+}
+
+.page-theme-articles .article-view-button.active {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.page-theme-articles .print-list-item {
+  border-left: 2px solid transparent;
+}
+
+.page-theme-articles .print-list-item:hover,
+.page-theme-articles .print-list-item:focus-visible {
+  border-left-color: var(--accent);
+  background: rgba(255, 253, 247, 0.72);
+}
+
+/* About: quieter editorial note */
+.page-theme-about .quiet-about-page .print-section {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(78, 98, 82, 0.07), transparent 34%),
+    linear-gradient(180deg, rgba(244, 239, 230, 0.42), rgba(238, 233, 222, 0.68));
+  border-color: rgba(78, 98, 82, 0.12);
+}
+
+.page-theme-about .quiet-about-card {
+  background: rgba(255, 253, 247, 0.42);
+  border-top-color: rgba(78, 98, 82, 0.55);
+}
+
+.page-theme-about .quiet-about-card--intro {
+  border-left: 3px solid rgba(78, 98, 82, 0.35);
+}
+
+.page-theme-about .quiet-about-card--contact {
+  border-left: 3px solid rgba(139, 37, 0, 0.28);
+}
+
+.page-theme-about .sec-hd__n {
+  color: rgba(78, 98, 82, 0.35);
+}
+
+/* ---- Section numbering hierarchy 01 / 02 / 03 ---- */
+.sec-hd {
+  position: relative;
+}
+
+.sec-hd__n {
+  position: relative;
+  min-width: 2.4ch;
+  color: rgba(42, 36, 28, 0.14);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.sec-hd__n::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0.15em;
+  bottom: 0.08em;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.55;
+}
+
+/* Distinct tints per section index on home */
+.home-latest-section .sec-hd {
+  border-top-color: rgba(42, 36, 28, 0.7);
+  background: linear-gradient(180deg, rgba(139, 37, 0, 0.035), transparent 70%);
+}
+
+.home-hot-section .sec-hd {
+  border-top-color: var(--accent);
+  background: linear-gradient(180deg, rgba(139, 37, 0, 0.06), transparent 75%);
+}
+
+.home-hot-section .sec-hd__n {
+  color: rgba(139, 37, 0, 0.28);
+}
+
+.home-latest-section .sec-hd__n {
+  color: rgba(42, 36, 28, 0.18);
+}
+
+.unified-posts-page .sec-hd {
+  background: linear-gradient(180deg, rgba(42, 36, 28, 0.03), transparent 72%);
+}
+
+.unified-posts-page .sec-hd__n {
+  color: rgba(42, 36, 28, 0.16);
+}
+
+.quiet-about-page .sec-hd {
+  background: linear-gradient(180deg, rgba(78, 98, 82, 0.06), transparent 72%);
+  border-top-color: rgba(78, 98, 82, 0.45);
+}
+
+.print-page.print-section {
+  position: relative;
+}
+
+/* Subtle section badge on page corner for home chapters */
+.home-latest-section::before,
+.home-hot-section::before {
+  content: attr(aria-label);
+  position: absolute;
+  top: 1.1rem;
+  right: 2.5rem;
+  z-index: 2;
+  color: var(--ink-faded);
+  font-family: var(--f-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (max-width: 920px) {
+  .colophon-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .colophon-brand {
+    grid-column: 1 / -1;
+    padding-right: 0;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--rule-light);
+  }
+}
+
+@media (max-width: 760px) {
+  .print-shell > .print-colophon.site-footer,
+  .page-shell > .print-colophon.site-footer {
+    padding: 2rem 1.35rem 1.6rem !important;
+  }
+
+  .colophon-grid {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+  }
+
+  .colophon-brand {
+    grid-column: auto;
+  }
+
+  .colophon__legal {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .colophon__legal-sep {
+    display: none;
+  }
+
+  .home-latest-section::before,
+  .home-hot-section::before {
+    right: 1.35rem;
+    top: 0.9rem;
+  }
+
+  .page-theme-articles .article-toolbox {
+    padding: 0.55rem;
+  }
+}
+
+.posts-chapter-label,
+.about-chapter-label {
+  margin: 0 2.5rem 0.35rem;
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.54rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.about-chapter-label {
+  color: rgba(78, 98, 82, 0.85);
+}
+
+@media (max-width: 760px) {
+  .posts-chapter-label,
+  .about-chapter-label {
+    margin-right: 1.35rem;
+    margin-left: 1.35rem;
+  }
+}
+

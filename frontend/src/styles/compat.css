@@ -1,0 +1,191 @@
+/* 兼容层：AsyncState 反馈框、媒体容器稳定、换行与窄屏兜底 */
+/* ========================================================================
+   FRONTEND COMPATIBILITY — stable media boxes and narrow-screen wrapping
+   ======================================================================== */
+.async-state {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 2.5rem 1.5rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--rule-light);
+  background: rgba(42, 36, 28, 0.03);
+}
+
+.async-state--error {
+  border-color: rgba(139, 37, 0, 0.28);
+  background: rgba(139, 37, 0, 0.05);
+}
+
+.async-state--empty {
+  border-style: dashed;
+}
+
+.async-state__eyebrow {
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.async-state strong,
+.async-state p {
+  margin: 0;
+}
+
+.async-state strong {
+  color: var(--ink);
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+}
+
+.async-state p {
+  color: var(--ink-light);
+  font-size: 0.68rem;
+  line-height: 1.7;
+  max-width: 42em;
+}
+
+.async-state .cover-button {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+
+.post-cover {
+  min-height: clamp(180px, 34vw, 310px);
+  aspect-ratio: 16 / 7;
+  overflow: hidden;
+  background: rgba(42, 36, 28, 0.045);
+}
+
+.post-cover img {
+  height: 100%;
+  min-height: 100%;
+}
+
+.mimg.print-feature-image {
+  min-height: clamp(220px, 42vw, 360px);
+  background: rgba(42, 36, 28, 0.05);
+}
+
+.article-item__thumb {
+  background: rgba(42, 36, 28, 0.045);
+}
+
+.print-markdown {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.print-markdown a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.print-markdown pre {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.print-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.print-markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: rgba(42, 36, 28, 0.04);
+}
+
+.print-markdown img.is-broken {
+  display: none;
+}
+
+.article-item h2,
+.art__t,
+.home-index-row strong,
+.home-hot-row__copy h3,
+.archive__title {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.article-search__field input {
+  min-width: 0;
+}
+
+.article-toolbox,
+.article-directory-meta,
+.tag-filter-row {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .async-state {
+    margin-right: 1.35rem;
+    margin-left: 1.35rem;
+  }
+
+  .article-toolbox {
+    gap: 0.85rem;
+  }
+
+  .article-view-switch {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .article-search,
+  .article-search__field {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .post-cover {
+    min-height: 150px;
+    aspect-ratio: 4 / 3;
+  }
+
+  .print-markdown pre {
+    max-width: calc(100vw - 2.7rem);
+  }
+
+  .article-item--has-cover {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    column-gap: 0.8rem;
+  }
+
+  .home-hot-row,
+  .home-index-row {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 390px) {
+  .cover-button,
+  .article-view-button,
+  .tag-filter-button,
+  .print-nav__item {
+    min-height: 44px;
+  }
+
+  .article-search__field input {
+    min-height: 44px;
+  }
+
+  .print-markdown pre {
+    max-width: calc(100vw - 2rem);
+    margin-left: -0.85rem;
+    margin-right: -0.85rem;
+  }
+}
+

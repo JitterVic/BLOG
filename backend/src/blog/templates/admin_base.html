@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}至知 Journal 编辑台{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='admin/admin.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin/css/base.css') }}" />
+    {% block styles %}{% endblock %}
     {% block extra_head %}{% endblock %}
   </head>
   <body
@@ -33,18 +34,7 @@
         </div>
       </header>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="messages">
-            {% for category, message in messages %}
-              <div class="message message--{{ category or 'info' }} {% if category == 'error' %}error{% elif category == 'success' %}success{% endif %}" role="{{ 'alert' if category == 'error' else 'status' }}" aria-live="{{ 'assertive' if category == 'error' else 'polite' }}">
-                <span>{{ message }}</span>
-                <button type="button" class="message-close" aria-label="关闭提示" onclick="this.parentElement.remove()">&times;</button>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
+      {% include "admin/partials/flash_messages.html" %}
 
       <nav class="issue-strip" aria-label="后台工作流">
         <a href="{{ url_for('admin_dashboard') }}" class="{% if admin_page == 'dashboard' %}active{% endif %}" {% if admin_page == 'dashboard' %}aria-current="page"{% endif %}><span>01 / Desk</span><strong>稿件总览</strong></a>

@@ -29,6 +29,8 @@ def app_bundle(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
     application = app_module.create_app()
@@ -179,7 +181,17 @@ def test_image_upload_rejects_fake_files_and_accepts_real_images(app_bundle, cli
     assert valid.get_json()["url"].startswith("/uploads/media/")
 
 
-def test_search_tags_and_pagination(client):
+def test_search_tags_and_pagination(app_bundle, client):
+    _application, store = app_bundle
+    store.save_post(
+        {
+            "title": "Flask Notes",
+            "slug": "flask-notes",
+            "markdown_content": "## Section\n\nSome body text.",
+            "tags": "Flask, Vue",
+        },
+        action="published",
+    )
     response = client.get("/api/posts?q=Flask&page=1&limit=1")
     assert response.status_code == 200
     payload = response.get_json()
@@ -190,7 +202,12 @@ def test_search_tags_and_pagination(client):
     assert "Flask" in payload["items"][0]["tags"]
 
 
-def test_admin_phase_two_pages_render_accessible_controls(client):
+def test_admin_phase_two_pages_render_accessible_controls(app_bundle, client):
+    _application, store = app_bundle
+    store.save_post(
+        {"title": "List Me", "slug": "list-me", "markdown_content": "body"},
+        action="published",
+    )
     login(client)
     dashboard = client.get("/admin").get_data(as_text=True)
     assert "dashboard-overview" in dashboard
@@ -243,7 +260,10 @@ def test_markdown_import_endpoint_returns_editor_fields(client):
 
 def test_writing_editor_phase_three_contract_is_present():
     template = Path("backend/src/blog/templates/admin_write.html").read_text(encoding="utf-8")
-    script = Path("backend/src/blog/static/admin/admin-write.js").read_text(encoding="utf-8")
+    module_dir = Path("backend/src/blog/static/admin/js/write")
+    script = "\n".join(
+        item.read_text(encoding="utf-8") for item in sorted(module_dir.glob("*.js"))
+    )
     assert "data-form-saved" in template
     assert "retry-autosave" in template
     for marker in (
@@ -516,8 +536,8 @@ def test_write_page_exposes_publish_status_chrome(client):
 
 
 def test_css_contains_no_toc_rule():
-    admin_css = Path("backend/src/blog/static/admin/admin.css").read_text(encoding="utf-8")
-    front_css = Path("frontend/src/styles/editorial.css").read_text(encoding="utf-8")
+    admin_css = Path("backend/src/blog/static/admin/css/write.css").read_text(encoding="utf-8")
+    front_css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
     assert "write-status-badge" in admin_css
     assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
 
@@ -595,7 +615,9 @@ def test_post_page_injects_open_graph_meta(app_bundle, client, tmp_path, monkeyp
     )
     import blog.app as app_module
 
-    monkeypatch.setattr(app_module, "FRONTEND_DIST", dist)
+    spa_module = importlib.import_module("blog.routes.spa")
+    monkeypatch.setattr(spa_module, "FRONTEND_DIST", dist)
+    monkeypatch.setattr(app_module, "FRONTEND_DIST", dist, raising=False)
     monkeypatch.setenv("BLOG_PUBLIC_BASE_URL", "https://example.com")
     # recreate app with patched FRONTEND_DIST
     application = app_module.create_app()
@@ -1021,6 +1043,8 @@ def test_login_rate_limit_uses_trusted_proxy_chain(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
     application = app_module.create_app()
@@ -1079,9 +1103,12 @@ def test_login_failure_buckets_are_capped(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
-    monkeypatch.setattr(app_module, "LOGIN_FAILURE_MAX_KEYS", 4)
+    monkeypatch.setattr(importlib.import_module("blog.security"), "LOGIN_FAILURE_MAX_KEYS", 4)
+    monkeypatch.setattr(app_module, "LOGIN_FAILURE_MAX_KEYS", 4, raising=False)
     application = app_module.create_app()
     application.config.update(TESTING=True)
     client = application.test_client()
@@ -1139,6 +1166,8 @@ def test_login_with_non_ascii_password_does_not_500(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
     application = app_module.create_app()
@@ -1247,6 +1276,8 @@ def test_hsts_header_present_when_secure(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
     application = app_module.create_app()
@@ -1303,6 +1334,8 @@ def test_feed_link_attributes_escape_quotes(tmp_path, monkeypatch):
     uploads_dir = tmp_path / "uploads"
     uploads_dir.mkdir()
     monkeypatch.setattr(store_module, "UPLOADS_DIR", uploads_dir)
+    uploads_module = importlib.import_module("blog.uploads")
+    monkeypatch.setattr(uploads_module, "UPLOADS_DIR", uploads_dir)
     monkeypatch.setattr(app_module, "UPLOADS_DIR", uploads_dir)
 
     application = app_module.create_app()
@@ -1532,6 +1565,10 @@ def test_schema_migrations_are_idempotent(app_bundle):
 
 def test_legacy_schema_is_cleaned_up_on_migration(app_bundle):
     _application, store = app_bundle
+    post_id = store.save_post(
+        {"title": "Migrate Me", "slug": "migrate-me", "markdown_content": "body"},
+        action="draft",
+    )
     with store.connect() as connection:
         connection.execute("ALTER TABLE posts ADD COLUMN featured INTEGER NOT NULL DEFAULT 0")
         connection.execute("ALTER TABLE posts ADD COLUMN tone TEXT DEFAULT 'amber'")
@@ -1543,7 +1580,6 @@ def test_legacy_schema_is_cleaned_up_on_migration(app_bundle):
         connection.execute("ALTER TABLE site_profile ADD COLUMN update_calendar TEXT NOT NULL DEFAULT '[]'")
         connection.execute("ALTER TABLE site_profile ADD COLUMN avatar_path TEXT DEFAULT ''")
         connection.execute("CREATE TABLE post_working_copies (post_id INTEGER PRIMARY KEY)")
-        post_id = connection.execute("SELECT id FROM posts LIMIT 1").fetchone()[0]
         connection.execute(
             "INSERT INTO post_revisions (post_id, revision_type, snapshot_json, created_at) "
             "VALUES (?, 'discarded_changes', '{}', '2026-01-01T00:00:00')",
@@ -1631,7 +1667,12 @@ def test_bulk_post_actions(app_bundle, client):
     assert store.get_post_by_id(ids[0])["status"] == "draft"
 
 
-def test_dashboard_chrome_includes_bulk_sort_and_help(client):
+def test_dashboard_chrome_includes_bulk_sort_and_help(app_bundle, client):
+    _application, store = app_bundle
+    store.save_post(
+        {"title": "Bulk Chrome", "slug": "bulk-chrome", "markdown_content": "body"},
+        action="draft",
+    )
     login(client)
     html = client.get("/admin").get_data(as_text=True)
     assert 'id="bulk-form"' in html
@@ -1644,8 +1685,11 @@ def test_dashboard_chrome_includes_bulk_sort_and_help(client):
 
 def test_legacy_excerpts_are_regenerated_on_migration(app_bundle):
     _application, store = app_bundle
+    post_id = store.save_post(
+        {"title": "Excerpt Fix", "slug": "excerpt-fix", "markdown_content": "body"},
+        action="draft",
+    )
     with store.connect() as connection:
-        post_id = connection.execute("SELECT id FROM posts LIMIT 1").fetchone()[0]
         connection.execute(
             "UPDATE posts SET excerpt = ?, markdown_content = ? WHERE id = ?",
             ("Intro ![462](old-image.png) body", "## Section\n\nIntro text body here.", post_id),
@@ -1659,6 +1703,6 @@ def test_legacy_excerpts_are_regenerated_on_migration(app_bundle):
 
 def test_admin_static_assets_are_not_cached(client):
     login(client)
-    response = client.get("/static/admin/admin.css")
+    response = client.get("/static/admin/css/base.css")
     assert response.status_code == 200
     assert "no-cache" in (response.headers.get("Cache-Control") or "")

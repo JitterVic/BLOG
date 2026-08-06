@@ -1,9 +1,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
-import { displayDate, shortDate } from "../composables/useFormat";
+import ArchiveLedger from "../components/posts/ArchiveLedger.vue";
+import PostLatestList from "../components/posts/PostLatestList.vue";
+import PostsToolbox from "../components/posts/PostsToolbox.vue";
+import TagResultsGrid from "../components/posts/TagResultsGrid.vue";
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
@@ -186,7 +189,6 @@ function scheduleReload() {
   }, 250);
 }
 
-
 async function applyRouteState() {
   applyingRouteState = true;
   const requestedView = typeof route.query.view === "string" ? route.query.view : "";
@@ -267,36 +269,13 @@ onBeforeUnmount(() => {
         <div class="sec-hd__line"></div>
       </div>
 
-      <div class="article-toolbox rv">
-        <div class="article-view-switch" role="tablist" aria-label="文章目录视图">
-          <button
-            v-for="item in VIEW_OPTIONS"
-            :key="item.id"
-            type="button"
-            class="article-view-button"
-            :class="{ active: activeView === item.id }"
-            role="tab"
-            :aria-selected="activeView === item.id"
-            @click="setView(item.id)"
-          >
-            <strong>{{ item.label }}</strong>
-            <span>{{ item.english }}</span>
-          </button>
-        </div>
-
-        <label class="article-search">
-          <span class="article-search__label">Search the issue</span>
-          <span class="article-search__field">
-            <input
-              v-model="searchQuery"
-              type="search"
-              placeholder="搜索标题、摘要或标签"
-              autocomplete="off"
-            >
-            <button v-if="searchQuery" type="button" @click="clearSearch">清除</button>
-          </span>
-        </label>
-      </div>
+      <PostsToolbox
+        :view-options="VIEW_OPTIONS"
+        :active-view="activeView"
+        v-model:search-query="searchQuery"
+        @set-view="setView"
+        @clear-search="clearSearch"
+      />
 
       <div class="article-directory-meta rv" aria-live="polite">
         <span>{{ resultLabel }}</span>
@@ -329,94 +308,17 @@ onBeforeUnmount(() => {
         empty-message="请调整关键词或筛选条件后再试。"
       />
 
-      <div v-else-if="activeView === 'latest'" class="article-list print-article-list unified-latest-list">
-        <RouterLink
-          v-for="(post, index) in visiblePosts"
-          :key="post.slug"
-          :to="`/posts/${post.slug}`"
-          class="article-item print-list-item rv"
-          :class="{ 'article-item--has-cover': !!post.cover_image }"
-          :data-reveal-delay="Math.min(index, 8) * 45"
-        >
-          <img
-            v-if="post.cover_image"
-            class="article-item__thumb"
-            :src="post.cover_image"
-            alt=""
-            width="132"
-            height="99"
-            loading="lazy"
-            decoding="async"
-            @error="(event) => event.target.classList.add('is-broken')"
-          >
-          <div class="article-meta">
-            <span>{{ displayDate(post.published_at) }}</span>
-            <span>{{ post.read_time }}</span>
-          </div>
-          <h2>{{ post.title }}</h2>
-          <p>{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
-          <div class="post-card-tags list-tags">
-            <span v-for="tag in post.tags" :key="tag" class="tag tag--code">{{ tag }}</span>
-          </div>
-        </RouterLink>
-      </div>
+      <PostLatestList v-else-if="activeView === 'latest'" :posts="visiblePosts" />
 
-      <div v-else-if="activeView === 'archive'" class="print-year-ledger unified-archive-view">
-        <section
-          v-for="([year, items], index) in groupedPosts"
-          :key="year"
-          class="archive print-year-block rv"
-          :data-reveal-delay="index * 60"
-        >
-          <div class="archive__year">
-            <span>{{ year }}</span>
-            <strong>{{ items.length }} 篇</strong>
-          </div>
-          <ul class="archive__list">
-            <li v-for="post in items" :key="post.slug" class="archive__li">
-              <span class="archive__date">{{ shortDate(post.published_at) }}</span>
-              <RouterLink :to="`/posts/${post.slug}`" class="archive__title">{{ post.title }}</RouterLink>
-              <span class="archive__tags">
-                <span v-for="tag in post.tags?.slice(0, 2)" :key="tag" class="tag tag--code">{{ tag }}</span>
-              </span>
-            </li>
-          </ul>
-          <div v-if="index < groupedPosts.length - 1" class="orn">✦</div>
-        </section>
-      </div>
+      <ArchiveLedger v-else-if="activeView === 'archive'" :groups="groupedPosts" />
 
-      <div v-else class="unified-tags-view">
-        <aside class="tag-filter-row print-tag-cloud rv" aria-label="标签筛选">
-          <button
-            v-for="tag in tags"
-            :key="tag"
-            type="button"
-            class="tag-filter-button tag"
-            :class="{ active: selectedTag === tag, 'tag--hot': selectedTag === tag }"
-            @click="selectTag(tag)"
-          >
-            {{ tag }}
-          </button>
-        </aside>
-
-        <div class="g2e print-tag-results">
-          <RouterLink
-            v-for="(post, index) in visiblePosts"
-            :key="post.slug"
-            :to="`/posts/${post.slug}`"
-            class="art print-article-strip rv"
-            :data-reveal-delay="Math.min(index, 6) * 50"
-          >
-            <div class="art__cat">{{ post.category || "Article" }}</div>
-            <h2 class="art__t art__t--lg">{{ post.title }}</h2>
-            <p class="art__p">{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
-            <div class="art__meta">
-              <span>{{ displayDate(post.published_at) }}</span>
-              <span>{{ post.read_time }}</span>
-            </div>
-          </RouterLink>
-        </div>
-      </div>
+      <TagResultsGrid
+        v-else
+        :tags="tags"
+        :selected-tag="selectedTag"
+        :posts="visiblePosts"
+        @select-tag="selectTag"
+      />
 
       <div
         v-if="activeView === 'latest' && !loading && !error && hasMore"

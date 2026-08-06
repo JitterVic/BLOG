@@ -1,0 +1,337 @@
+/* 首页特色：焦点大图卡的展示层（徽章/光斑/轨道/引言） */
+/* ==========================================================================
+   LATEST FEATURE + ORIGINAL ANIMATED MASCOT — interactive presentation pass
+   ========================================================================== */
+
+.home-latest-feature {
+  --feature-x: 50%;
+  --feature-y: 50%;
+  --feature-tilt-x: 0deg;
+  --feature-tilt-y: 0deg;
+  position: relative;
+  isolation: isolate;
+  perspective: 1200px;
+  gap: clamp(1.4rem, 3vw, 3.2rem);
+  padding-top: clamp(0.3rem, 1vw, 0.8rem);
+}
+
+.home-latest-feature::before {
+  content: "FEATURE / 01";
+  position: absolute;
+  top: -1rem;
+  left: 2.5rem;
+  z-index: 6;
+  padding: 0.22rem 0.55rem;
+  color: var(--paper, #f4efe6);
+  background: var(--accent, #8b2500);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+}
+
+.home-latest-feature .print-feature-image {
+  min-height: clamp(400px, 48vw, 570px);
+  border: 1px solid rgba(244, 239, 230, 0.14);
+  box-shadow:
+    0 22px 55px rgba(35, 25, 16, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  transform: rotateX(var(--feature-tilt-x)) rotateY(var(--feature-tilt-y));
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 0.45s var(--ease-expo), box-shadow 0.4s ease;
+}
+
+.home-latest-feature .print-feature-image:hover,
+.home-latest-feature .print-feature-image:focus-visible {
+  transform:
+    translateY(-6px)
+    rotateX(var(--feature-tilt-x))
+    rotateY(var(--feature-tilt-y));
+  box-shadow:
+    0 30px 70px rgba(35, 25, 16, 0.22),
+    0 0 0 1px rgba(184, 74, 42, 0.28);
+}
+
+.home-latest-feature .print-feature-image::before {
+  box-shadow:
+    inset 0 0 110px rgba(0, 0, 0, 0.36),
+    inset 0 -80px 110px rgba(0, 0, 0, 0.24);
+}
+
+.feature-spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle 250px at var(--feature-x) var(--feature-y), rgba(255, 238, 191, 0.19), transparent 65%),
+    linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.045) 48%, transparent 62%);
+  mix-blend-mode: screen;
+  transition: opacity 0.35s ease;
+}
+
+.feature-poster-mark {
+  position: absolute;
+  top: clamp(1.2rem, 2.5vw, 2rem);
+  right: clamp(1.2rem, 2.5vw, 2rem);
+  z-index: 5;
+  width: 4.1rem;
+  height: 4.1rem;
+  display: grid;
+  place-content: center;
+  gap: 0.05rem;
+  color: rgba(244, 239, 230, 0.88);
+  border: 1px solid rgba(244, 239, 230, 0.3);
+  border-radius: 50%;
+  background: rgba(25, 20, 16, 0.2);
+  backdrop-filter: blur(5px);
+  text-align: center;
+  transform: translateZ(28px) rotate(8deg);
+  animation: feature-seal-float 5s ease-in-out infinite;
+}
+
+.feature-poster-mark span {
+  font-family: var(--f-mono, monospace);
+  font-size: 0.42rem;
+  letter-spacing: 0.18em;
+}
+
+.feature-poster-mark strong {
+  font-family: var(--f-display, serif);
+  font-size: 1.45rem;
+  line-height: 0.9;
+}
+
+.feature-orbit {
+  position: absolute;
+  right: -7rem;
+  bottom: -8rem;
+  z-index: 2;
+  width: 22rem;
+  aspect-ratio: 1;
+  border: 1px solid rgba(244, 239, 230, 0.09);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: feature-orbit-spin 24s linear infinite;
+}
+
+.feature-orbit::before,
+.feature-orbit::after {
+  content: "";
+  position: absolute;
+  border: 1px solid rgba(244, 239, 230, 0.07);
+  border-radius: 50%;
+}
+
+.feature-orbit::before { inset: 2.8rem; }
+.feature-orbit::after { inset: 6.2rem; }
+
+.feature-orbit i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1935b;
+  box-shadow: 0 0 18px rgba(209, 147, 91, 0.65);
+}
+
+.feature-orbit i:nth-child(1) { top: 22%; left: 7%; }
+.feature-orbit i:nth-child(2) { top: 8%; right: 27%; width: 4px; height: 4px; }
+.feature-orbit i:nth-child(3) { bottom: 23%; left: 15%; width: 3px; height: 3px; }
+
+.home-latest-feature .print-feature-art {
+  align-items: flex-start;
+  transform: translateZ(32px);
+  transition: transform 0.55s var(--ease-expo);
+}
+
+.home-latest-feature .print-feature-image:hover .print-feature-art {
+  transform: translateZ(42px) translateY(-3px);
+}
+
+.feature-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.feature-kicker {
+  margin-top: clamp(2.2rem, 5vw, 4.5rem);
+  color: rgba(244, 239, 230, 0.62);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.home-latest-feature .print-feature-art h2 {
+  max-width: 12ch;
+  margin-top: 0.75rem;
+  text-wrap: balance;
+}
+
+.home-latest-feature .print-feature-art p {
+  max-width: 54ch;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.feature-open-hint {
+  margin-top: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: rgba(244, 239, 230, 0.76);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.feature-open-hint b {
+  width: 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 239, 230, 0.32);
+  border-radius: 50%;
+  font-size: 0.8rem;
+  transition: transform 0.28s var(--ease-spring), background 0.28s ease;
+}
+
+.print-feature-image:hover .feature-open-hint b,
+.print-feature-image:focus-visible .feature-open-hint b {
+  color: var(--ink, #1c1710);
+  background: var(--paper, #f4efe6);
+  transform: translate(3px, -3px) rotate(8deg);
+}
+
+.home-latest-feature .mimg__cap {
+  padding-left: clamp(1.5rem, 5vw, 4.5rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-latest-feature .print-lead-copy {
+  position: relative;
+  align-self: center;
+  min-height: 72%;
+  padding: clamp(2rem, 4vw, 3.6rem) clamp(1.4rem, 3vw, 2.8rem);
+  border-top: 1px solid var(--rule-light);
+  border-bottom: 1px solid var(--rule-light);
+  background:
+    linear-gradient(135deg, rgba(255, 253, 247, 0.38), transparent 52%),
+    rgba(239, 232, 219, 0.2);
+}
+
+.home-latest-feature .print-lead-copy::before {
+  content: "“";
+  position: absolute;
+  top: -0.9rem;
+  right: 0.8rem;
+  color: rgba(139, 37, 0, 0.09);
+  font-family: Georgia, serif;
+  font-size: clamp(6rem, 11vw, 10rem);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.home-latest-feature .print-lead-copy__inner {
+  position: relative;
+  z-index: 1;
+  gap: 1rem;
+}
+
+.lead-issue-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule-light);
+}
+
+.lead-issue-line > span {
+  color: var(--ink-faded);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home-latest-feature .print-lead-copy .art__t {
+  max-width: 13ch;
+  text-wrap: balance;
+}
+
+.home-latest-feature .print-lead-copy .print-read-more {
+  margin-top: 0.75rem;
+  padding-bottom: 0.28rem;
+  border-bottom: 1px solid rgba(139, 37, 0, 0.28);
+}
+
+@keyframes feature-seal-float {
+  0%, 100% { transform: translateZ(28px) translateY(0) rotate(8deg); }
+  50% { transform: translateZ(28px) translateY(-5px) rotate(3deg); }
+}
+
+@keyframes feature-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 920px) {
+  .home-latest-feature::before {
+    left: 1.35rem;
+  }
+
+  .home-latest-feature .print-feature-image {
+    min-height: clamp(390px, 72vw, 560px);
+    transform: none;
+  }
+
+  .home-latest-feature .print-feature-image:hover,
+  .home-latest-feature .print-feature-image:focus-visible {
+    transform: translateY(-4px);
+  }
+
+  .home-latest-feature .print-lead-copy {
+    min-height: 0;
+    padding: 2rem 1.4rem;
+  }
+
+  .home-latest-feature .print-lead-copy .art__t {
+    max-width: 20ch;
+  }
+}
+
+@media (max-width: 640px) {
+  .feature-poster-mark {
+    width: 3.45rem;
+    height: 3.45rem;
+  }
+
+  .feature-kicker {
+    margin-top: 1.8rem;
+  }
+
+  .home-latest-feature .print-feature-art h2 {
+    max-width: 10ch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-latest-feature .print-feature-image,
+  .home-latest-feature .print-feature-image:hover,
+  .feature-poster-mark,
+  .feature-orbit {
+    animation: none !important;
+    transform: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

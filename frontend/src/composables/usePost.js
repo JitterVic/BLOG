@@ -11,10 +11,6 @@ export function usePost({ errorMessage = DEFAULT_POST_ERROR } = {}) {
   let requestSequence = 0;
   let activeController = null;
 
-  const articleSections = computed(() => post.value?.sections || []);
-  const hasFallbackSections = computed(
-    () => !post.value?.html_content && articleSections.value.length > 0,
-  );
   const relatedPosts = computed(() => post.value?.related_posts || []);
   const previousPost = computed(() => post.value?.previous_post || null);
   const nextPost = computed(() => post.value?.next_post || null);
@@ -58,8 +54,6 @@ export function usePost({ errorMessage = DEFAULT_POST_ERROR } = {}) {
     post,
     error,
     loading,
-    articleSections,
-    hasFallbackSections,
     relatedPosts,
     previousPost,
     nextPost,

@@ -47,7 +47,7 @@ The backend is a standard src-layout Python package `blog` (`backend/src/blog/`,
 
 - **`app.py`** — `create_app()` app factory; module-level `app = create_app()` is the WSGI entrypoint. Loads root `.env` at import time via `env_loader` (repo root resolved by `env_loader.project_root()`, overridable with `BLOG_PROJECT_ROOT`). Defines all routes and thin request/response shaping (`summarize_post`, `build_profile_form`, `build_edit_post`). Delegates all persistence and rendering to `BlogStore`. Includes security audit logging (`audit()` helper) and login rate-limiting keyed by `BLOG_TRUSTED_PROXY_COUNT`.
 - **`store.py`** — `BlogStore`, the single hub for persistence, Markdown rendering, sanitization, uploads, slugs, read-time, and excerpts. **Most logic lives here.**
-- **`content.py`** — default seed data (`POSTS`, `SITE_CONFIG`), inserted only when the tables are empty.
+- **`content.py`** — default site profile seed (`SITE_CONFIG`), inserted only when the `site_profile` table is empty. No post seeding: posts are created exclusively through the admin console.
 - **`env_loader.py`** — minimal hand-rolled `.env` parser (no python-dotenv dependency); does not override already-set env vars. Also provides `project_root()`.
 - **`__main__.py`** — dev-server entrypoint (`python -m blog`).
 - **`templates/`** — server-rendered admin pages (`admin_login.html`, `admin_dashboard.html`, `admin_write.html`, `admin_profile.html`, `admin_media.html`, `admin_base.html`); `static/` holds the admin CSS/JS. The admin UI is classic Flask+Jinja, NOT Vue.

@@ -1,0 +1,8 @@
+<aside class="author-drawer author-drawer--wide" id="history-panel" hidden aria-labelledby="revision-title">
+  <div class="author-drawer__head"><div><span>History</span><h2 id="revision-title">关键版本</h2></div><button type="button" data-close-panel="history-panel" aria-label="关闭版本面板">×</button></div>
+  <div class="author-drawer__body revision-panel" id="revision-panel" data-post-id="{{ edit_post.id }}">
+    <p>自动保存不会制造历史记录；“保存版本”、发布、下架和恢复会保留节点。</p>
+    <span class="revision-count" id="revision-count">加载中…</span>
+    <div class="revision-layout"><div class="revision-list" id="revision-list" aria-live="polite"><p class="revision-empty">正在加载历史版本……</p></div><div class="revision-preview" id="revision-preview" hidden><div class="revision-preview__head"><div><span class="eyebrow" id="revision-preview-type">Revision</span><strong id="revision-preview-title">选择一个历史版本</strong><small id="revision-preview-time"></small></div><button type="button" class="post-action" id="revision-restore" hidden>恢复到编辑区</button></div><article class="markdown-body revision-preview__body" id="revision-preview-body"></article></div></div>
+  </div>
+</aside>

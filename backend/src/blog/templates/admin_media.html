@@ -1,6 +1,8 @@
 {% extends "admin_base.html" %}
 {% set admin_page = "media" %}
 
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='admin/css/media.css') }}" />{% endblock %}
+
 {% block page_title %}媒体资源{% endblock %}
 {% block page_description %}浏览上传图片、复制引用地址，并确认每张图片正在被哪些稿件使用。{% endblock %}
 

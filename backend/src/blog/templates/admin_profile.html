@@ -1,6 +1,8 @@
 {% extends "admin_base.html" %}
 {% set admin_page = "profile" %}
 
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='admin/css/profile.css') }}" />{% endblock %}
+
 {% block title %}封面资料 · 至知 Journal{% endblock %}
 {% block page_title %}封面资料{% endblock %}
 {% block page_description %}维护首页身份、联系卡片与关于页简介。{% endblock %}
