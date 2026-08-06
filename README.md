@@ -1,231 +1,201 @@
-# Flask + Vue Personal Blog
+# 至知 Journal — Flask + Vue 个人博客
 
-一个参考 [PaperGrid](https://github.com/xywml/PaperGrid) 气质重新实现的个人博客项目，前端使用 Vue 3 + Vite，后端使用 Flask，内容存储切换到了 SQLite，并内置了一个可登录的管理后台。
+一个报刊排版风格的个人博客：Vue 3 + Vite 前台，Flask 后端，SQLite 存储，内置单管理员写作后台。支持 Markdown 写作工作流、自动保存、历史版本、媒体库与回收站，前台自带 SEO（OG 标签、Atom feed、sitemap、robots.txt）。
 
-## 现在支持的能力
+## 功能特性
 
-- 前台博客展示：首页、文章、归档、标签、关于页
-- SQLite 数据库存储：站点资料、文章、草稿都落在本地数据库
-- 后台管理入口：登录后可以编辑个人资料、更新关于页内容、维护文章
-- Markdown 工作流：支持导入 `.md` 文件、在线预览、保存草稿、发布文章
-- 文件上传：支持头像上传和正文图片上传
+**前台**
+- 报刊式首页：封面、最新文章大图卡、热点排行、归档与标签筛选
+- 文章详情：阅读进度、目录跟随、代码高亮与复制、图片灯箱、上一篇/下一篇、相关推荐
+- 关于页、404 页、打印样式（print 适配）
+- SEO：文章页注入 title/description/OG/canonical；`/feed.xml`、`/sitemap.xml`、`/robots.txt`
 
-- 历史版本：手动保存、发布、下架和恢复时保留关键节点，支持预览并恢复为草稿
-- 文章回收站：删除后保留 30 天，可恢复为草稿，再次发布前不会出现在前台
-- 发布预检：同时执行客户端和服务端校验，区分必须修复的错误与可确认继续的提醒
-- 媒体库：浏览已上传图片、复制 URL/Markdown，并查看草稿、已发布和回收站文章的引用情况
-- 紧凑作者工作台：写作 / 分栏 / 预览、文章设置与媒体抽屉、目录跳转、移动端快速改稿
-- 服务器工作副本：修改已发布文章时保持线上版本不变，自动保存待发布修改并支持跨设备继续
-- 发布检查与版本比较：错误定位、提醒确认、线上/工作副本/历史版本差异比较和安全恢复
+**后台（单管理员）**
+- 紧凑写作台：写作 / 分栏 / 预览三种视图，Markdown 工具栏与快捷键
+- 自动保存：本地草稿缓存 + 服务器同步 + 版本冲突检测 + 离线重试
+- 发布预检：服务端校验错误/提醒，定位到具体字段
+- 历史版本：发布、下架、回收等关键节点自动留档，支持预览与恢复
+- 媒体库：图片上传（表单 / 粘贴 / 拖拽）、素材抽屉、文章引用关系
+- 稿件总览：搜索、状态筛选、排序、批量操作、内容健康度与待办提醒
+- 站点资料维护：名称、标语、简介、联系方式（前台实时预览卡片）
+
+**数据**
+- SQLite 单文件存储，启动时自动建表与幂等迁移
+- 文章回收站保留 30 天，可恢复
+- 正文图片上传至 `storage/media`（`storage/avatars` 仅保留历史文件）
+
+## 技术栈与架构
+
+| 端 | 技术 |
+|---|---|
+| 前端 | Vue 3（`<script setup>`）、Vue Router、Vite 6、highlight.js |
+| 后端 | Flask、SQLite（WAL）、Markdown（extra/fenced_code/tables/nl2br + HTML 白名单消毒）、Pillow（图片校验/压缩） |
+| 部署 | Gunicorn + systemd + Nginx + certbot（HTTPS），uv/pip 依赖管理 |
+
+后端采用「路由 — 服务 — 仓储」三层 + 工具模块的工程化拆分：
+
+```text
+backend/src/blog/
+├── app.py              # 应用工厂：配置、安全钩子、错误处理、蓝图注册
+├── config.py           # 启动配置读取与生产强校验
+├── security.py         # 会话鉴权、CSRF、登录限流、安全响应头
+├── serializers.py      # API 载荷裁剪
+├── seo.py              # Atom feed / sitemap / OG 注入
+├── uploads.py          # 上传校验、图片压缩、公开路径白名单
+├── validation.py       # 表单字段长度校验
+├── routes/             # 路由层：public / feed / spa / admin_auth / admin_pages / admin_posts / admin_api
+├── services/           # 服务层：post / media / profile / dashboard / import 业务编排
+├── repository/         # 仓储层：database / posts / revisions / profile / media（纯 SQLite 访问）
+├── markdown_tools/     # 工具层：renderer（渲染+消毒）/ frontmatter / analysis
+└── store.py            # 兼容门面：BlogStore 委托各服务（保留旧接口）
+```
+
+前端按职责拆分：
+
+```text
+frontend/src/
+├── services/       # http.js（请求基建）+ api.js（端点）
+├── lib/            # highlight.js（语言注册）、articleEnhancer.js（正文 DOM 增强）
+├── composables/    # useSite / usePost / usePosts / useReveal / usePageMeta / useFormat
+│                   # useReadingProgress / useTableOfContents / useLightbox
+├── components/     # home/、post/、posts/ 子目录 + SiteHeader / SiteFooter / AsyncState 等
+├── views/          # HomeView / PostsView / PostView / AboutView / NotFoundView（编排层）
+└── styles/         # editorial.css 聚合 12 个按层叠顺序导入的样式模块
+```
+
+管理后台静态资源同样模块化：`static/admin/css/` 按页面拆分（base/dashboard/write/media/profile），`static/admin/js/write/` 为 ES Modules（dom/util/api/save-state/editor/preview/workspace/panels/autosave/media/importer/publish/revisions + main 装配）。
 
 ## 目录结构
 
 ```text
-backend/    服务端：可安装的 Python 包（src/blog），Flask API、管理后台模板、数据库访问层
-frontend/   前端：Vue 3 SPA
-deploy/     Linux 部署脚本（deploy.sh、systemd/Nginx 示例、备份与恢复）
-scripts/    本地开发脚本（dev.ps1、verify.ps1、backup.ps1）
-storage/    SQLite 数据库和上传文件（运行时数据，不入库）
+backend/      服务端：可安装 Python 包（src/blog），Jinja 后台模板与静态资源，pytest 测试
+frontend/     前端：Vue 3 SPA，构建产物输出到 frontend/dist
+deploy/       Linux 部署：deploy.sh、systemd/Nginx 示例、备份与恢复脚本
+scripts/      Windows 本地脚本：dev.ps1、verify.ps1、backup.ps1
+storage/      SQLite 数据库与上传文件（运行时数据，不入库）
+storage-backups/  备份产物（Linux 备份脚本输出）
+docs/         上线检查清单等文档
 ```
 
-## 本地运行
+## 本地开发
 
-1. 安装后端依赖（使用 [uv](https://docs.astral.sh/uv/)，虚拟环境位于 `backend/.venv`）
+要求：Python ≥ 3.10、Node ≥ 18、[uv](https://docs.astral.sh/uv/)（可选，未安装时用 pip）。
 
 ```bash
+# 1. 后端依赖（虚拟环境位于 backend/.venv）
 uv sync --directory backend --group dev --group prod
-```
 
-2. 启动 Flask 后端
+# 2. 启动后端（自动加载根目录 .env）
+backend/.venv/bin/python -m blog
+# Windows: backend\.venv\Scripts\python.exe -m blog
 
-```bash
-backend/.venv/bin/python -m blog        # Windows: backend\.venv\Scripts\python.exe -m blog
-```
-
-3. 安装前端依赖
-
-```bash
+# 3. 前端
 cd frontend
 npm install
+npm run dev        # http://127.0.0.1:5173，Vite 代理 /api 到后端
 ```
 
-4. 启动 Vue 前端开发服务器
+也可以一键启动前后端：`.\scripts\dev.ps1`。
+
+## 环境变量（.env）
+
+复制 `.env.example` 为 `.env` 后按需修改，后端启动时自动读取：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `BLOG_SECRET_KEY` | dev 默认值 | 会话签名密钥，生产至少 32 位随机值 |
+| `BLOG_ADMIN_PASSWORD` | `admin123456` | 后台登录密码，生产至少 12 位强密码 |
+| `BLOG_ADMIN_PREFIX` | `/admin` | 后台入口路径，生产改为不易猜测的路径 |
+| `BLOG_HOST` / `BLOG_PORT` | `127.0.0.1` / `5000` | 开发服务器监听地址 |
+| `BLOG_DEBUG` | `false` | 生产必须 `false` |
+| `BLOG_COOKIE_SECURE` | `false` | 站点走 HTTPS 时必须 `true` |
+| `BLOG_PUBLIC_BASE_URL` | 空 | 公开域名，如 `https://blog.example.com`（RSS/sitemap/OG 使用） |
+| `BLOG_REQUIRE_PUBLIC_BASE_URL` | `false` | 上线时设 `true`，运行时强校验公开域名 |
+| `BLOG_TRUSTED_PROXY_COUNT` | `0` | Nginx 反向代理下设为 `1`（登录限流取真实客户端 IP） |
+| `BLOG_DATABASE_PATH` | `storage/blog.db` | 相对路径按项目根目录解析 |
+| `BLOG_MAX_UPLOAD_BYTES` | 10 MB | 单次上传上限（与 Nginx `client_max_body_size` 对应） |
+| `BLOG_MAX_IMAGE_BYTES` / `BLOG_MAX_IMAGE_PIXELS` | 5 MB / 2000 万像素 | 图片校验上限 |
+| `BLOG_SESSION_LIFETIME_SECONDS` | 8 小时 | 后台会话时长 |
+| `BLOG_LOGIN_MAX_ATTEMPTS` / `BLOG_LOGIN_RATE_WINDOW_SECONDS` | 5 / 300 | 登录限流 |
+
+> 生产模式下启动会做强校验：弱密钥、弱密码、默认后台路径、缺 HTTPS 域名等都会直接拒绝启动。
+
+## 测试
 
 ```bash
-npm run dev
+backend/.venv/bin/python -m pytest backend/tests -q
+# Windows 下如遇临时目录权限问题：--basetemp=.tmp/pytest
 ```
 
-前端默认运行在 `http://127.0.0.1:5173`，并通过 Vite 代理访问 Flask 的 `/api`。
+测试覆盖：后端集成测试（API、后台流程、数据库迁移、安全）、模块级测试（markdown 渲染与消毒、上传管线、序列化、SEO、安全配置）。
 
-## 使用 `.env`
-
-项目根目录已经支持自动读取 `.env`。你只需要直接运行：
-
-```bash
-backend/.venv/bin/python -m blog
-```
-
-后端会自动加载根目录下的 `.env`，不需要额外传参。
-
-当前可配置的主要变量：
-
-```bash
-BLOG_SECRET_KEY=change-me-before-deploy
-BLOG_ADMIN_PASSWORD=replace-with-a-strong-password
-BLOG_ADMIN_PREFIX=/your-hidden-admin-path
-BLOG_DATABASE_PATH=storage/blog.db
-BLOG_HOST=127.0.0.1
-BLOG_PORT=5000
-BLOG_DEBUG=false
-BLOG_COOKIE_SECURE=false
-BLOG_PUBLIC_BASE_URL=
-BLOG_REQUIRE_PUBLIC_BASE_URL=false
-```
-
-- `.env` 已加入忽略规则，不会被提交
-- `.env.example` 可以作为服务器或新环境的配置模板
-- `BLOG_DATABASE_PATH=storage/blog.db` 这种相对路径会自动按项目根目录解析
-
-## 后台入口
-
-默认后台地址：`/admin/login`
-
-默认后台密码：`admin123456`
-
-建议你在部署前一定修改下面这些环境变量：
-
-```bash
-BLOG_SECRET_KEY=replace-with-a-random-secret
-BLOG_ADMIN_PASSWORD=replace-with-a-strong-password
-BLOG_ADMIN_PREFIX=/your-hidden-admin-path
-BLOG_DATABASE_PATH=/absolute/path/to/blog.db
-BLOG_HOST=127.0.0.1
-BLOG_PORT=5000
-BLOG_DEBUG=false
-BLOG_COOKIE_SECURE=true
-BLOG_PUBLIC_BASE_URL=https://example.com
-BLOG_REQUIRE_PUBLIC_BASE_URL=true
-```
-
-说明：
-
-- `BLOG_ADMIN_PREFIX` 可以把后台入口从 `/admin` 改成你自己的隐藏路径，更接近你想要的“后门入口”
-- `BLOG_DATABASE_PATH` 不配置时，默认使用 `storage/blog.db`
-- 上传的头像和文章图片默认存放在 `storage/avatars` 和 `storage/media`
-
-## Markdown 发布流程
-
-1. 登录后台，从编辑台继续最近稿件或新建文章
-2. 在紧凑写作台输入 Markdown，草稿会自动保存到服务器；无标题内容也会先创建安全草稿
-3. 使用“文章设置”维护栏目、标签、Slug、摘要和封面，使用“图片”抽屉上传或选择已有图片
-4. 在“写作 / 分栏 / 预览”间切换，或打开登录态全页预览检查最终排版
-5. 点击“发布”进入发布检查；错误必须修复，提醒确认后可继续
-6. 修改已发布文章时，系统只更新服务器工作副本；点击“发布更新”后才会替换线上版本
-
-升级包含工作副本或媒体元数据表的版本前，先使用仓库备份脚本备份 `storage/blog.db` 和上传目录。数据库迁移为新增表，应用启动时会自动、幂等执行。
-## 构建前端
+## 构建与发布验证
 
 ```bash
 cd frontend
-npm run build
+npm run build          # 产物输出 frontend/dist，由 Flask 自动托管
 ```
 
-构建后，Flask 会自动托管 `frontend/dist` 里的静态文件。
-
-## 发布前一键验证
-
-在准备上线或提交前，可以从仓库根目录运行（完整清单见 `docs/launch-checklist.md`）：
+Windows 一键验证（测试 + 构建 + API 冒烟 + 生产配置检查）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch   # 上线前严格模式
 ```
 
-脚本会依次执行后端 pytest、前端生产构建、临时后端 API 冒烟验证（默认端口 `5055`，并强制 `BLOG_DEBUG=false` 以检查生产启动约束）。如果端口被占用，可以指定 `-Port 5060`；如果只想跳过前端构建，可以加 `-SkipFrontend`。
+## Linux + Nginx 部署
 
-上线前请额外运行严格配置检查：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch
-```
-
-`-StrictLaunch` 会失败退出，直到 `.env` 中的后台密码足够强、后台路径不是默认 `/admin`、`BLOG_PUBLIC_BASE_URL` 已设置为真实的 HTTPS 公开域名、`BLOG_REQUIRE_PUBLIC_BASE_URL=true`，并且 HTTPS 场景下 `BLOG_COOKIE_SECURE=true`。
-
-## Linux 服务器一键部署
-
-如果服务器是 Linux，可以使用 `deploy/deploy.sh`。它会创建/更新 `backend/.venv`（优先用 uv，未安装时回退 pip）、安装生产依赖（含 Gunicorn）、构建前端、校验生产 `.env`，并可安装/重启 systemd 服务。建议在有 sudo 权限的普通管理员账号下执行。
-
-首次运行前先准备 `.env`：
+要求：Ubuntu/Debian，Python ≥ 3.10（含 venv）、Node ≥ 18、nginx、certbot（HTTPS 时）。完整清单见 `docs/launch-checklist.md`。
 
 ```bash
+# 1. 获取代码
+sudo mkdir -p /opt/blog && sudo chown $USER /opt/blog
+git clone <仓库地址> /opt/blog && cd /opt/blog
+
+# 2. 准备生产配置
 cp .env.example .env
-nano .env
+nano .env     # 至少修改：BLOG_SECRET_KEY / BLOG_ADMIN_PASSWORD / BLOG_ADMIN_PREFIX
+              # BLOG_PUBLIC_BASE_URL=https://域名 / BLOG_REQUIRE_PUBLIC_BASE_URL=true / BLOG_COOKIE_SECURE=true
+
+# 3. 一键部署（依赖 + 测试 + 构建 + systemd 服务 + Nginx 反代 + TLS 证书 + 每日备份 timer）
+DOMAIN=你的域名 INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=你的邮箱 deploy/deploy.sh
 ```
 
-至少修改：`BLOG_SECRET_KEY`、`BLOG_ADMIN_PASSWORD`、`BLOG_ADMIN_PREFIX`、`BLOG_PUBLIC_BASE_URL`、`BLOG_REQUIRE_PUBLIC_BASE_URL=true`、`BLOG_COOKIE_SECURE=true`。
+可选参数（环境变量传入）：`SERVICE_NAME`（默认 blog）、`SERVICE_USER`、`APP_PORT`（8000）、`GUNICORN_WORKERS`（2）、`RUN_TESTS`、`INSTALL_SERVICE`、`INSTALL_NGINX`、`INSTALL_TLS`、`TLS_EMAIL`、`BACKUP_KEEP`（7）。
 
-常用部署命令：
+脚本行为说明：
 
-```bash
-deploy/deploy.sh
-```
+- 使用 `INSTALL_NGINX=1` 时自动在 `.env` 写入 `BLOG_TRUSTED_PROXY_COUNT=1`
+- Nginx 配置写入 `/etc/nginx/sites-available/blog.conf`（gzip、10m 上传上限、转发头），`nginx -t` 通过后 reload
+- 证书签发后 Nginx 配置由 certbot 托管，后续重跑脚本不会覆盖 TLS 配置
+- systemd 服务以独立账号运行并启用沙箱加固，开机自启
+- 无域名临时体验：`.env` 中 `BLOG_PUBLIC_BASE_URL` 留空、`BLOG_REQUIRE_PUBLIC_BASE_URL=false`、`BLOG_COOKIE_SECURE=false`，`DOMAIN=服务器IP deploy/deploy.sh`（仅 HTTP）
 
-`deploy/deploy.sh` 已自带可执行权限，无需 `chmod +x`。
+手动配置 Nginx 可参考 `deploy/nginx.conf.example`，systemd 单元参考 `deploy/blog.service.example`。
 
-如果服务器已经安装了 Nginx，并希望脚本同时写入反向代理配置：
-
-```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 deploy/deploy.sh
-```
-
-同时用 certbot 签发 TLS 证书：
+## 备份与恢复
 
 ```bash
-DOMAIN=blog.example.com INSTALL_NGINX=1 INSTALL_TLS=1 TLS_EMAIL=you@example.com deploy/deploy.sh
-```
-
-可选参数通过环境变量传入：`SERVICE_NAME`、`SERVICE_USER`、`APP_PORT`、`GUNICORN_WORKERS`、`RUN_TESTS`、`INSTALL_SERVICE`、`INSTALL_NGINX`、`INSTALL_TLS`、`TLS_EMAIL`、`BACKUP_KEEP`。详见 `docs/launch-checklist.md`。
-
-deploy/deploy.sh 会自动在 `.env` 中写入 `BLOG_TRUSTED_PROXY_COUNT=1`（当 INSTALL_NGINX=1 时），确保 Nginx 反代下的登录限流使用真实客户端 IP 而非 127.0.0.1。
-
-### 备份与恢复
-
-部署后可使用 Linux 备份/恢复脚本：
-
-```bash
-# 手动备份
+# Linux：手动备份（数据库一致性快照 + avatars/media）
 bash deploy/backup.sh
 
-# 从备份恢复（会先自动创建回滚点）
+# 恢复（恢复前自动创建回滚点）
 bash deploy/restore.sh storage-backups/blog-backup-<时间戳>.tar.gz --yes
 ```
 
-deploy/deploy.sh 默认安装每日定时备份 systemd timer（03:20 ±15min，保留 7 份）。
+- 每日自动备份：systemd timer（每天 03:20 ±15min，保留 `BACKUP_KEEP` 份）
+- 本地备份：`./scripts/backup.ps1`（Windows）
+- 升级或迁移前务必备份 `storage/blog.db`、`storage/media`（含历史 `storage/avatars`）
 
-## 部署前建议
+## 常见问题
 
-- 修改默认后台密码和 `secret key`（至少 32 位）
-- 把 `BLOG_ADMIN_PREFIX` 设成不容易猜到的路径
-- 关闭 `BLOG_DEBUG`；如果站点已通过 HTTPS 对外发布，建议将 `BLOG_REQUIRE_PUBLIC_BASE_URL` 设为 `true`，并将 `BLOG_COOKIE_SECURE` 设为 `true`
-- 备份 `storage/blog.db` 和 `storage/` 上传目录（可用 `bash deploy/backup.sh`）
-- 如果是正式服务器，建议使用 Nginx + Gunicorn 生产部署方式，而不是 Flask 自带开发服务器
+- **后台登录不上（已配 HTTPS）**：确认 `BLOG_COOKIE_SECURE=true` 且访问的是 https 地址；HTTP 下登录会被安全策略拒绝。
+- **上传图片报 413**：`BLOG_MAX_UPLOAD_BYTES` 与 Nginx `client_max_body_size`（默认 10m）需匹配。
+- **登录限流误判**：Nginx 反代场景确认 `BLOG_TRUSTED_PROXY_COUNT=1`。
+- **修改已发布文章**：草稿修改不会影响线上，点击「发布更新」后生效；重要节点会留历史版本，可随时恢复。
 
-## 第一阶段上线需求说明
+## 安全提醒
 
-当前项目已按“个人主页优先 + 轻量上线 + 单管理员后台”的方向推进：
-
-- 首页定位为个人主页，突出头像、昵称、身份、简介、联系方式、精选/最新文章和关注标签。
-- 关于页展示更完整的个人资料、动态记录和联系入口。
-- 文章页补齐了未发布/不存在文章的友好提示，并优化了 Markdown 图片、表格、代码块等基础阅读样式。
-- 后台继续保持单管理员模式，支持维护首页标题、身份、简介、关于页、头像、文章和正文图片。
-- 后台文章可以保存为草稿/下架、发布、设置为首页精选，也可以删除。
-- 草稿文章不会出现在前台 API 和页面中。
-
-### 上线前检查清单
-
-1. 修改 `.env` 中的 `BLOG_SECRET_KEY` 和 `BLOG_ADMIN_PASSWORD`。
-2. 将 `BLOG_ADMIN_PREFIX` 改成不容易猜到的后台路径。
-3. 确认 `BLOG_DEBUG=false`。
-4. 运行 `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch`，确认后端测试、前端构建、API 冒烟验证和严格上线配置检查全部通过。
-5. 确认 `frontend/dist/` 已由最新构建生成。
-6. 备份 `storage/blog.db`、`storage/avatars` 和 `storage/media`。
-7. 登录后台确认首页资料、关于页文案、联系方式和已发布文章内容。
+- 生产环境必须修改 `BLOG_SECRET_KEY`（≥32 位随机）、`BLOG_ADMIN_PASSWORD`（强密码）、`BLOG_ADMIN_PREFIX`（非默认路径）
+- `.env` 已被 gitignore，切勿提交真实密钥
+- 使用 Nginx + Gunicorn 生产部署，不要用 Flask 开发服务器对外服务
