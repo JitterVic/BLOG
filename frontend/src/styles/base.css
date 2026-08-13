@@ -42,8 +42,8 @@ select {
   --ring:rgba(139,37,0,.2);--shadow:0 20px 46px rgba(42,36,28,.08);
   --study-font:var(--f-display);--ui-font:var(--f-mono);
 }
-html{overflow-x:hidden;background:var(--paper);scrollbar-color:var(--ink-faded) var(--paper-dark);scrollbar-width:thin}
-body{position:relative;margin:0;min-width:320px;overflow-x:hidden;color:var(--ink);background:var(--paper);background-image:none;font-family:var(--f-mono);font-size:.84rem;font-weight:400;line-height:1.7}
+html{overflow-x:clip;background:var(--paper);scrollbar-color:var(--ink-faded) var(--paper-dark);scrollbar-width:thin}
+body{position:relative;margin:0;min-width:320px;overflow-x:clip;color:var(--ink);background:var(--paper);background-image:none;font-family:var(--f-mono);font-size:.84rem;font-weight:400;line-height:1.7}
 body::before{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");opacity:.035;mix-blend-mode:multiply}
 body::after{content:"";position:fixed;inset:0;z-index:9998;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(26,22,17,.006) 3px,rgba(26,22,17,.006) 4px),repeating-linear-gradient(90deg,transparent,transparent 5px,rgba(26,22,17,.004) 5px,rgba(26,22,17,.004) 6px)}
 ::selection{color:var(--paper);background:var(--accent)}

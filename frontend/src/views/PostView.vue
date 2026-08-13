@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
@@ -60,6 +60,24 @@ async function buildArticleNavigation() {
   await buildNavigation(enhanceBody);
 }
 
+function getSavedScrollPosition() {
+  const savedPosition = window.history.state?.scroll;
+  const top = Number(savedPosition?.top);
+  const left = Number(savedPosition?.left);
+  if (!Number.isFinite(top) || !Number.isFinite(left)) return null;
+  return { top, left };
+}
+
+async function restoreSavedScrollPosition(savedPosition) {
+  if (!savedPosition) return;
+  await nextTick();
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  });
+  window.scrollTo({ ...savedPosition, behavior: "auto" });
+  updateReadingProgress();
+}
+
 async function retryPost() {
   await loadPost(route.params.slug);
   await buildArticleNavigation();
@@ -75,6 +93,7 @@ watch([post, site], () => {
 });
 
 onMounted(async () => {
+  const savedScrollPosition = getSavedScrollPosition();
   try {
     await ensureSite();
   } catch (err) {
@@ -83,6 +102,7 @@ onMounted(async () => {
 
   await loadPost(route.params.slug);
   await buildArticleNavigation();
+  await restoreSavedScrollPosition(savedScrollPosition);
   refreshReveal();
 });
 
@@ -90,10 +110,12 @@ watch(
   () => route.params.slug,
   async (slug) => {
     if (slug) {
+      const savedScrollPosition = getSavedScrollPosition();
       closeLightbox();
       readingProgress.value = 0;
       await loadPost(slug);
       await buildArticleNavigation();
+      await restoreSavedScrollPosition(savedScrollPosition);
       refreshReveal();
     }
   },

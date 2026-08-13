@@ -1,7 +1,7 @@
-﻿# Article Table of Contents Follow Design
+# Article Table of Contents Follow Design
 
 Date: 2026-08-12
-Status: Approved approach, pending written-spec review
+Status: Approved for implementation
 
 ## Context
 
@@ -36,13 +36,13 @@ The current active-section calculation also depends on headings intersecting a n
 
 Replace root-level horizontal clipping based on `overflow-x: hidden` with `overflow-x: clip`. This still prevents decorative horizontal overflow from producing a scrollbar, but does not create the scrolling ancestor that breaks the article TOC's sticky positioning.
 
-Desktop behavior remains a left sidebar with:
+Desktop behavior uses a right sidebar so the article and its code blocks keep the primary left reading column:
 
 - `position: sticky` below the fixed site header;
 - a viewport-bounded maximum height;
 - independent vertical scrolling when the TOC is longer than the available space.
 
-At widths up to 920px, the TOC becomes a horizontal sticky strip below the mobile site header instead of a normal in-flow block. It receives an opaque paper background, border treatment, and a suitable stacking level so article text does not show through it.
+At widths up to 1280px, the TOC becomes a horizontal sticky strip below the mobile site header instead of a normal in-flow block. It receives an opaque paper background, border treatment, and a suitable stacking level so article text does not show through it.
 
 ### 2. Derive the active section from the reading position
 
@@ -76,14 +76,22 @@ TOC buttons remain real `button` elements and retain `aria-current="location"` f
 
 The clicked item may be marked active immediately for responsive feedback, but the reading-position calculation remains authoritative after scrolling progresses or completes.
 
+### 5. Clarify the admin excerpt placeholder
+
+The article settings drawer keeps the existing optional excerpt behavior, but its placeholder changes from the vague `留空自动生成` to `可不填，系统会根据正文自动生成摘要`. This is presentation-only: stored excerpts, automatic excerpt generation, preview behavior, and publishing logic remain unchanged.
+
 ## Component and File Scope
 
 Expected production changes:
 
+- `backend/src/blog/templates/admin/partials/write_metadata_panel.html`
+  - clarify the optional excerpt placeholder without changing form behavior;
 - `frontend/src/styles/base.css`
   - change root horizontal clipping from `hidden` to `clip`;
 - `frontend/src/styles/post.css`
-  - preserve desktop sticky behavior and make the mobile horizontal TOC sticky, layered, and independently scrollable;
+  - place the desktop sticky TOC to the right of the article body;
+  - preserve mobile source order so the horizontal TOC remains above the article;
+  - keep the mobile horizontal TOC sticky, layered, and independently scrollable;
 - `frontend/src/composables/useTableOfContents.js`
   - replace narrow `IntersectionObserver` activation with animation-frame-throttled reading-position tracking;
   - add listener/frame cleanup;
@@ -100,7 +108,7 @@ Expected production changes:
 - Clicking a subsection near the end of the document activates and reveals it.
 - Reversing direction updates to the preceding section.
 - At the document bottom, the final heading is active even if it cannot reach the reading line.
-- Resizing across the 920px breakpoint changes TOC alignment from vertical to horizontal without moving the article's vertical scroll position.
+- Resizing across the 1280px breakpoint changes TOC alignment from vertical to horizontal without moving the article's vertical scroll position.
 - Reduced-motion mode avoids smooth animation for both article navigation and TOC alignment.
 
 ## Validation
@@ -144,3 +152,23 @@ The fix is accepted when:
 - the active entry remains visible in the TOC's own scroll viewport on both layouts;
 - TOC alignment never causes an unintended vertical article jump;
 - frontend build, backend tests, and real-browser verification pass.
+
+## Approved Layout Correction
+
+The first right-side implementation centered the combined `article + gap + TOC` grid. At a 1440px viewport this moved the 760px article column left of the viewport center. Because wide code blocks expand from the article center toward the viewport edges, that offset also caused part of the code surface to be clipped.
+
+The approved correction uses a viewport-wide symmetric three-track grid:
+
+- equal flexible left and right rails surround the fixed 760px article track;
+- the article occupies the center track and therefore keeps the same center and width whether or not a TOC exists;
+- the TOC occupies only the independent right rail, with a visual gap from the article, and does not participate in article centering;
+- the TOC remains sticky and its navigation remains independently scrollable;
+- at widths up to 1280px, the right rail is replaced by the existing horizontal sticky TOC above the centered article before the rail can overlap or compress content;
+- mobile behavior remains the horizontal sticky TOC above the article.
+
+Additional acceptance checks:
+
+- at 1440 x 900, the article center matches the viewport center and remains 760px wide;
+- the right TOC does not overlap, shift, or narrow the article;
+- wide code blocks expand symmetrically and remain horizontally usable;
+- at intermediate widths below the desktop rail breakpoint, the horizontal TOC appears before the right rail becomes too narrow.

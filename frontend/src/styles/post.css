@@ -4,40 +4,49 @@
    ========================================================================== */
 
 .post-reading-layout {
-  width: min(1180px, calc(100% - 5rem));
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(168px, 220px) minmax(0, 760px);
-  justify-content: center;
-  align-items: start;
-  gap: clamp(2rem, 6vw, 6rem);
+  --post-article-width: 760px;
+  --post-toc-width: 220px;
+  --post-toc-gap: clamp(2rem, 3vw, 3rem);
+  width: 100vw;
+  margin-right: calc(50% - 50vw);
+  margin-left: calc(50% - 50vw);
   padding: 0 0 4rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--post-article-width)) minmax(0, 1fr);
+  grid-template-areas: ". article toc";
+  align-items: start;
 }
 
-/* Articles without h2/h3 render no TOC aside; collapse to a single centered column
-   so the body is not auto-placed into the narrow TOC track. */
+/* Keep the reading column centered whether or not the article has a TOC. */
 .post-reading-layout--no-toc {
-  grid-template-columns: minmax(0, 760px);
+  grid-template-areas: ". article .";
 }
 
 .post-reading-layout > .print-markdown,
 .post-reading-layout > .post-body {
   width: 100%;
+  min-width: 0;
   max-width: none;
   margin: 0;
   box-sizing: border-box;
+  grid-area: article;
 }
 
 .article-toc {
+  grid-area: toc;
   position: sticky;
   top: 6.8rem;
+  width: min(var(--post-toc-width), calc(100% - var(--post-toc-gap)));
   max-height: calc(100vh - 8.5rem);
-  overflow: auto;
+  min-height: 0;
+  margin-left: var(--post-toc-gap);
   padding: 0.9rem 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-self: start;
+  overflow: hidden;
   border-top: 2px solid var(--ink, #2a241c);
-  scrollbar-width: thin;
 }
-
 .article-toc__head {
   display: flex;
   align-items: baseline;
@@ -59,8 +68,13 @@
 }
 
 .article-toc nav {
+  min-height: 0;
+  flex: 1 1 auto;
   display: grid;
   gap: 0.12rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .article-toc button {
@@ -129,25 +143,41 @@
   scroll-margin-top: 6.5rem;
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1280px) {
   .post-reading-layout {
-    width: calc(100% - 2.7rem);
-    grid-template-columns: 1fr;
+    width: min(var(--post-article-width), calc(100% - 2.7rem));
+    margin-right: auto;
+    margin-left: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "toc" "article";
     gap: 1.4rem;
   }
 
+  .post-reading-layout--no-toc {
+    grid-template-areas: "article";
+    gap: 0;
+  }
+
   .article-toc {
-    position: relative;
-    top: auto;
+    position: sticky;
+    top: 3.55rem;
+    z-index: 90;
+    width: auto;
     max-height: none;
-    padding: 0.85rem 0 0;
-    border-top-width: 1px;
+    margin: 0 -1.35rem;
+    padding: 0.65rem 1.35rem 0.75rem;
+    justify-self: stretch;
+    border-top: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+    border-bottom: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+    background: var(--paper, #f4efe6);
+    box-shadow: 0 12px 24px rgba(42, 36, 28, 0.08);
   }
 
   .article-toc nav {
     display: flex;
     gap: 0.45rem;
     overflow-x: auto;
+    overflow-y: hidden;
     padding-bottom: 0.5rem;
     scrollbar-width: thin;
   }
@@ -177,8 +207,12 @@
   .article-toc > p {
     display: none;
   }
-}
 
+  .post-reading-layout .print-markdown h2,
+  .post-reading-layout .print-markdown h3 {
+    scroll-margin-top: 11rem;
+  }
+}
 @media (max-width: 640px) {
   .post-reading-layout {
     width: calc(100% - 2.7rem);

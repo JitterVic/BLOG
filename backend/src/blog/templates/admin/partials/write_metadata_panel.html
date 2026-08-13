@@ -7,7 +7,7 @@
       <label class="field-wide"><span>Slug</span><div class="field-inline"><input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" /><button type="button" id="generate-slug-button">生成短链</button></div><small id="slug-hint" class="field-hint" hidden>中文链接会被编码，建议使用英文短链。</small></label>
       <label class="field"><span>发布日期</span><input type="date" name="published_at" value="{{ edit_post.published_at }}" /></label>
       <label class="field"><span>阅读时间</span><input type="text" id="read_time" name="read_time" value="{{ edit_post.read_time }}" placeholder="自动估算" maxlength="32" /></label>
-      <label class="field-wide"><span>摘要</span><textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="留空自动生成" maxlength="1200">{{ edit_post.excerpt }}</textarea></label>
+      <label class="field-wide"><span>摘要</span><textarea class="small-textarea" id="excerpt" name="excerpt" placeholder="可不填，系统会根据正文自动生成摘要" maxlength="1200">{{ edit_post.excerpt }}</textarea></label>
       <label class="field-wide"><span>题记</span><input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="显示在标题下方的短句" maxlength="1000" /></label>
       <label class="field-wide"><span>文章封面图</span><input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" maxlength="2048" /></label>
     </div>
