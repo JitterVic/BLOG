@@ -1,0 +1,104 @@
+{
+  "name": "ZhiZhi Editorial Cat Pet",
+  "version": "2.0.0",
+  "description": "Codex-style companion desk pet for ZhiZhi Editorial Blog",
+  "specification": "hatch-pet-v2",
+  "author": "Antigravity",
+  "canvas": {
+    "width": 360,
+    "height": 360
+  },
+  "states": {
+    "idle_home": {
+      "image": "idle_home.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "reading_book": {
+      "image": "reading_book.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "archive_lens": {
+      "image": "archive_lens.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "about_welcome": {
+      "image": "about_welcome.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "typing_bongo": {
+      "image": "typing_bongo.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "sleeping_curl": {
+      "image": "sleeping_curl.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "dragging_scruff": {
+      "image": "dragging_scruff.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "rocket_launch": {
+      "image": "rocket_launch.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "stretch": {
+      "image": "stretch.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "grooming": {
+      "image": "grooming.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "eureka": {
+      "image": "eureka.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "curious_look": {
+      "image": "curious_look.png",
+      "size": [
+        360,
+        360
+      ]
+    },
+    "petting_hearts": {
+      "image": "petting_hearts.png",
+      "size": [
+        360,
+        360
+      ]
+    }
+  }
+}

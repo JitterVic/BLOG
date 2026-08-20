@@ -2,8 +2,8 @@
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 
+import CatPet from "./components/pet/CatPet.vue";
 import CursorEffects from "./components/CursorEffects.vue";
-import FloatingCat from "./components/FloatingCat.vue";
 import InitialLoader from "./components/InitialLoader.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 import SiteHeader from "./components/SiteHeader.vue";
@@ -47,7 +47,7 @@ onMounted(async () => {
   <div class="page-shell print-shell" :class="pageTheme">
     <InitialLoader />
     <CursorEffects />
-    <FloatingCat />
+    <CatPet />
     <SiteHeader />
 
     <main class="app-main print-main">
