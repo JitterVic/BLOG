@@ -1,30 +1,92 @@
-# Repository Guidelines
+# Repository Guidelines & Architecture Standards
 
-## Project Structure & Module Organization
+本项目为基于 Flask + Vue 3 的报刊排版风格个人博客。本文档为开发人员及 AI 编码助手提供代码架构、开发约束、设计原则与质量把控基准。
 
-This repository is a Flask + Vue personal blog. Backend code lives in `backend/` as an installable Python package (`backend/src/blog/`): `app.py` defines routes and app startup, `store.py` handles SQLite persistence and Markdown rendering, `content.py` contains seeded/default content, and `src/blog/templates/` + `src/blog/static/` store the admin HTML pages and assets. `backend/pyproject.toml` declares dependencies (managed with uv). Frontend code lives in `frontend/src/`: `views/` contains route pages, `components/` shared UI, `composables/` reusable Vue state, `services/api.js` API calls, and `router/` route definitions. Linux deployment scripts live in `deploy/` (`deploy.sh`, systemd/Nginx examples, backup/restore); local dev scripts live in `scripts/` (`dev.ps1`, `verify.ps1`, `backup.ps1`). Runtime data and uploads are under `storage/`; do not commit private databases or uploaded media unless intentionally versioned. Build artifacts (`frontend/dist/`), local run logs (`output/`), and Playwright captures are generated files.
+---
 
-## Build, Test, and Development Commands
+## 1. 架构分层与职责边界
 
-- `uv sync --directory backend --group dev --group prod` creates `backend/.venv` and installs Flask/Markdown/Pillow plus pytest and gunicorn.
-- `backend/.venv/bin/python -m blog` starts the Flask API/admin server and loads `.env` from the repository root (Windows: `backend\.venv\Scripts\python.exe -m blog`).
-- `cd frontend && npm install` installs Vue/Vite dependencies.
-- `cd frontend && npm run dev` starts the Vite development server at `127.0.0.1:5173` with API proxying.
-- `cd frontend && npm run build` builds production assets into `frontend/dist/`, which Flask can serve.
-- `cd frontend && npm run preview` previews the built frontend locally.
+### 后端分层架构 (`backend/src/blog/`)
 
-## Coding Style & Naming Conventions
+后端采用标准 Python src-layout 结构，严格执行分层设计与单一职责原则：
 
-Use 4-space indentation for Python and keep functions small and route helpers explicit. Prefer `pathlib.Path` for filesystem paths and environment-backed configuration via `backend/src/blog/env_loader.py`. Vue files use `<script setup>`, 2-space indentation, PascalCase component files such as `PostCard.vue`, and camelCase JavaScript names. Keep shared CSS in `frontend/src/styles.css` unless a style is tightly coupled to a new component.
+1. **路由层 (`routes/`)**：
+   - `public.py`：公开数据接口（`/api/site`, `/api/posts`, `/api/posts/<slug>`, `/api/health`）。
+   - `feed.py`：动态生成 `/feed.xml`（Atom）、`/sitemap.xml` 与 `/robots.txt`。
+   - `spa.py`：SPA 单页应用托管与基于路由的 Open Graph 动态注入。
+   - `admin_auth.py` / `admin_pages.py` / `admin_posts.py` / `admin_api.py`：管理后台登录、页面渲染、稿件操作及 AJAX 交互接口。
+   - 职责范围：仅负责 HTTP 请求解析、权限拦截、响应封装，不包含直接 SQL 操作或复杂业务逻辑。
 
-## Testing Guidelines
+2. **服务层 (`services/`)**：
+   - `post_service.py`：文章生命周期管理（草稿、发布、版本快照、自动清理、Slug 唯一性算法）。
+   - `media_service.py`：素材上传处理、图片尺寸约束与文章引用关联追踪。
+   - `profile_service.py`：站点全局配置管理。
+   - `dashboard_service.py`：仪表盘统计数据聚合与健康度分析。
+   - `import_service.py`：Markdown/Frontmatter 内容解析与导入转换。
 
-Backend tests live in `backend/tests/test_backend.py` and run with `backend/.venv/bin/python -m pytest backend/tests -q` (add `--basetemp=<clean-dir>` on Windows machines with broken temp-dir ACLs). Before submitting changes, run the backend test suite and execute `npm run build` to catch frontend compile errors. Frontend tests, if added, go next to components as `*.spec.js` and are documented in `package.json`.
+3. **仓储层 (`repository/`)**：
+   - `database.py`：SQLite 连接池（WAL 模式）、建表与幂等增量迁移机制。
+   - `posts.py` / `revisions.py` / `profile.py` / `media.py`：纯 SQL 数据访问层，负责底层数据持久化与 JSON 字段编解码。
 
-## Commit & Pull Request Guidelines
+4. **工具与基建层**：
+   - `markdown_tools/`：Markdown 扩展渲染、`SafeHTMLCleaner` XSS 消毒与正文统计指标计算。
+   - `security.py`：基于 HMAC 的 Session 鉴权、CSRF 防护、防爆破登录限流（`BLOG_TRUSTED_PROXY_COUNT`）。
+   - `uploads.py`：图片类型校验与 Pillow 内存安全压缩。
+   - `store.py`：门面层（`BlogStore`），为历史代码提供向下兼容的统一委托入口。
 
-Recent commits use concise, imperative summaries, for example `Refine single-page calendar flip navigation`. Keep subjects focused on one change. Pull requests should include a short description, manual verification steps, linked issues when available, and screenshots or Playwright captures for UI changes.
+### 前端架构 (`frontend/src/`)
 
-## Security & Configuration Tips
+- **状态管理**：采用单例 Composables 模式（如 `useSite.js`, `usePosts.js`, `usePost.js`），在模块作用域持有响应式状态并去重并发请求，不引入额外的状态管理库（Pinia/Vuex）。
+- **组件划分**：按业务模块拆分子目录（`components/home/`, `components/post/`, `components/posts/`, `components/pet/`），通用 UI 组件平铺于 `components/`。
+- **样式体系**：基于原生 CSS 变量构建 `styles/editorial.css`，聚合 12 个按层叠顺序加载的主题模块（reset, tokens, layout, typography, components, print 等）。
 
-Never commit real `.env` secrets. Start from `.env.example`, change `BLOG_SECRET_KEY`, `BLOG_ADMIN_PASSWORD`, and `BLOG_ADMIN_PREFIX` before deployment, and keep `BLOG_DEBUG=false` in production. Back up `storage/blog.db`, `storage/avatars/`, and `storage/media/` before migrations or releases.
+---
+
+## 2. 编码规范与命名约定
+
+- **Python**：
+  - 遵循 PEP 8，4 空格缩进。
+  - 文件路径处理统一采用 `pathlib.Path`。
+  - 函数与方法保持精简，类型提示与异常处理明确。
+- **Vue & JavaScript**：
+  - Vue 3 组件统一采用 `<script setup>` 语法，2 空格缩进。
+  - 组件文件名使用 PascalCase（如 `PostCard.vue`, `CatPet.vue`）。
+  - JavaScript 变量、函数与 Composable 使用 camelCase（如 `useTableOfContents.js`, `formatDate`）。
+- **持久化与数据规范**：
+  - Markdown 正文为**唯一真实数据源**（Source of Truth），读取文章时统一动态渲染与消毒。
+  - 数据库增量字段使用 `_migrate_schema` 中的 `PRAGMA table_info` 校验后执行 `ALTER TABLE ADD COLUMN`，保持幂等性。
+
+---
+
+## 3. 安全防护与边界约束
+
+1. **XSS 消毒边界**：所有 Markdown 渲染产物必须经过 `SafeHTMLCleaner` 标签与属性白名单清洗后方可存储或输出。
+2. **上传路径隔离**：上传资源只允许保存至 `storage/media/`（及历史 `storage/avatars/`），通过 `/uploads/<path>` 提供访问前必须通过 `is_allowed_public_upload_path` 路径白名单拦截。
+3. **代理与限流安全**：Nginx 等反向代理环境下必须配置 `BLOG_TRUSTED_PROXY_COUNT=1`，确保客户端真实 IP 取自可信的 `X-Forwarded-For` 节点，防止限流绕过。
+4. **生产环境强拦截**：`BLOG_DEBUG=false` 时，若检测到默认密钥、默认弱密码或默认后台路径，后端将强制终止启动。
+
+---
+
+## 4. 构建、测试与验证基准
+
+- **依赖同步**：
+  - 后端：`uv sync --directory backend --group dev --group prod`
+  - 前端：`cd frontend && npm install`
+- **本地服务启动**：
+  - 后端：`backend/.venv/bin/python -m blog`（Windows: `.\backend\.venv\Scripts\python.exe -m blog`）
+  - 前端：`cd frontend && npm run dev`
+  - 一键启动：`.\scripts\dev.ps1`
+- **自动化测试**：
+  - 执行指令：`backend/.venv/bin/python -m pytest backend/tests -q -p no:cacheprovider --basetemp=.tmp/pytest`
+- **静态构建**：
+  - 执行指令：`cd frontend && npm run build`（产物输出至 `frontend/dist/`）
+- **一键发布验证**：
+  - Windows 环境：`powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch`
+
+---
+
+## 5. 提交与变更规范
+
+- **Git Commit**：使用祈使语态的简明英文摘要（如 `Refine table of contents active observer` 或 `Optimize media upload validation pipeline`）。
+- **Pull Request**：包含改动摘要、相关 issue 索引、测试执行结果及 UI 改动的截图或录屏。
+- **敏感信息防御**：严禁提交包含真实凭证的 `.env` 文件；持久化数据 `storage/` 严禁提交至版本控制。

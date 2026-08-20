@@ -1,17 +1,31 @@
-.venv/
-__pycache__/
-*.pyc
+# Environment & Secrets
 .env
 .env.local
 .env.*.local
-storage/
+
+# Python & Virtual Environments
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node & Frontend
 frontend/node_modules/
 frontend/dist/
-.run/
-.playwright-cli/
-output/
-.codex/
+
+# Runtime Data & Storage (Persistent/Dynamic)
+storage/
 storage-backups/
+output/
+.run/
 .tmp/
+.playwright-cli/
+
+# IDE & Tooling
+.vscode/
+.idea/
+.codex/
 .agents/
 .claude/
