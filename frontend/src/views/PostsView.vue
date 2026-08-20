@@ -294,13 +294,12 @@ onBeforeUnmount(() => {
         empty-message="请检查网络连接后重试。"
         @retry="retryList"
       />
-      <div v-else-if="loading" class="posts-skeleton" aria-busy="true" aria-label="目录整理中">
-        <div v-for="n in 4" :key="n" class="posts-skeleton__item">
-          <div class="sk-line sk-line--sm"></div>
-          <div class="sk-line sk-line--lg"></div>
-          <div class="sk-line sk-line--md"></div>
-        </div>
-      </div>
+      <AsyncState
+        v-else-if="loading"
+        loading
+        variant="posts"
+        loading-message="目录正在整理装订……"
+      />
       <AsyncState
         v-else-if="!visiblePosts.length"
         empty

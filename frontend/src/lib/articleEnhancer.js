@@ -55,26 +55,76 @@ function enhanceImages(body, tracked, openLightbox) {
 function enhanceCodeBlocks(body, tracked) {
   body.querySelectorAll("pre").forEach((pre) => {
     const code = pre.querySelector("code");
-    if (!code || pre.querySelector(".code-copy-button")) return;
+    if (!code || pre.querySelector(".code-toolbar")) return;
     hljs.highlightElement(code);
-    pre.classList.add("has-copy-button");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "code-copy-button";
-    button.textContent = "COPY";
-    button.setAttribute("aria-label", "复制代码");
+    pre.classList.add("has-code-toolbar");
+
+    // 提取语言名称
+    let lang = "";
+    const langClass = Array.from(code.classList).find((c) => c.startsWith("language-") || c.startsWith("lang-"));
+    if (langClass) {
+      lang = langClass.replace(/^languages?-|^lang-/, "").toUpperCase();
+    }
+    if (!lang) {
+      lang = pre.getAttribute("data-lang") || "CODE";
+    }
+
+    // 创建顶部工具条
+    const toolbar = document.createElement("div");
+    toolbar.className = "code-toolbar";
+
+    const dots = document.createElement("div");
+    dots.className = "code-toolbar__dots";
+    dots.innerHTML = "<span></span><span></span><span></span>";
+
+    const label = document.createElement("span");
+    label.className = "code-toolbar__lang";
+    label.textContent = lang;
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "code-copy-button";
+    copyBtn.innerHTML = `
+      <svg class="copy-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <span class="copy-text">COPY</span>
+    `;
+    copyBtn.setAttribute("aria-label", "复制代码");
+
     const handler = async () => {
       try {
         await copyText(code.textContent || "");
-        button.textContent = "COPIED";
+        copyBtn.classList.add("copied");
+        copyBtn.innerHTML = `
+          <svg class="copy-icon-svg check-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span class="copy-text">COPIED!</span>
+        `;
       } catch {
-        button.textContent = "FAILED";
+        copyBtn.querySelector(".copy-text").textContent = "FAILED";
       }
-      window.setTimeout(() => { button.textContent = "COPY"; }, 1200);
+      window.setTimeout(() => {
+        copyBtn.classList.remove("copied");
+        copyBtn.innerHTML = `
+          <svg class="copy-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span class="copy-text">COPY</span>
+        `;
+      }, 1800);
     };
-    button.addEventListener("click", handler);
-    pre.appendChild(button);
-    tracked.push({ element: button, type: "button", handler });
+
+    copyBtn.addEventListener("click", handler);
+    toolbar.appendChild(dots);
+    toolbar.appendChild(label);
+    toolbar.appendChild(copyBtn);
+
+    pre.insertBefore(toolbar, code);
+    tracked.push({ element: copyBtn, type: "button", handler });
   });
 }
 

@@ -62,7 +62,7 @@ onMounted(async () => {
         <div class="quiet-about-layout">
           <article class="quiet-about-card quiet-about-card--intro rv" data-reveal-delay="40">
             <p class="section-label">Editor’s Note</p>
-            <h2>关于这本博客</h2>
+            <h2>关于博客</h2>
             <div class="quiet-about-copy">
               <p v-for="paragraph in introParagraphs" :key="paragraph">{{ paragraph }}</p>
             </div>

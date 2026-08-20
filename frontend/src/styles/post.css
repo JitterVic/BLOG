@@ -304,22 +304,125 @@
   outline: none;
 }
 
+/* ==========================================================================
+   ENHANCED TERMINAL CODE BLOCKS & TYPOGRAPHY
+   ========================================================================== */
+
 .print-markdown pre {
-  color: #352f28;
-  background: #eee7db;
-  box-shadow: inset 4px 0 0 rgba(139, 37, 0, 0.72);
+  position: relative;
+  margin: 2.2rem 0;
+  padding: 0;
+  overflow: hidden;
+  color: var(--code-fg, #eae2d5);
+  background: var(--code-bg, #221d18);
+  border: 1px solid rgba(232, 223, 208, 0.08);
+  border-radius: var(--radius-sm, 4px);
+  box-shadow: 0 12px 32px rgba(28, 23, 16, 0.16);
+}
+
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: var(--code-bar, #1a1612);
+  border-bottom: 1px solid rgba(232, 223, 208, 0.06);
+  user-select: none;
+}
+
+.code-toolbar__dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4a4035;
+  opacity: 0.75;
+  transition: transform 0.24s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity 0.2s ease;
+}
+
+.code-toolbar:hover .code-toolbar__dots span {
+  opacity: 0.95;
+}
+
+.code-toolbar:hover .code-toolbar__dots span:nth-child(1) { transform: scale(1.1); }
+.code-toolbar:hover .code-toolbar__dots span:nth-child(2) { transform: scale(1.1); transition-delay: 0.04s; }
+.code-toolbar:hover .code-toolbar__dots span:nth-child(3) { transform: scale(1.1); transition-delay: 0.08s; }
+
+.code-toolbar__dots span:nth-child(1) { background: #d9534f; opacity: 0.85; }
+.code-toolbar__dots span:nth-child(2) { background: #f0ad4e; opacity: 0.85; }
+.code-toolbar__dots span:nth-child(3) { background: #5cb85c; opacity: 0.85; }
+
+.code-toolbar__lang {
+  font-family: var(--f-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--ink-faded);
+}
+
+.code-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.28rem 0.68rem;
+  color: rgba(234, 226, 213, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xs, 2px);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  transition: all 0.25s var(--ease-quart);
+  user-select: none;
+}
+
+.code-copy-button .copy-icon-svg {
+  transition: transform 0.25s var(--ease-spring);
+}
+
+.code-copy-button:hover,
+.code-copy-button:focus-visible {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: translate3d(0, -1px, 0);
+  box-shadow: 0 4px 12px rgba(139, 37, 0, 0.3);
+}
+
+.code-copy-button:active {
+  transform: translate3d(0, 1px, 0) scale(0.96);
+}
+
+.code-copy-button.copied {
+  color: #fff;
+  background: #2e682a;
+  border-color: #2e682a;
+  box-shadow: 0 4px 14px rgba(46, 104, 42, 0.35);
+}
+
+.code-copy-button.copied .check-icon {
+  animation: check-pop 0.35s var(--ease-spring) both;
+}
+
+@keyframes check-pop {
+  0% { transform: scale(0.5) rotate(-15deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 
 .print-markdown pre code.hljs {
   display: block;
-  padding: 0;
-  color: #352f28;
+  padding: 1.4rem 1.6rem;
+  overflow-x: auto;
+  color: var(--code-fg, #eae2d5);
   background: transparent;
+  font-family: var(--f-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
 }
 
 .print-markdown .hljs-comment,
 .print-markdown .hljs-quote {
-  color: #81786b;
+  color: #7d7265;
   font-style: italic;
 }
 
@@ -328,7 +431,7 @@
 .print-markdown .hljs-literal,
 .print-markdown .hljs-section,
 .print-markdown .hljs-link {
-  color: #8b2500;
+  color: #e58269;
 }
 
 .print-markdown .hljs-string,
@@ -342,7 +445,7 @@
 .print-markdown .hljs-variable,
 .print-markdown .hljs-template-tag,
 .print-markdown .hljs-template-variable {
-  color: #526334;
+  color: #b8c984;
 }
 
 .print-markdown .hljs-number,
@@ -350,45 +453,7 @@
 .print-markdown .hljs-built_in,
 .print-markdown .hljs-builtin-name,
 .print-markdown .hljs-params {
-  color: #795548;
-}
-
-.print-markdown .hljs-deletion {
-  color: #a42828;
-  background: rgba(164, 40, 40, 0.08);
-}
-
-.print-markdown .hljs-addition {
-  background: rgba(82, 99, 52, 0.08);
-}
-
-.print-markdown pre.has-copy-button {
-  padding-top: 2.8rem;
-}
-
-.code-copy-button {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.9rem;
-  z-index: 2;
-  min-width: 4.4rem;
-  padding: 0.35rem 0.55rem;
-  color: rgba(42, 36, 28, 0.68);
-  border: 1px solid rgba(42, 36, 28, 0.2);
-  background: rgba(244, 239, 230, 0.86);
-  cursor: pointer;
-  font-family: var(--f-mono);
-  font-size: 0.5rem;
-  letter-spacing: 0.14em;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.code-copy-button:hover,
-.code-copy-button:focus-visible {
-  color: var(--paper);
-  border-color: var(--accent);
-  background: var(--accent);
-  outline: none;
+  color: #e5b567;
 }
 
 .print-markdown h2,
@@ -420,33 +485,40 @@
 
 .post-sequence-nav {
   width: min(1040px, calc(100% - 5rem));
-  margin: 1rem auto 2rem;
+  margin: 2.5rem auto;
   padding-top: 1.5rem;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  gap: 1.5rem;
   border-top: 3px double var(--rule);
-  background: var(--rule-light);
 }
 
 .post-sequence-link,
 .post-sequence-placeholder {
-  min-height: 9rem;
-  padding: 1.5rem;
-  background: var(--paper);
+  min-height: 8rem;
+  padding: 1.5rem 1.8rem;
+  background: var(--paper-card, rgba(246, 241, 232, 0.8));
+  border: 1px solid var(--rule-light);
+  transition: all 0.28s var(--ease-quart);
+}
+
+.post-sequence-link:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(42, 36, 28, 0.08);
+  border-color: var(--accent);
 }
 
 .post-sequence-link {
   display: grid;
   align-content: center;
-  gap: 0.7rem;
-  transition: color 0.24s ease, background 0.24s ease;
+  gap: 0.5rem;
 }
 
 .post-sequence-link > span {
   color: var(--accent);
   font-family: var(--f-mono);
-  font-size: 0.52rem;
+  font-size: 0.56rem;
+  font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }

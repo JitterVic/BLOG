@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { displayDate } from "../../composables/useFormat";
@@ -8,16 +8,44 @@ defineProps({
   post: { type: Object, required: true },
 });
 
+const featureCardRef = ref(null);
 const issueNumber = computed(() => String(new Date().getMonth() + 1).padStart(2, "0"));
+
+function handlePointerMove(e) {
+  if (!featureCardRef.value || e.pointerType === "touch") return;
+  const rect = featureCardRef.value.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+  const tiltX = -((y - centerY) / centerY) * 4.5;
+  const tiltY = ((x - centerX) / centerX) * 4.5;
+
+  featureCardRef.value.style.setProperty("--feature-tilt-x", `${tiltX.toFixed(2)}deg`);
+  featureCardRef.value.style.setProperty("--feature-tilt-y", `${tiltY.toFixed(2)}deg`);
+  featureCardRef.value.style.setProperty("--feature-x", `${((x / rect.width) * 100).toFixed(1)}%`);
+  featureCardRef.value.style.setProperty("--feature-y", `${((y / rect.height) * 100).toFixed(1)}%`);
+}
+
+function handlePointerLeave() {
+  if (!featureCardRef.value) return;
+  featureCardRef.value.style.setProperty("--feature-tilt-x", "0deg");
+  featureCardRef.value.style.setProperty("--feature-tilt-y", "0deg");
+  featureCardRef.value.style.setProperty("--feature-x", "50%");
+  featureCardRef.value.style.setProperty("--feature-y", "50%");
+}
 </script>
 
 <template>
   <div class="g2 home-latest-feature" data-feature-card="latest">
     <RouterLink
+      ref="featureCardRef"
       :to="`/posts/${post.slug}`"
       class="mimg print-feature-image rv"
       :class="{ 'mimg--has-image': !!post.cover_image }"
       data-reveal-delay="40"
+      @pointermove="handlePointerMove"
+      @pointerleave="handlePointerLeave"
     >
       <img
         v-if="post.cover_image"

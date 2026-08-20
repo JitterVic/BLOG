@@ -140,7 +140,8 @@ onBeforeUnmount(() => {
     <AsyncState
       v-if="loading"
       loading
-      loading-message="文章页面正在展开……"
+      variant="post"
+      loading-message="文章正在排版装订……"
     />
 
     <section v-else-if="error" class="print-page print-section post-empty-state">

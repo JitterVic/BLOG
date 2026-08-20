@@ -1,9 +1,10 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 
 import CursorEffects from "./components/CursorEffects.vue";
 import FloatingCat from "./components/FloatingCat.vue";
+import InitialLoader from "./components/InitialLoader.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 import SiteHeader from "./components/SiteHeader.vue";
 import { usePageMeta } from "./composables/usePageMeta";
@@ -44,6 +45,7 @@ onMounted(async () => {
 
 <template>
   <div class="page-shell print-shell" :class="pageTheme">
+    <InitialLoader />
     <CursorEffects />
     <FloatingCat />
     <SiteHeader />
