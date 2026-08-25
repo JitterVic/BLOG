@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from flask import Blueprint, abort, jsonify, request, send_from_directory, session
 
 from .. import uploads
@@ -11,6 +13,23 @@ from ..serializers import (
     summarize_post,
     summarize_related_post,
 )
+
+
+# The view-dedup marker rides in the same signed cookie as admin_authenticated
+# and the CSRF token. Storing raw slugs let a zh-CN slug cost ~99 bytes of JSON
+# each (\uXXXX escapes), pushing the cookie past the ~4093-byte browser limit
+# after ~26-67 articles — at which point the browser drops the WHOLE cookie and
+# silently logs the admin out. Short digests keep the payload bounded instead.
+VIEWED_POSTS_MAX = 80
+VIEWED_DIGEST_LENGTH = 12
+
+# Longest accepted search/tag filter. Matches the excerpt field limit; well under
+# SQLite's LIKE pattern ceiling.
+MAX_SEARCH_LENGTH = 1200
+
+
+def viewed_marker(slug: str) -> str:
+    return hashlib.sha256(str(slug).encode("utf-8")).hexdigest()[:VIEWED_DIGEST_LENGTH]
 
 
 def build_blueprint(store) -> Blueprint:
@@ -26,7 +45,11 @@ def build_blueprint(store) -> Blueprint:
         tag = request.args.get("tag")
         limit = request.args.get("limit", type=int)
         sort = request.args.get("sort", "latest")
-        q = (request.args.get("q") or "").strip()
+        # SQLite raises "LIKE or GLOB pattern too complex" near 50k chars, which
+        # would surface as an unauthenticated 500. Truncate instead of erroring:
+        # no real query is this long, and a prefix still returns sane results.
+        q = (request.args.get("q") or "").strip()[:MAX_SEARCH_LENGTH]
+        tag = tag[:MAX_SEARCH_LENGTH] if tag else tag
         page = request.args.get("page", type=int)
 
         list_kwargs = {
@@ -71,9 +94,11 @@ def build_blueprint(store) -> Blueprint:
         viewed = session.get("viewed_posts") or []
         if not isinstance(viewed, list):
             viewed = []
-        if slug not in viewed:
+        marker = viewed_marker(slug)
+        if marker not in viewed:
             match["click_count"] = store.increment_post_click(slug)
-            viewed = (viewed + [slug])[-80:]
+            viewed = [item for item in viewed if isinstance(item, str)]
+            viewed = (viewed + [marker])[-VIEWED_POSTS_MAX:]
             session["viewed_posts"] = viewed
             session.modified = True
 

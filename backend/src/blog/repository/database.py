@@ -88,11 +88,23 @@ class Database:
                 created_at TEXT NOT NULL
             );
 
+            -- Login throttling lives in SQLite, not process memory: gunicorn runs
+            -- multiple workers (each would keep its own bucket, multiplying the
+            -- effective limit) and recycles them via --max-requests, which would
+            -- otherwise hand an attacker a free bucket reset.
+            CREATE TABLE IF NOT EXISTS login_failures (
+                client_key TEXT NOT NULL,
+                failed_at REAL NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
 
             CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
             ON post_revisions (post_id, created_at DESC, id DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_login_failures_key_time
+            ON login_failures (client_key, failed_at DESC);
             """
         )
 
@@ -148,10 +160,16 @@ class Database:
                 original_filename TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS login_failures (
+                client_key TEXT NOT NULL,
+                failed_at REAL NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
             CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
             ON post_revisions (post_id, created_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_login_failures_key_time
+            ON login_failures (client_key, failed_at DESC);
             """
         )
 

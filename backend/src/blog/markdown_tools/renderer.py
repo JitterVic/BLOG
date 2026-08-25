@@ -193,11 +193,27 @@ def sanitize_html(html_text: str) -> str:
     return cleaner.get_html()
 
 
+# The "extra" preset bundles attr_list, which lets Markdown emit arbitrary
+# attributes — `# H {: onclick="..." }` really does render an onclick handler.
+# SafeHTMLCleaner strips it, but that makes the sanitizer the single point of
+# failure. Enumerate extra's other members instead so no event-handler
+# attribute can be produced in the first place.
+MARKDOWN_EXTENSIONS = [
+    "abbr",
+    "def_list",
+    "fenced_code",
+    "footnotes",
+    "md_in_html",
+    "tables",
+    "nl2br",
+]
+
+
 def render_markdown(markdown_text: str) -> str:
     # Rich-text paste often carries NBSP (U+00A0) indentation; rendered code
     # copied back out would then fail to run, so normalize before rendering.
     rendered = markdown_lib.markdown(
         (markdown_text or "").replace("\xa0", " "),
-        extensions=["extra", "fenced_code", "tables", "nl2br"],
+        extensions=MARKDOWN_EXTENSIONS,
     )
     return sanitize_html(rendered)

@@ -47,7 +47,7 @@ def create_app():
     store.init()
     store.purge_expired_trash(retention_days=30)
 
-    security = AdminSecurity(app, settings)
+    security = AdminSecurity(app, settings, db=store.db)
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_too_large(error):

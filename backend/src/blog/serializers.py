@@ -47,6 +47,7 @@ def build_post_detail_payload(post, *, related_posts, previous_post, next_post) 
         "tags": post["tags"],
         "hero_quote": post["hero_quote"],
         "cover_image": post.get("cover_image") or "",
+        "click_count": int(post.get("click_count") or 0),
         "html_content": post.get("html_content") or "",
         "sections": post.get("sections") or [],
         "related_posts": related_posts,

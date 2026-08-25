@@ -19,6 +19,14 @@ class DashboardService:
         self.post_service = post_service
         self.media_service = media_service
 
+    def dashboard_overview(self, *, attention_limit: int = 8) -> dict[str, Any]:
+        """Health + attention items off ONE post fetch, for the dashboard route."""
+        active = self.active_posts()
+        return {
+            "content_health": self.content_health(active=active),
+            "attention_items": self.author_attention_items(limit=attention_limit, active=active),
+        }
+
     def stats(self) -> dict[str, Any]:
         counts = self.posts_repo.count_by_status()
         return {
@@ -30,14 +38,24 @@ class DashboardService:
             "upload_dir": str(uploads.UPLOADS_DIR),
         }
 
-    def author_attention_items(self, *, limit: int = 8) -> list[dict[str, Any]]:
+    def active_posts(self) -> list[dict[str, Any]]:
+        """Non-trashed posts with bodies, fetched in a single query."""
+        return [
+            item
+            for item in self.posts_repo.list_for_dashboard()
+            if item.get("status") != "trashed"
+        ]
+
+    def author_attention_items(
+        self,
+        *,
+        limit: int = 8,
+        active: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
-        for summary in self.posts_repo.list_admin():
-            if summary.get("status") == "trashed":
-                continue
-            post = self.posts_repo.get_by_id(int(summary["id"])) or {}
+        for post in active if active is not None else self.active_posts():
             fields = self.post_service.snapshot_as_form(post)
-            validation = self.post_service.validate_post_for_publish(fields, post_id=int(summary["id"]))
+            validation = self.post_service.validate_post_for_publish(fields, post_id=int(post["id"]))
             reasons: list[str] = []
             if not str(post.get("title") or "").strip():
                 reasons.append("无标题草稿")
@@ -48,22 +66,23 @@ class DashboardService:
             if not reasons:
                 continue
             items.append({
-                "id": summary["id"],
-                "title": summary.get("display_title") or "无标题草稿",
-                "status": summary.get("status"),
-                "updated_at": summary.get("updated_at"),
+                "id": post["id"],
+                "title": post.get("display_title") or "无标题草稿",
+                "status": post.get("status"),
+                "updated_at": post.get("updated_at"),
                 "reasons": reasons,
             })
         return items[:max(1, int(limit))]
 
-    def content_health(self) -> dict[str, Any]:
-        active = [item for item in self.posts_repo.list_admin() if item.get("status") != "trashed"]
+    def content_health(self, *, active: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        active = active if active is not None else self.active_posts()
         without_sections = 0
         missing_images = 0
         empty_alt = 0
+        # One stat() per distinct media path instead of per reference.
+        local_image_exists: dict[str, bool] = {}
         for item in active:
-            post = self.posts_repo.get_by_id(int(item["id"])) or {}
-            markdown_content = str(post.get("markdown_content") or "")
+            markdown_content = str(item.get("markdown_content") or "")
             if markdown_content and not markdown_has_section_heading(markdown_content):
                 without_sections += 1
             for alt, url in markdown_images(markdown_content):
@@ -71,8 +90,11 @@ class DashboardService:
                     empty_alt += 1
                 clean_url = unquote(url.split("?", 1)[0].split("#", 1)[0])
                 if clean_url.startswith("/uploads/media/"):
-                    candidate = uploads.UPLOADS_DIR / "media" / Path(clean_url).name
-                    if not candidate.is_file():
+                    exists = local_image_exists.get(clean_url)
+                    if exists is None:
+                        exists = (uploads.UPLOADS_DIR / "media" / Path(clean_url).name).is_file()
+                        local_image_exists[clean_url] = exists
+                    if not exists:
                         missing_images += 1
         media_assets = self.media_service.list_media_assets()
         return {

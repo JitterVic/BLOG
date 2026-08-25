@@ -2,11 +2,17 @@
 # Copy to /etc/nginx/sites-available/blog.conf, replace example.com,
 # then link it into sites-enabled and reload nginx.
 
+# 记得同时在 .env 中设置 BLOG_TRUSTED_PROXY_COUNT=1，
+# 否则应用只能看到 127.0.0.1，登录限流会退化成全站共用一个桶。
+
 server {
     listen 80;
     server_name example.com;
 
     client_max_body_size 10m;
+
+    # 挡掉超长 URL / 请求头，避免把畸形查询串透传给应用（默认值即 4 8k，显式写出以免被改大）。
+    large_client_header_buffers 4 8k;
 
     location / {
         proxy_pass http://127.0.0.1:8000;

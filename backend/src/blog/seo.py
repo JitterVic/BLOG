@@ -5,7 +5,7 @@ from __future__ import annotations
 import html as html_lib
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable
 from xml.sax.saxutils import escape as xml_escape
 
@@ -30,19 +30,37 @@ def absolute_url(path: str) -> str:
     return base + path
 
 
+def _utc_now_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def atom_datetime(value: str | None) -> str:
     text = (value or "").strip()
     if not text:
-        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return _utc_now_stamp()
     if "T" in text:
         return text if text.endswith("Z") else text + "Z" if len(text) == 19 else text
     if len(text) >= 10:
         return text[:10] + "T00:00:00Z"
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _utc_now_stamp()
+
+
+# XML 1.0 forbids C0 controls other than tab/LF/CR outright — they cannot even
+# be escaped as character references. Feed readers reject the whole document,
+# so strip them before they reach <title>/<summary>.
+ILLEGAL_XML_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def strip_illegal_xml_chars(value: str) -> str:
+    return ILLEGAL_XML_CHARS_RE.sub("", str(value or ""))
+
+
+def _xml_text(value: str) -> str:
+    return xml_escape(strip_illegal_xml_chars(value))
 
 
 def _xml_attr(value: str) -> str:
-    return xml_escape(str(value), {'"': "&quot;", "'": "&apos;"})
+    return xml_escape(strip_illegal_xml_chars(value), {'"': "&quot;", "'": "&apos;"})
 
 
 def build_atom_feed(store) -> str:
@@ -52,8 +70,8 @@ def build_atom_feed(store) -> str:
     entries: list[str] = []
     for post in posts:
         link = absolute_url(f"/posts/{post['slug']}")
-        title = xml_escape(str(post.get("title") or ""))
-        summary = xml_escape(str(post.get("excerpt") or ""))
+        title = _xml_text(post.get("title") or "")
+        summary = _xml_text(post.get("excerpt") or "")
         entry_updated = atom_datetime(post.get("updated_at") or post.get("published_at"))
         entries.append(
             "\n".join(
@@ -61,7 +79,7 @@ def build_atom_feed(store) -> str:
                     "  <entry>",
                     f"    <title>{title}</title>",
                     f'    <link href="{_xml_attr(link)}" rel="alternate" type="text/html"/>',
-                    f"    <id>{xml_escape(link)}</id>",
+                    f"    <id>{_xml_text(link)}</id>",
                     f"    <updated>{entry_updated}</updated>",
                     f'    <summary type="text">{summary}</summary>',
                     "  </entry>",
@@ -75,7 +93,7 @@ def build_atom_feed(store) -> str:
         "  <subtitle>记录技术实践、项目复盘和长期学习的个人博客</subtitle>",
         f'  <link href="{_xml_attr(absolute_url("/feed.xml"))}" rel="self" type="application/atom+xml"/>',
         f'  <link href="{_xml_attr(base + "/")}" rel="alternate" type="text/html"/>',
-        f"  <id>{xml_escape(base + '/')}</id>",
+        f"  <id>{_xml_text(base + '/')}</id>",
         f"  <updated>{updated}</updated>",
         *entries,
         "</feed>",
@@ -100,9 +118,9 @@ def build_sitemap(store) -> str:
     ]
     for path, lastmod in urls:
         parts.append("  <url>")
-        parts.append(f"    <loc>{xml_escape(absolute_url(path))}</loc>")
+        parts.append(f"    <loc>{_xml_text(absolute_url(path))}</loc>")
         if lastmod:
-            parts.append(f"    <lastmod>{xml_escape(lastmod)}</lastmod>")
+            parts.append(f"    <lastmod>{_xml_text(lastmod)}</lastmod>")
         parts.append("  </url>")
     parts.append("</urlset>")
     parts.append("")
@@ -121,9 +139,13 @@ def inject_post_meta(html_text: str, post: dict[str, Any], url_builder: Callable
     safe_title = html_lib.escape(title, quote=True)
     safe_desc = html_lib.escape(description, quote=True)
     safe_page_url = html_lib.escape(page_url, quote=True)
+    # Post text reaches re.sub as the *replacement*, where Python expands \1,
+    # \g<name> and friends. A title or auto-excerpt holding a backslash escape
+    # (regex tutorials, Windows paths) would raise re.error and 500 the page,
+    # so pass a callable — its return value is used verbatim.
     html_text = re.sub(
         r"<title>.*?</title>",
-        f"<title>{html_lib.escape(title)} · 至知</title>",
+        lambda _match: f"<title>{html_lib.escape(title)} · 至知</title>",
         html_text,
         count=1,
         flags=re.I | re.S,
@@ -132,7 +154,7 @@ def inject_post_meta(html_text: str, post: dict[str, Any], url_builder: Callable
     if re.search(desc_pattern, html_text, flags=re.I | re.S):
         html_text = re.sub(
             desc_pattern,
-            f'<meta name="description" content="{safe_desc}" />',
+            lambda _match: f'<meta name="description" content="{safe_desc}" />',
             html_text,
             count=1,
             flags=re.I | re.S,

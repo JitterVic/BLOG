@@ -24,7 +24,7 @@ def register(bp, *, store, security, settings) -> None:
             (item for item in admin_posts if item.get("status") == "draft"),
             admin_posts[0] if admin_posts else None,
         )
-        health = store.content_health()
+        overview = store.dashboard_overview()
         return render_template(
             "admin_dashboard.html",
             **build_admin_context(
@@ -32,8 +32,8 @@ def register(bp, *, store, security, settings) -> None:
                 admin_prefix,
                 admin_posts=admin_posts,
                 continue_post=continue_post,
-                content_health=health,
-                attention_items=store.author_attention_items(),
+                content_health=overview["content_health"],
+                attention_items=overview["attention_items"],
             ),
         )
 

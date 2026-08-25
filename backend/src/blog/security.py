@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from flask import flash, jsonify, redirect, request, session, url_for
 
 from .config import DEFAULT_ADMIN_PASSWORD, LaunchSettings
+from .login_throttle import LoginFailureStore
 
 LOGIN_FAILURE_MAX_KEYS = 2048
 CSRF_SESSION_KEY = "_admin_csrf_token"
@@ -61,11 +62,21 @@ def safe_referrer_target(referrer: str | None, admin_prefix: str, host: str) -> 
 class AdminSecurity:
     """聚合鉴权相关钩子与工具，随应用实例创建。"""
 
-    def __init__(self, app, settings: LaunchSettings):
+    def __init__(self, app, settings: LaunchSettings, *, db=None):
         self.app = app
         self.settings = settings
         self.admin_prefix = settings.admin_prefix
-        self.login_failures: dict[str, list[float]] = {}
+        # Shared across workers and restart-durable when a database is supplied;
+        # falls back to a plain dict for unit tests that construct the security
+        # layer standalone.
+        if db is not None:
+            self.login_failures = LoginFailureStore(
+                db,
+                window_seconds=settings.login_window_seconds,
+                max_keys=LOGIN_FAILURE_MAX_KEYS,
+            )
+        else:
+            self.login_failures = {}
         app.extensions["blog_login_failures"] = self.login_failures
 
         @app.context_processor
@@ -84,9 +95,6 @@ class AdminSecurity:
 
     def is_admin_api_request(self) -> bool:
         return request.path.startswith(f"{self.admin_prefix}/api/")
-
-    def is_api_like_request(self) -> bool:
-        return self.is_admin_api_request() or request.is_json
 
     # ------------------------------------------------------------------
     # CSRF
@@ -128,7 +136,7 @@ class AdminSecurity:
 
     def prune_login_failures(self, now: float) -> None:
         window = self.settings.login_window_seconds
-        for key in [k for k, stamps in self.login_failures.items()
+        for key in [k for k, stamps in list(self.login_failures.items())
                     if not stamps or now - stamps[-1] >= window]:
             self.login_failures.pop(key, None)
         # 上限值允许测试通过模块属性动态调整。
@@ -136,33 +144,38 @@ class AdminSecurity:
 
         overflow = len(self.login_failures) - security_module.LOGIN_FAILURE_MAX_KEYS
         if overflow > 0:
-            for key, _ in sorted(self.login_failures.items(), key=lambda item: item[1][-1])[:overflow]:
+            for key, _ in sorted(list(self.login_failures.items()), key=lambda item: item[1][-1])[:overflow]:
                 self.login_failures.pop(key, None)
 
     def login_rate_limited(self) -> tuple[bool, int]:
-        now = time.monotonic()
+        # Wall clock, not monotonic: timestamps are shared between workers and
+        # persist across restarts, so they must mean the same thing everywhere.
+        now = time.time()
         key = self.client_key()
         window = self.settings.login_window_seconds
         max_attempts = self.settings.login_max_attempts
         self.prune_login_failures(now)
-        attempts = [stamp for stamp in self.login_failures.get(key, []) if now - stamp < window]
+        attempts = [stamp for stamp in self.login_failures.get(key, []) or [] if now - stamp < window]
         if not attempts:
             self.login_failures.pop(key, None)
             return False, 0
-        self.login_failures[key] = attempts
         if len(attempts) < max_attempts:
             return False, 0
         retry_after = max(1, int(window - (now - attempts[0])))
         return True, retry_after
 
     def register_login_failure(self) -> None:
-        now = time.monotonic()
+        now = time.time()
         key = self.client_key()
+        store = self.login_failures
+        if isinstance(store, LoginFailureStore):
+            store.record_failure(key, now=now)
+            return
         window = self.settings.login_window_seconds
         max_attempts = self.settings.login_max_attempts
-        attempts = [stamp for stamp in self.login_failures.get(key, []) if now - stamp < window]
+        attempts = [stamp for stamp in store.get(key, []) or [] if now - stamp < window]
         attempts.append(now)
-        self.login_failures[key] = attempts[-max_attempts:]
+        store[key] = attempts[-max_attempts:]
         self.prune_login_failures(now)
 
     # ------------------------------------------------------------------
@@ -200,13 +213,20 @@ class AdminSecurity:
         )
         content_type = (response.headers.get("Content-Type") or "").lower()
         if "text/html" in content_type:
-            # Admin templates still rely on small inline scripts/styles.
+            # The Jinja admin templates carry small inline <script> blocks, so they
+            # still need script-src 'unsafe-inline'. The built SPA has none, so the
+            # public shell gets the stricter policy — that keeps a hypothetical
+            # sanitizer bypass on an article page from executing.
+            is_admin_html = request.path == self.admin_prefix or request.path.startswith(
+                f"{self.admin_prefix}/"
+            )
+            script_src = "'self' 'unsafe-inline'" if is_admin_html else "'self'"
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'self'; "
                 "img-src 'self' data: blob: https:; "
                 "style-src 'self' 'unsafe-inline'; "
-                "script-src 'self' 'unsafe-inline'; "
+                f"script-src {script_src}; "
                 "font-src 'self' data:; "
                 "connect-src 'self'; "
                 "frame-ancestors 'none'; "

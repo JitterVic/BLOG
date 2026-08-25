@@ -73,18 +73,6 @@ class PostRepository:
             row = connection.execute(query, params).fetchone()
         return row_to_dict(row)
 
-    def get_status(self, post_id: int) -> str | None:
-        with self.db.connect() as connection:
-            row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
-        return row["status"] if row else None
-
-    def get_updated_at_and_status(self, post_id: int) -> tuple[str, str] | None:
-        with self.db.connect() as connection:
-            row = connection.execute(
-                "SELECT updated_at, status FROM posts WHERE id = ?", (post_id,)
-            ).fetchone()
-        return (row["updated_at"], row["status"]) if row else None
-
     def build_filters(
         self,
         *,
@@ -255,14 +243,23 @@ class PostRepository:
             connection.commit()
         return int(row["click_count"] if row else 0)
 
-    def ensure_unique_slug(self, desired_slug: str, *, post_id: int | None = None) -> str:
+    def ensure_unique_slug(
+        self,
+        desired_slug: str,
+        *,
+        post_id: int | None = None,
+        connection: sqlite3.Connection | None = None,
+    ) -> str:
+        """Pick a free slug. Pass *connection* so the check and the following
+        write share one transaction — otherwise two concurrent saves can both
+        clear the check and the loser dies on the UNIQUE constraint."""
         base_slug = slugify(desired_slug)
-        candidate = base_slug
-        counter = 2
 
-        with self.db.connect() as connection:
+        def _execute(conn: sqlite3.Connection) -> str:
+            candidate = base_slug
+            counter = 2
             while True:
-                row = connection.execute(
+                row = conn.execute(
                     "SELECT id FROM posts WHERE slug = ?",
                     (candidate,),
                 ).fetchone()
@@ -271,12 +268,40 @@ class PostRepository:
                 candidate = f"{base_slug}-{counter}"
                 counter += 1
 
+        if connection is not None:
+            return _execute(connection)
+        with self.db.connect() as conn:
+            return _execute(conn)
+
     def scan_rows(self) -> list[sqlite3.Row]:
         """素材引用扫描所需的轻量行集合。"""
         with self.db.connect() as connection:
             return connection.execute(
                 "SELECT id, title, slug, status, cover_image, markdown_content FROM posts"
             ).fetchall()
+
+    def list_for_dashboard(self, *, limit: int = ADMIN_LIST_LIMIT) -> list[dict[str, Any]]:
+        """Dashboard rows including bodies, in ONE query.
+
+        The dashboard needs markdown_content for every active post. Fetching it
+        per post via get_by_id cost one connection each (300+ per render at 150
+        posts), so select the whole working set at once instead.
+        """
+        capped = max(1, min(int(limit or ADMIN_LIST_LIMIT), ADMIN_LIST_LIMIT))
+        with self.db.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {LIST_POST_COLUMNS}, markdown_content
+                FROM posts
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT ?
+                """,
+                (capped,),
+            ).fetchall()
+        items = [row_to_dict(row) for row in rows]
+        for item in items:
+            item["display_title"] = item.get("title") or "无标题草稿"
+        return items
 
     def published_tags(self) -> set[str]:
         tags: set[str] = set()
@@ -457,37 +482,6 @@ class PostRepository:
             return
         with self.db.connect() as conn:
             _execute(conn)
-            conn.commit()
-
-    def set_status(
-        self,
-        post_id: int,
-        status: str,
-        *,
-        updated_at: str,
-        published_at: str | None = None,
-        connection: sqlite3.Connection | None = None,
-    ) -> None:
-        """恢复/快速发布等仅变更状态的窄更新（deleted_at 一并清空）。"""
-        if published_at is None:
-            sql = "UPDATE posts SET status = ?, deleted_at = NULL, updated_at = ? WHERE id = ?"
-            params: tuple[Any, ...] = (status, updated_at, post_id)
-        else:
-            sql = "UPDATE posts SET status = ?, published_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?"
-            params = (status, published_at, updated_at, post_id)
-        if connection is not None:
-            connection.execute(sql, params)
-            return
-        with self.db.connect() as conn:
-            conn.execute(sql, params)
-            conn.commit()
-
-    def delete(self, post_id: int, connection: sqlite3.Connection | None = None) -> None:
-        if connection is not None:
-            connection.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-            return
-        with self.db.connect() as conn:
-            conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
             conn.commit()
 
     def purge_expired_trash(self, *, retention_days: int = 30, now: datetime | None = None) -> int:

@@ -263,3 +263,6 @@ class BlogStore:
 
     def author_attention_items(self, *, limit: int = 8) -> list[dict[str, Any]]:
         return self.dashboard_service.author_attention_items(limit=limit)
+
+    def dashboard_overview(self, *, attention_limit: int = 8) -> dict[str, Any]:
+        return self.dashboard_service.dashboard_overview(attention_limit=attention_limit)

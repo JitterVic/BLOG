@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -96,10 +97,19 @@ class PostService:
         *,
         fallback: dict[str, Any],
         post_id: int,
+        connection=None,
     ) -> dict[str, Any]:
+        """Normalize a snapshot and settle its slug.
+
+        Pass *connection* so the slug check runs inside the caller's transaction;
+        every caller does, which keeps one transaction model across all write
+        paths rather than leaving state transitions on a second connection.
+        """
         snapshot = self._normalize_edit_snapshot(source, fallback=fallback)
         desired_slug = snapshot.get("slug") or snapshot.get("title") or fallback.get("slug") or f"draft-{uuid.uuid4().hex[:12]}"
-        snapshot["slug"] = self.posts.ensure_unique_slug(str(desired_slug), post_id=post_id)
+        snapshot["slug"] = self.posts.ensure_unique_slug(
+            str(desired_slug), post_id=post_id, connection=connection
+        )
         return snapshot
 
     # ------------------------------------------------------------------
@@ -233,7 +243,6 @@ class PostService:
             desired_slug = title
         else:
             desired_slug = f"draft-{uuid.uuid4().hex[:12]}"
-        slug = self.posts.ensure_unique_slug(desired_slug, post_id=post_id)
         published = action == "published"
         published_at = validate_text_length("published_at", form_data.get("published_at", ""))
         if published and not published_at:
@@ -251,47 +260,23 @@ class PostService:
             raise ValueError('封面图片地址无效：请使用上传得到的 /uploads/ 地址或 http(s) 图片链接。')
         now = datetime.now().isoformat(timespec="microseconds")
 
-        with self.posts.db.connect() as connection:
-            previous_status = ""
-            if post_id:
-                current_row = connection.execute("SELECT updated_at, status FROM posts WHERE id = ?", (post_id,)).fetchone()
-                if current_row is None:
-                    raise ValueError('稿件不存在。')
-                previous_status = current_row["status"] or "draft"
-                if action == "published" and previous_status == "published":
-                    self.revisions.insert_from_row(connection, post_id, "pre_publish")
-                if expected_updated_at is not None and current_row["updated_at"] != expected_updated_at:
-                    raise PostVersionConflict('文章已在其他页面更新，请重新加载后再保存。')
-                if action == "update":
-                    status = previous_status
-                    if not published_at:
-                        published_at = existing_for_slug.get("published_at", "") if existing_for_slug else ""
-                else:
-                    status = "published" if published else "draft"
-                self.posts.update_full(
-                    post_id,
-                    slug=slug,
-                    title=title,
-                    excerpt=excerpt,
-                    published_at=published_at,
-                    read_time=read_time,
-                    category=category,
-                    tags=tags,
-                    hero_quote=hero_quote,
-                    cover_image=cover_image,
-                    markdown_content=markdown_content,
-                    html_content=html_content,
-                    status=status,
-                    updated_at=now,
-                    connection=connection,
+        def _attempt() -> int:
+            with self.posts.db.connect() as connection:
+                # BEGIN IMMEDIATE takes the write lock up front, so the slug
+                # uniqueness check below cannot be invalidated by another writer
+                # between the SELECT and our INSERT/UPDATE.
+                connection.execute("BEGIN IMMEDIATE")
+                slug = self.posts.ensure_unique_slug(
+                    desired_slug, post_id=post_id, connection=connection
                 )
-                saved_id = post_id
-            else:
-                status = "published" if published else "draft"
-                saved_id = self.posts.insert_full(
+                return self._write_post(
+                    connection,
+                    post_id=post_id,
+                    action=action,
                     slug=slug,
                     title=title,
                     excerpt=excerpt,
+                    published=published,
                     published_at=published_at,
                     read_time=read_time,
                     category=category,
@@ -300,22 +285,110 @@ class PostService:
                     cover_image=cover_image,
                     markdown_content=markdown_content,
                     html_content=html_content,
-                    status=status,
                     now=now,
-                    connection=connection,
+                    expected_updated_at=expected_updated_at,
+                    create_revision=create_revision,
+                    existing_for_slug=existing_for_slug,
                 )
 
-            if create_revision:
-                if not post_id:
-                    revision_type = "created"
-                elif action == "published":
-                    revision_type = "published"
-                elif previous_status == "published":
-                    revision_type = "unpublished"
-                else:
-                    revision_type = "draft_saved"
-                self.revisions.insert_from_row(connection, saved_id, revision_type)
-            connection.commit()
+        # Belt and braces: if a concurrent writer still lands the same slug,
+        # recompute and retry rather than surfacing a raw IntegrityError as 500.
+        for attempt in range(3):
+            try:
+                return _attempt()
+            except sqlite3.IntegrityError:
+                if attempt == 2:
+                    raise ValueError('保存冲突，请重试一次。') from None
+        raise ValueError('保存冲突，请重试一次。')
+
+    def _write_post(
+        self,
+        connection,
+        *,
+        post_id: int | None,
+        action: str,
+        slug: str,
+        title: str,
+        excerpt: str,
+        published: bool,
+        published_at: str,
+        read_time: str,
+        category: str,
+        tags: list[str],
+        hero_quote: str,
+        cover_image: str,
+        markdown_content: str,
+        html_content: str,
+        now: str,
+        expected_updated_at: str | None,
+        create_revision: bool,
+        existing_for_slug: dict[str, Any] | None,
+    ) -> int:
+        """Single insert/update transaction body, shared by the retry loop."""
+        previous_status = ""
+        if post_id:
+            current_row = connection.execute("SELECT updated_at, status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if current_row is None:
+                raise ValueError('稿件不存在。')
+            previous_status = current_row["status"] or "draft"
+            if action == "published" and previous_status == "published":
+                self.revisions.insert_from_row(connection, post_id, "pre_publish")
+            if expected_updated_at is not None and current_row["updated_at"] != expected_updated_at:
+                raise PostVersionConflict('文章已在其他页面更新，请重新加载后再保存。')
+            if action == "update":
+                status = previous_status
+                if not published_at:
+                    published_at = existing_for_slug.get("published_at", "") if existing_for_slug else ""
+            else:
+                status = "published" if published else "draft"
+            self.posts.update_full(
+                post_id,
+                slug=slug,
+                title=title,
+                excerpt=excerpt,
+                published_at=published_at,
+                read_time=read_time,
+                category=category,
+                tags=tags,
+                hero_quote=hero_quote,
+                cover_image=cover_image,
+                markdown_content=markdown_content,
+                html_content=html_content,
+                status=status,
+                updated_at=now,
+                connection=connection,
+            )
+            saved_id = post_id
+        else:
+            status = "published" if published else "draft"
+            saved_id = self.posts.insert_full(
+                slug=slug,
+                title=title,
+                excerpt=excerpt,
+                published_at=published_at,
+                read_time=read_time,
+                category=category,
+                tags=tags,
+                hero_quote=hero_quote,
+                cover_image=cover_image,
+                markdown_content=markdown_content,
+                html_content=html_content,
+                status=status,
+                now=now,
+                connection=connection,
+            )
+
+        if create_revision:
+            if not post_id:
+                revision_type = "created"
+            elif action == "published":
+                revision_type = "published"
+            elif previous_status == "published":
+                revision_type = "unpublished"
+            else:
+                revision_type = "draft_saved"
+            self.revisions.insert_from_row(connection, saved_id, revision_type)
+        connection.commit()
         return saved_id
 
     def unpublish_post(self, post_id: int) -> dict[str, Any]:
@@ -324,12 +397,15 @@ class PostService:
             raise ValueError("文章不存在。")
         if post.get("status") != "published":
             raise ValueError("只有已发布文章可以下架。")
-        snapshot = self._prepare_snapshot_for_post(post, fallback=post, post_id=post_id)
         now = datetime.now().isoformat(timespec="microseconds")
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
             if current is None or current["status"] != "published":
                 raise PostVersionConflict("文章状态已变化，请重新加载。")
+            snapshot = self._prepare_snapshot_for_post(
+                post, fallback=post, post_id=post_id, connection=connection
+            )
             self.revisions.insert_from_row(connection, post_id, "pre_unpublish")
             self.posts.update_from_snapshot(
                 post_id, snapshot, status="draft", updated_at=now, deleted_at=None, connection=connection
@@ -344,12 +420,15 @@ class PostService:
             raise ValueError("文章不存在或已经被删除。")
         if post.get("status") == "trashed":
             raise ValueError("文章已经在回收站中。")
-        snapshot = self._prepare_snapshot_for_post(post, fallback=post, post_id=post_id)
         now = datetime.now().isoformat(timespec="microseconds")
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
             if current is None or current["status"] == "trashed":
                 raise PostVersionConflict("文章状态已变化，请重新加载。")
+            snapshot = self._prepare_snapshot_for_post(
+                post, fallback=post, post_id=post_id, connection=connection
+            )
             self.revisions.insert_from_row(connection, post_id, "pre_trash")
             self.posts.update_from_snapshot(
                 post_id, snapshot, status="trashed", updated_at=now, deleted_at=now, connection=connection
@@ -360,6 +439,7 @@ class PostService:
     def restore_post(self, post_id: int) -> None:
         now = datetime.now().isoformat(timespec="microseconds")
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
             if row is None:
                 raise ValueError('文章不存在。')
@@ -398,6 +478,12 @@ class PostService:
         now = datetime.now().isoformat(timespec="microseconds")
         published_at = post.get("published_at") or date.today().isoformat()
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
+            if current is None:
+                raise ValueError('文章不存在。')
+            if current["status"] == "published":
+                raise ValueError('文章已经处于发布状态。')
             connection.execute(
                 "UPDATE posts SET status = 'published', published_at = ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
                 (published_at, now, post_id),
@@ -408,6 +494,7 @@ class PostService:
     def purge_post(self, post_id: int) -> None:
         """Permanently delete a trashed post (revisions cascade-delete)."""
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT status FROM posts WHERE id = ?", (post_id,)).fetchone()
             if row is None:
                 raise ValueError('文章不存在。')
@@ -459,17 +546,20 @@ class PostService:
         current_post = self.posts.get_by_id(post_id)
         if current_post is None:
             raise ValueError("稿件不存在。")
-        # Restore must not resurrect a slug now owned by another post (slug is UNIQUE).
-        restored = self._prepare_snapshot_for_post(snapshot, fallback=current_post, post_id=post_id)
-        cover_image = restored.get("cover_image", "")
-        if cover_image and not is_safe_image_url(cover_image):
-            restored["cover_image"] = ""
         status = "published" if current_post.get("status") == "published" else "draft"
         now = datetime.now().isoformat(timespec="microseconds")
         with self.posts.db.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = connection.execute("SELECT id FROM posts WHERE id = ?", (post_id,)).fetchone()
             if current is None:
                 raise ValueError('稿件不存在。')
+            # Restore must not resurrect a slug now owned by another post (slug is UNIQUE).
+            restored = self._prepare_snapshot_for_post(
+                snapshot, fallback=current_post, post_id=post_id, connection=connection
+            )
+            cover_image = restored.get("cover_image", "")
+            if cover_image and not is_safe_image_url(cover_image):
+                restored["cover_image"] = ""
             self.revisions.insert_from_row(connection, post_id, "pre_restore")
             self.posts.update_from_snapshot(
                 post_id, restored, status=status, updated_at=now, deleted_at=None, connection=connection
