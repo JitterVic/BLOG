@@ -40,10 +40,12 @@
   max-height: calc(100vh - 8.5rem);
   min-height: 0;
   margin-left: var(--post-toc-gap);
+  /* 贴向视口右侧边缘，与正文阅读列拉开距离，避免干扰阅读 */
+  margin-right: clamp(0.35rem, 1vw, 1.25rem);
   padding: 0.9rem 0 0.5rem;
   display: flex;
   flex-direction: column;
-  justify-self: start;
+  justify-self: end;
   overflow: hidden;
   border-top: 2px solid var(--ink, #2a241c);
 }
@@ -562,6 +564,51 @@
 
   .post-sequence-link {
     min-height: 7.5rem;
+  }
+}
+
+
+/* ==========================================================================
+   EDITORIAL REFINEMENT — 首字下沉 + 正文链接墨晕
+   ========================================================================== */
+
+/* 首字下沉：报刊排版的经典开场（CJK 与西文首字均适用） */
+.post-reading-layout .print-markdown > p:first-of-type::first-letter {
+  float: left;
+  padding: 0.08em 0.14em 0 0;
+  color: var(--accent, #8b2500);
+  font-family: var(--f-display, "Playfair Display", serif);
+  font-size: 3.15em;
+  font-weight: 900;
+  line-height: 0.82;
+}
+
+/* 正文链接：静置时为低调墨线，悬停时晕染成朱砂底色 */
+.print-markdown a:not(:has(img)) {
+  padding-bottom: 0.06em;
+  color: var(--ink, #1c1710);
+  text-decoration: none;
+  background-image: linear-gradient(
+    var(--accent-glow, rgba(184, 74, 42, 0.4)),
+    var(--accent-glow, rgba(184, 74, 42, 0.4))
+  );
+  background-repeat: no-repeat;
+  background-position: 0 96%;
+  background-size: 100% 1px;
+  transition:
+    color 0.3s ease,
+    background-size 0.34s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+.print-markdown a:not(:has(img)):hover,
+.print-markdown a:not(:has(img)):focus-visible {
+  color: var(--accent, #8b2500);
+  background-size: 100% 38%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-markdown a:not(:has(img)) {
+    transition: none;
   }
 }
 

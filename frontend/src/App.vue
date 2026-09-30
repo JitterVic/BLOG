@@ -1,12 +1,14 @@
 <script setup>
-import { computed, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import CatPet from "./components/pet/CatPet.vue";
 import CursorEffects from "./components/CursorEffects.vue";
 import InitialLoader from "./components/InitialLoader.vue";
+import RouteProgress from "./components/RouteProgress.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 import SiteHeader from "./components/SiteHeader.vue";
+import { usePageFlip } from "./composables/usePageFlip";
 import { usePageMeta } from "./composables/usePageMeta";
 import { useReveal } from "./composables/useReveal";
 import { useSite } from "./composables/useSite";
@@ -33,6 +35,18 @@ usePageMeta(() => {
   return { title: `${siteName} · Journal`, description: site.value?.summary || "记录技术实践、项目复盘和长期学习的个人博客。" };
 });
 
+// 首页三版整屏翻页：滚轮/键盘由 usePageFlip 接管（向下翻下一版、向上翻上一版），
+// 同时仅在首页给根元素挂 home-paging 类，驱动 pages.css 中的整屏布局与进度隐藏。
+usePageFlip();
+
+watch(
+  () => route.name,
+  (name) => {
+    document.documentElement.classList.toggle("home-paging", name === "home");
+  },
+  { immediate: true },
+);
+
 onMounted(async () => {
   try {
     await ensureSite();
@@ -41,11 +55,16 @@ onMounted(async () => {
   }
   refreshReveal();
 });
+
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove("home-paging");
+});
 </script>
 
 <template>
   <div class="page-shell print-shell" :class="pageTheme">
     <InitialLoader />
+    <RouteProgress />
     <CursorEffects />
     <CatPet />
     <SiteHeader />
@@ -58,6 +77,7 @@ onMounted(async () => {
       </router-view>
     </main>
 
-    <SiteFooter />
+    <!-- 首页采用三页整屏翻页布局，不保留页脚版权栏 -->
+    <SiteFooter v-if="route.name !== 'home'" />
   </div>
 </template>

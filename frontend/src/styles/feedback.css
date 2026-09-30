@@ -20,12 +20,12 @@
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: translate3d(0, 16px, 0);
+  transform: translate3d(0, 26px, 0) scale(0.992);
 }
 
 .page-fade-leave-to {
   opacity: 0;
-  transform: translate3d(0, -10px, 0);
+  transform: translate3d(0, -14px, 0) scale(0.997);
 }
 
 .page-fade-enter-to,
@@ -784,6 +784,192 @@
   }
   .sk-search-input {
     width: 100%;
+  }
+}
+
+
+/* ==========================================================================
+   PERSONALITY MOTION — split text, reveal variants, route progress,
+   news ticker, spinning seal（全部仅 transform/opacity，可降级）
+   ========================================================================== */
+
+/* --- 滚动显现方向变体：与 useReveal 的 .vis 切换配合，纯 CSS 实现 --- */
+.rv--left {
+  transform: translate3d(-28px, 0, 0);
+}
+
+.rv--right {
+  transform: translate3d(28px, 0, 0);
+}
+
+.rv--scale {
+  transform: translate3d(0, 12px, 0) scale(0.94);
+}
+
+.rv.vis,
+.rv--left.vis,
+.rv--right.vis,
+.rv--scale.vis {
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+/* --- 逐字浮现（SplitText）：.vis / .is-active 祖先触发 --- */
+.split-text {
+  display: inline-block;
+}
+
+.split-text__mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  /* 预留斜体下行笔画（Playfair 的 J 等）与右侧倾出空间，负 margin 抵消布局占位 */
+  padding: 0 0.06em 0.24em 0;
+  margin: 0 -0.06em -0.24em 0;
+}
+
+.split-text__char {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(0, 115%, 0);
+  transition:
+    transform 0.72s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) var(--char-delay, 0ms),
+    opacity 0.4s ease var(--char-delay, 0ms);
+}
+
+.vis .split-text__char,
+.is-active .split-text__char {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* --- 路由切换进度条（RouteProgress） --- */
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 5000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.route-progress.is-visible {
+  opacity: 1;
+}
+
+.route-progress.is-done {
+  opacity: 0;
+  transition: opacity 0.3s ease 0.08s;
+}
+
+.route-progress__fill {
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light, #b84a2a));
+  box-shadow: 0 0 8px var(--accent-glow, rgba(184, 74, 42, 0.35));
+  transition: transform 0.18s linear;
+}
+
+/* --- 印刷裁切角线（crop marks）：封面四角的拼版对位标记 --- */
+@media (min-width: 761px) {
+  .print-cover::before {
+    content: "";
+    position: absolute;
+    inset: 16px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.5;
+    background:
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) left top / 20px 1px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) left top / 1px 20px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) right top / 20px 1px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) right top / 1px 20px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) left bottom / 20px 1px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) left bottom / 1px 20px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) right bottom / 20px 1px,
+      linear-gradient(var(--ink-faded, #8a7f6f), var(--ink-faded, #8a7f6f)) right bottom / 1px 20px;
+    background-repeat: no-repeat;
+  }
+}
+
+/* --- 旋转印章（SpinSeal）：首页封面刊头装饰 --- */
+.focused-cover {
+  position: relative;
+}
+
+.cover-seal {
+  position: absolute;
+  right: clamp(1.25rem, 4vw, 3.5rem);
+  bottom: clamp(4.5rem, 12vh, 7rem);
+  z-index: 3;
+}
+
+.spin-seal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--seal-size, 120px);
+  height: var(--seal-size, 120px);
+}
+
+.spin-seal__ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: spin-seal-rotate 26s linear infinite;
+}
+
+.spin-seal__text {
+  font-family: var(--f-mono, monospace);
+  font-size: 7.2px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: var(--ink-faded, #8a7f6f);
+}
+
+.spin-seal__center {
+  display: grid;
+  place-items: center;
+  width: 42%;
+  height: 42%;
+  border: 1.5px solid var(--accent, #8b2500);
+  border-radius: 50%;
+  font-family: var(--f-display, "Playfair Display", serif);
+  font-size: calc(var(--seal-size, 120px) * 0.24);
+  font-weight: 900;
+  color: var(--accent, #8b2500);
+  opacity: 0.88;
+  box-shadow: 0 0 0 3px var(--paper, #f6f1e8), 0 0 0 4px var(--rule-subtle, rgba(42, 36, 28, 0.08));
+}
+
+@keyframes spin-seal-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px), (max-height: 640px) {
+  .cover-seal {
+    display: none;
+  }
+}
+
+/* --- 降级：reduced-motion 下全部静止并立即可见 --- */
+@media (prefers-reduced-motion: reduce) {
+  .split-text__char {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .spin-seal__ring {
+    animation: none;
+  }
+
+  .route-progress__fill {
+    transition: none;
   }
 }
 

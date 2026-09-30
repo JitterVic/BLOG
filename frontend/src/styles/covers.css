@@ -13,6 +13,23 @@
   object-fit: cover;
 }
 
+/* 特色图影调：静置时轻微去饱和的胶片质感，悬停/聚焦时恢复全彩 */
+.print-feature-image .mimg__img {
+  filter: saturate(0.85) contrast(1.02);
+  transition: filter 0.55s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+.print-feature-image:hover .mimg__img,
+.print-feature-image:focus-visible .mimg__img {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-feature-image .mimg__img {
+    transition: none;
+  }
+}
+
 .mimg__img.is-broken {
   display: none;
 }

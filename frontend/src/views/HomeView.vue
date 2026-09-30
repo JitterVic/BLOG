@@ -7,6 +7,7 @@ import HomeCover from "../components/home/HomeCover.vue";
 import HomeFeature from "../components/home/HomeFeature.vue";
 import HomeHotLedger from "../components/home/HomeHotLedger.vue";
 import HomeLatestIndex from "../components/home/HomeLatestIndex.vue";
+import { usePageFlip } from "../composables/usePageFlip";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
@@ -15,6 +16,7 @@ const HOME_POST_LIMIT = 5;
 
 const { ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
+const { isFlipActive, trackStyle } = usePageFlip();
 const latestPosts = ref([]);
 const hotPosts = ref([]);
 const postsError = ref("");
@@ -70,11 +72,12 @@ onBeforeUnmount(() => postsController?.abort());
 </script>
 
 <template>
-  <div class="home-view print-home focused-home">
+  <div class="home-view print-home focused-home" :class="{ 'flip-mode': isFlipActive }">
+    <div class="flip-track" :style="trackStyle">
     <HomeCover />
 
     <section id="latest" class="print-page print-section home-latest-section" aria-label="最近更新">
-      <div class="sec-hd rv">
+      <div class="sec-hd rv rv--left">
         <span class="sec-hd__n">02</span>
         <h2 class="sec-hd__t">最近更新 Latest</h2>
         <div class="sec-hd__line"></div>
@@ -123,7 +126,7 @@ onBeforeUnmount(() => postsController?.abort());
     </section>
 
     <section id="hot" class="print-page print-section home-hot-section" aria-label="热点文章">
-      <div class="sec-hd rv">
+      <div class="sec-hd rv rv--left">
         <span class="sec-hd__n">03</span>
         <h2 class="sec-hd__t">热点文章 Most Read</h2>
         <div class="sec-hd__line"></div>
@@ -161,5 +164,6 @@ onBeforeUnmount(() => postsController?.abort());
       </div>
       <span class="pg pg--r">— 003 —</span>
     </section>
+    </div>
   </div>
 </template>
