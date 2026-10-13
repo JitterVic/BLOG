@@ -144,7 +144,7 @@ class Database:
                 "UPDATE posts SET excerpt = ? WHERE id = ?",
                 (build_excerpt(row["markdown_content"] or ""), row["id"]),
             )
-        self._rerender_markdown_labelled_fences(connection)
+        self._refresh_stale_html_content(connection)
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS post_revisions (
@@ -174,17 +174,18 @@ class Database:
             """
         )
 
-    def _rerender_markdown_labelled_fences(self, connection: sqlite3.Connection) -> None:
-        """重算历史正文里 ```` ```markdown ```` 围栏块的 HTML。
+    def _refresh_stale_html_content(self, connection: sqlite3.Connection) -> None:
+        """用最新的渲染器重算围栏代码块的 HTML 快照。
 
-        `html_content` 是写入时渲染的快照，历史数据里那些围栏块被当成了代码，
-        表格/标题全部原样输出。这里按 Markdown 源重新渲染一次；渲染结果与库中
-        内容相同时不写回，因此重复启动不会产生额外写入。
+        `html_content` 是写入时渲染的快照，历史数据里「围栏里其实是 Markdown」
+        的内容被当成了代码，表格/列表全部原样输出。渲染器升级后这些快照就过期了，
+        这里按 Markdown 源重新渲染一次；只有结果不同才写回，因此重复启动不产生
+        额外写入（幂等）。
         """
-        legacy = connection.execute(
-            "SELECT id, markdown_content, html_content FROM posts WHERE markdown_content LIKE '%```markdown%'"
+        stale = connection.execute(
+            "SELECT id, markdown_content, html_content FROM posts WHERE markdown_content LIKE '%```%'"
         ).fetchall()
-        for row in legacy:
+        for row in stale:
             rendered = render_markdown(row["markdown_content"] or "")
             if rendered != (row["html_content"] or ""):
                 connection.execute(

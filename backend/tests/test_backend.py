@@ -109,7 +109,8 @@ def test_admin_api_requires_auth_and_csrf(client):
         headers={"X-CSRF-Token": token},
     )
     assert response.status_code == 200
-    assert response.get_json()["html"] == "<h1>hi</h1>"
+    # 正文标题降一级：文章标题由页面 h1 承担，正文 `#` 渲染为 h2。
+    assert response.get_json()["html"] == "<h2>hi</h2>"
 
 
 def test_logout_is_post_and_clears_session(client):
@@ -1475,6 +1476,11 @@ def test_media_references_preview_and_dashboard_author_surfaces(app_bundle, clie
     assert client.get(f"/admin/api/posts/{post_id}/diff").status_code == 404
     assert client.delete(f"/admin/api/posts/{post_id}/working-copy", headers={"X-CSRF-Token": token}).status_code in (404, 405)
     assert client.get(f"/admin/preview/{post_id}").status_code == 200
+    # 后台预览不得调用 highlightElement 让 hljs 自动猜语言：目录树/YAML/表格
+    # 会被猜成 python/sql/bash 并染上错误配色。必须走 highlightDeclared 包装。
+    preview_html = client.get(f"/admin/preview/{post_id}").get_data(as_text=True)
+    assert "js/highlight.js" in preview_html
+    assert "highlightElement" not in preview_html
     assert client.get("/admin/api/media").status_code == 200
     dashboard = client.get("/admin").get_data(as_text=True)
     assert "继续上次的工作" in dashboard

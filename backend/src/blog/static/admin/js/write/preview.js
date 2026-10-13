@@ -20,6 +20,7 @@ import {
   titleInput,
 } from "./dom.js";
 import { fetchJson } from "./api.js";
+import { highlightDeclared } from "../highlight.js";
 import { setSaveState } from "./save-state.js";
 import { escapeHtml, splitTags } from "./util.js";
 
@@ -32,7 +33,7 @@ export const previewComputed = { excerpt: "", readTime: "1 min" };
 
 export function highlightPreview() {
   if (!window.hljs || !previewTarget) return;
-  previewTarget.querySelectorAll("pre code").forEach((code) => window.hljs.highlightElement(code));
+  previewTarget.querySelectorAll("pre code").forEach((code) => highlightDeclared(code));
 }
 
 export function renderPreviewMeta() {

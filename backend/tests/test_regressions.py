@@ -368,24 +368,138 @@ def test_markdown_labelled_fence_is_rendered_as_markdown():
     """```markdown 围栏承载的是 Markdown 源码，应渲染而非原样输出。"""
     render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
     html = render_markdown("```markdown\n## 标题\n\n| a | b |\n| - | - |\n| 1 | 2 |\n```")
-    assert "<h2" in html and "标题" in html
+    assert "<h3" in html and "标题" in html
     assert "<table>" in html and "<td>" in html
     assert "<pre>" not in html
 
 
-def test_markdown_labelled_fence_keeps_other_languages_as_code():
+def test_markdown_labelled_fence_keeps_explicit_code_languages():
+    """显式声明为某种代码语言的围栏绝不按 Markdown 渲染。"""
     render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
-    for lang in ("", "python", "json", "text"):
+    for lang in ("python", "json", "text", "yaml", "bash"):
         source = f"```{lang}\n| a | b |\n| - | - |\n| 1 | 2 |\n```"
         html = render_markdown(source)
         assert "<pre>" in html, f"{lang!r} 围栏不应被还原为 Markdown"
         assert "<table>" not in html
 
 
+def test_untagged_fence_with_table_is_rendered_as_markdown():
+    """无语言标记、但内容是表格的围栏应渲染成表格。
+
+    这是最容易踩的坑：```` ``` ```` 里的 Markdown 表格会被当代码原样输出，
+    读者看到的是 `|---|---|` 而不是表格。
+    """
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```\n| a | b |\n| - | - |\n| 1 | 2 |\n```")
+    assert "<table>" in html and "<td>" in html
+    assert "<pre>" not in html
+
+
+def test_untagged_fence_with_only_list_items_is_rendered_as_markdown():
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```\n1. 第一步\n2. 第二步\n3. 第三步\n```")
+    assert "<ol>" in html and "<pre>" not in html
+
+
+def test_untagged_fence_keeps_diagrams_and_code_verbatim():
+    """目录树、YAML、JSON、缩进代码必须保持原样：它们是靠等宽对齐的。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    bodies = [
+        "project/\n├── SKILL.md\n└── progress/\n    └── meta.json",
+        "---\nname: demo\nversion: 2.1.0\ntriggers:\n  - \"a\"\n  - \"b\"",
+        '{\n  "a": 1,\n  "b": [2, 3]\n}',
+        "def main():\n    return 1",
+        "答案：\n├── 先看 A\n├── 再看 B\n└── 最后看 C",
+    ]
+    for body in bodies:
+        html = render_markdown(f"```\n{body}\n```")
+        assert "<pre>" in html, f"应保持代码块：{body[:24]!r}"
+        assert "<table>" not in html
+
+
+def test_untagged_fence_keeps_plain_prose_verbatim():
+    """一段用围栏框起来的散文不按 Markdown 渲染，避免误判代码为正文。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```\n这是一段说明文字，没有任何列表或表格。\n第二行也一样。\n```")
+    assert "<pre>" in html
+
+
+def test_consecutive_fences_pair_up_correctly():
+    """收栏行与无标记的开栏行写法完全相同，必须按开/收两态配对。
+
+    曾经把收栏行当成新的开栏行，导致它一路吞到下一个 ```` ``` ````，
+    把中间的代码块和随后的正文并成一块：一个 json 块的收栏行被删掉，
+    其后的 Markdown 模板块被当成 json 代码原样输出（约 60 行）。
+    """
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    source = "\n".join([
+        "```json",
+        '{"a": 1}',
+        "```",
+        "",
+        "```markdown",
+        "## 模板标题",
+        "",
+        "| a | b |",
+        "| - | - |",
+        "| 1 | 2 |",
+        "```",
+        "",
+        "正文结尾。",
+    ])
+    html = render_markdown(source)
+    # json 块必须完整保留为代码（内容经 HTML 转义）
+    assert "<pre>" in html and "{&quot;a&quot;: 1}" in html
+    # 模板块必须渲染
+    assert "<h3" in html and "模板标题" in html
+    assert "<table>" in html
+    # 正文结尾不能被卷进代码块
+    assert "正文结尾。" in html
+    assert html.count("<pre") == 1
+
+
+def test_unwrapped_fence_headings_are_demoted_one_level():
+    """围栏内的模板标题整体降一级，避免正文里出现第二个 h1。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```markdown\n# 快照\n\n## 小节\n\n### 细节\n```")
+    assert "<h1" not in html
+    assert "<h2" in html and "快照" in html
+    assert "<h3" in html and "小节" in html
+    assert "<h4" in html and "细节" in html
+
+
+def test_article_body_never_emits_h1():
+    """正文的 `#` 降为 `##`：文章标题已由页面自己的 h1 承担。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("# 第一节\n\n正文\n\n# 第二节\n\n| a | b |\n| - | - |\n| 1 | 2 |")
+    assert "<h1" not in html
+    assert html.count("<h2") == 2
+    assert "<table>" in html
+
+
+def test_code_comments_that_start_with_hash_stay_unchanged():
+    """代码块里的 `# 注释` 不是标题，不能被降级改写。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```python\n# 这是注释\ndef f():\n    return 1\n```")
+    assert "<pre>" in html
+    assert "# 这是注释" in html
+    assert "<h" not in html
+
+
+def test_hash_without_space_is_also_demoted():
+    """Python-Markdown 把 `#标题` 也当标题（不要求空格），必须同样降级。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("#标题\n\n正文")
+    assert "<h1" not in html
+    assert "<h2" in html and "标题" in html
+    # `##` 不能被连带降成 `###`
+    assert "<h3" not in html
+
+
 def test_markdown_labelled_fence_tolerates_indent_and_crlf():
     render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
     html = render_markdown("```markdown\r\n    ## 标题\r\n\r\n    正文\r\n```\r\n")
-    assert "<h2" in html and "<pre>" not in html
+    assert "<h3" in html and "<pre>" not in html
 
 
 def test_markdown_labelled_fence_without_closing_is_left_untouched():

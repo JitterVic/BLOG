@@ -19,6 +19,9 @@
     <article class="markdown-body">{{ preview_post.html_content | safe }}</article>
   </main>
   <script src="{{ url_for('static', filename='admin/vendor/highlight.min.js') }}"></script>
-  <script>document.querySelectorAll('pre code').forEach((node) => window.hljs?.highlightElement(node));</script>
+  <script type="module">
+    import { highlightAll } from "{{ url_for('static', filename='admin/js/highlight.js') }}";
+    highlightAll(document.querySelector(".markdown-body"));
+  </script>
 </body>
 </html>

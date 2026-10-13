@@ -1,7 +1,7 @@
 // 文章正文 DOM 增强：外链安全、图片灯箱、代码复制按钮、标题锚点。
 // 所有增强均可通过返回的 cleanup 函数完整撤销。
 
-import hljs from "./highlight";
+import { highlightDeclared } from "./highlight";
 
 export async function copyText(text) {
   if (navigator.clipboard?.writeText) {
@@ -57,24 +57,10 @@ function enhanceCodeBlocks(body, tracked) {
     const code = pre.querySelector("code");
     if (!code || pre.querySelector(".code-toolbar")) return;
 
-    // 提取语言名称
-    let lang = "";
-    const langClass = Array.from(code.classList).find((c) => c.startsWith("language-") || c.startsWith("lang-"));
-    const langKey = langClass ? langClass.replace(/^languages?-|^lang-/, "").toLowerCase() : "";
-    if (langKey) {
-      lang = langKey.toUpperCase();
-    }
-    if (!lang) {
-      lang = pre.getAttribute("data-lang") || "CODE";
-    }
-
-    // hljs 不认识的语言（如 markdown/jsonc）不会给 code 加 .hljs 类，
-    // 导致代码块丢掉内边距与配色，这里先判断再高亮，未知语言就保持纯文本。
-    if (!langKey || hljs.getLanguage(langKey)) {
-      hljs.highlightElement(code);
-    } else {
-      code.classList.add("hljs");
-    }
+    // 只高亮显式声明且已注册的语言；无标记的围栏（目录树、YAML、表格）
+    // 一律按纯文本处理，避免 hljs 自动猜测出错误的 token 配色。
+    const language = highlightDeclared(code);
+    const label = pre.getAttribute("data-lang") || (language ? language.toUpperCase() : "CODE");
     pre.classList.add("has-code-toolbar");
 
     // 创建顶部工具条
@@ -85,9 +71,9 @@ function enhanceCodeBlocks(body, tracked) {
     dots.className = "code-toolbar__dots";
     dots.innerHTML = "<span></span><span></span><span></span>";
 
-    const label = document.createElement("span");
-    label.className = "code-toolbar__lang";
-    label.textContent = lang;
+    const langLabel = document.createElement("span");
+    langLabel.className = "code-toolbar__lang";
+    langLabel.textContent = label;
 
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";
@@ -128,7 +114,7 @@ function enhanceCodeBlocks(body, tracked) {
 
     copyBtn.addEventListener("click", handler);
     toolbar.appendChild(dots);
-    toolbar.appendChild(label);
+    toolbar.appendChild(langLabel);
     toolbar.appendChild(copyBtn);
 
     pre.insertBefore(toolbar, code);
