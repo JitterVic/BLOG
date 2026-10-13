@@ -15,6 +15,8 @@ const MAX_WAIT_MS = 6000;
 const FINISH_HOLD_MS = 420;
 const TRICKLE_INTERVAL_MS = 120;
 const TRICKLE_CAP = 92;
+// 离场过渡最长 0.5s，留出余量用于兜底摘除节点
+const LEAVE_FALLBACK_MS = 800;
 
 const STAGES = [
   { until: 34, caption: "正在校对样张……" },
@@ -31,12 +33,14 @@ const isVisible = ref(true);
 const isMounted = ref(false);
 const progress = ref(0);
 const dataReady = ref(false);
+const rootRef = ref(null);
 
 let startTime = 0;
 let trickleTimer = 0;
 let finishTimer = 0;
 let hideTimer = 0;
 let maxTimer = 0;
+let leaveFallbackTimer = 0;
 let finishing = false;
 
 const caption = computed(() => {
@@ -49,7 +53,7 @@ const percentText = computed(() => `${String(Math.round(progress.value)).padStar
 const fillStyle = computed(() => ({ transform: `scaleX(${progress.value / 100})` }));
 
 function clearTimers() {
-  [trickleTimer, finishTimer, hideTimer, maxTimer].forEach((timer) => {
+  [trickleTimer, finishTimer, hideTimer, maxTimer, leaveFallbackTimer].forEach((timer) => {
     if (timer) {
       window.clearTimeout(timer);
       window.clearInterval(timer);
@@ -59,6 +63,7 @@ function clearTimers() {
   finishTimer = 0;
   hideTimer = 0;
   maxTimer = 0;
+  leaveFallbackTimer = 0;
 }
 
 function hide() {
@@ -117,6 +122,21 @@ watch([site, error], ([siteValue, errorValue]) => {
   if (siteValue || errorValue) markDataReady();
 });
 
+// 兜底摘除：Vue 的 leave 过渡由 requestAnimationFrame 推进，后台标签页里会长期
+// 卡在 leave-from（元素不卸载）。CSS 已让离场阶段不吃指针事件，这里再超时直接
+// 摘掉节点，避免全屏遮罩残留。节点若已卸载则为空操作。
+// 注意：watcher 默认 pre-flush，回调先于组件 patch 执行——必须先在这里抓住节点，
+// 因为 patch 一开始 Vue 就会把 rootRef 置空。
+watch(isVisible, (visible) => {
+  if (visible) return;
+  const el = rootRef.value || document.querySelector(".journal-initial-loader");
+  if (!el) return;
+  leaveFallbackTimer = window.setTimeout(() => {
+    leaveFallbackTimer = 0;
+    el.parentNode?.removeChild(el);
+  }, LEAVE_FALLBACK_MS);
+});
+
 onBeforeUnmount(() => {
   clearTimers();
 });
@@ -124,7 +144,7 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="journal-loader">
-    <div v-if="isVisible" class="journal-initial-loader" aria-hidden="true">
+    <div v-if="isVisible" ref="rootRef" class="journal-initial-loader" aria-hidden="true">
       <div class="loader-content" :class="{ 'is-active': isMounted }">
         <div class="loader-masthead">
           <span>VOL. 03 · DIGITAL EDITION</span>
@@ -304,6 +324,14 @@ onBeforeUnmount(() => {
 }
 
 /* Exit Transition */
+/* 离场阶段立刻放开指针事件：leave 过渡依赖 rAF，后台标签页里可能长期停在
+   leave-from，此时遮罩若仍 pointer-events:all 会吞掉整页点击。 */
+.journal-initial-loader.journal-loader-leave-from,
+.journal-initial-loader.journal-loader-leave-active,
+.journal-initial-loader.journal-loader-leave-to {
+  pointer-events: none;
+}
+
 .journal-loader-leave-active {
   transition:
     opacity 0.42s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),

@@ -34,7 +34,39 @@
 .tl{position:relative;padding-left:2.5rem}.tl::before{content:"";position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--rule-light)}.tl__it{position:relative;padding:0 0 2rem .8rem}.tl__it::before{content:"";position:absolute;top:.3rem;left:-2.78rem;width:8px;height:8px;background:var(--paper);border:2px solid var(--accent);border-radius:50%}.tl__yr{margin-bottom:.3rem;color:var(--rule-light);font-family:var(--f-display);font-size:1.45rem;font-weight:900;line-height:1}.tl__role{margin-bottom:.25rem;color:var(--ink);font-family:var(--f-display);font-size:.98rem;font-weight:700;line-height:1.4}.tl__org{margin-bottom:.4rem;color:var(--accent);font-family:var(--f-mono);font-size:.58rem;letter-spacing:.09em;text-transform:uppercase}
 
 .print-colophon.site-footer{position:relative;z-index:2;width:auto;max-width:none;margin:3rem 2.5rem 0;padding:2.5rem 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.8rem;color:var(--ink-faded);border-top:3px double var(--rule);font-family:var(--f-mono);font-size:.58rem;line-height:1.9}.print-colophon h4{margin:0 0 .6rem;padding-bottom:.3rem;color:var(--ink-light);border-bottom:1px solid var(--rule-light);font-size:.55rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase}.print-colophon p{margin:0;color:var(--ink-faded)}.colophon__issn{margin-bottom:.4rem;color:var(--ink-light);font-family:var(--f-display);font-size:.85rem;font-weight:700;letter-spacing:.1em}.colophon__mark{margin-bottom:.4rem;color:var(--ink-light);font-family:var(--f-display);font-size:1.15rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase}.colophon__legal{grid-column:1/-1;margin-top:.8rem;padding-top:1.2rem;border-top:1px solid var(--rule-light);text-align:center;font-size:.54rem;letter-spacing:.06em}
-.print-subpage.content-view,.print-post-view.post-view{width:100%;max-width:none;margin:0;padding:7rem 0 0}.print-subpage .print-page,.print-post-view .print-page,.print-related-section{width:min(1180px,calc(100vw - 48px));margin:0 auto}.print-subpage .print-section{min-height:calc(100svh - 7rem);border-right:1px solid rgba(42,36,28,.055);border-left:1px solid rgba(42,36,28,.055);background:rgba(244,239,230,.52)}
+.print-subpage.content-view,.print-post-view.post-view{width:100%;max-width:none;margin:0;padding:7rem 0 0;display:flex;flex:1 1 auto;flex-direction:column}.print-subpage .print-page,.print-post-view .print-page,.print-related-section{width:min(1180px,calc(100vw - 48px));margin:0 auto}.print-subpage .print-section{min-height:auto;flex:1 1 auto;border-right:1px solid rgba(42,36,28,.055);border-left:1px solid rgba(42,36,28,.055);background:rgba(244,239,230,.52)}.print-post-view .print-article-detail{flex:1 1 auto}
+/* 子页面纵向节奏按视口高度流式收紧：分辨率越小压缩越多，
+   让 768 / 900 / 1080 等主流分辨率下页脚都能进入首屏；
+   高分辨率下 clamp() 取上限，与原设计尺寸完全一致。 */
+.print-subpage.content-view,.print-post-view.post-view{padding-top:clamp(5.5rem,11svh,7rem)}
+.print-subpage .sec-hd,.print-post-view .sec-hd{padding-top:clamp(.5rem,1.4svh,4.8rem);padding-bottom:clamp(.5rem,1.2svh,2rem);margin-bottom:clamp(.7rem,1.8svh,2.5rem)}
+.print-subpage .sec-hd__n,.print-post-view .sec-hd__n{font-size:clamp(1.6rem,3.8svh,3.5rem)}
+.print-subpage .sec-hd__t,.print-post-view .sec-hd__t{font-size:clamp(1.5rem,3.6svh,2.7rem)}
+.print-subpage .article-directory-meta,.print-post-view .article-directory-meta{margin-bottom:clamp(.6rem,1.6svh,2rem)}
+.print-subpage .print-article-list,.print-post-view .print-article-list{padding-bottom:clamp(.6rem,1.6svh,3rem)}
+.print-subpage .print-list-item.article-item,.print-post-view .print-list-item.article-item{min-height:clamp(150px,27svh,280px);padding:clamp(.9rem,2.4svh,2rem)}
+.print-subpage .print-section,.print-post-view .print-section{padding-bottom:clamp(1.1rem,3.4svh,3rem)}
+.print-subpage .quiet-about-layout{padding-bottom:clamp(1.2rem,4svh,5rem);gap:clamp(1rem,2.4svh,2rem)}
+.print-subpage .quiet-about-card{padding:clamp(1rem,2.8svh,3rem) clamp(1.1rem,2.4vw,3rem)}
+.print-subpage .about-chapter-label{margin-bottom:clamp(.15rem,.6svh,.35rem)}
+/* 矮视口（≤780px，如 1366×768 笔记本）再降一档：压缩视口切换与页脚内距。
+   调参提示：Vite dev 下这一档的声明可能被基线覆盖（实测 dev 读到的仍是基线值，
+   生产构建才生效），请用 npm run build 产物复核。 */
+@media (max-height: 780px) {
+  .print-subpage .article-view-button{min-height:44px;padding:.4rem .8rem}
+  .print-subpage .sec-hd,.print-post-view .sec-hd{padding-top:.45rem;padding-bottom:.45rem;margin-bottom:.45rem}
+  .print-subpage .sec-hd__t,.print-post-view .sec-hd__t{font-size:clamp(1.4rem,3.3svh,2.7rem)}
+  .print-subpage .article-directory-meta{margin-bottom:.35rem;padding-bottom:.45rem}
+  .print-subpage .print-list-item.article-item,.print-post-view .print-list-item.article-item{min-height:clamp(112px,19svh,280px)}
+  .print-subpage .print-article-list,.print-post-view .print-article-list{padding-bottom:.4rem}
+  .print-subpage .print-section,.print-post-view .print-section{padding-bottom:.5rem}
+  .print-subpage .quiet-about-layout{padding-bottom:.8rem}
+  .print-subpage .quiet-about-card{padding:.85rem clamp(1.1rem,2.4vw,3rem)}
+  .print-subpage .quiet-about-card h2{margin:.4rem 0 .7rem}
+  .print-subpage .quiet-contact-list{margin-top:1rem}
+  .print-shell.page-theme-articles > .print-colophon.site-footer,
+  .print-shell.page-theme-about > .print-colophon.site-footer{padding-top:.9rem !important;padding-bottom:.65rem !important}
+}
 .print-subpage__meta{margin:-1rem 2.5rem 2rem;padding-bottom:.7rem;display:flex;justify-content:space-between;gap:1rem;color:var(--ink-faded);border-bottom:1px solid var(--rule-light);font-size:.58rem;letter-spacing:.15em;text-transform:uppercase}.print-feedback{margin:0 2.5rem 2rem;padding:1rem 1.2rem;color:var(--ink-light);background:rgba(244,239,230,.72);border:1px solid var(--rule-light);border-radius:0;font-size:.7rem}.print-list-feature .mimg{min-height:430px}
 .print-article-list{padding:0 2.5rem 3rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}.print-list-item.article-item{min-height:280px;padding:2rem;background:transparent;border:0;border-right:1px solid var(--rule-light);border-bottom:1px solid var(--rule-light);border-radius:0;box-shadow:none}.print-list-item:nth-child(2n){border-right:0}.print-list-item h2{margin:0 0 .8rem;color:var(--ink);font-family:var(--f-display);font-size:clamp(1.55rem,2.6vw,2.35rem);line-height:1.2}.print-list-item p{color:var(--ink-light);font-size:.72rem;line-height:1.8}.print-list-item .post-card-tags{margin-top:1rem}.print-list-item .post-card-tags span{min-height:auto;padding:.2rem .58rem;color:var(--code-fg);background:var(--code-bg);border:0;border-radius:0;font-size:.54rem}.article-meta{color:var(--ink-faded);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase}
 .print-year-ledger{padding-bottom:1rem}.print-year-block{padding-top:0}.print-tag-cloud{margin:0 2.5rem 2.5rem;padding:1.2rem 0;border-top:1px solid var(--rule-light);border-bottom:1px solid var(--rule-light)}.print-tag-cloud .tag-filter-button{min-height:auto;cursor:pointer}.print-tag-cloud .tag-filter-button:hover,.print-tag-cloud .tag-filter-button.active{color:var(--paper);background:var(--accent);border-color:var(--accent);box-shadow:none;transform:translateY(-1px)}.print-tag-results{padding-bottom:4.5rem}.print-tag-results .print-article-strip{min-height:250px;padding:1.2rem}

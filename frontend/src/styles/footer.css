@@ -27,6 +27,32 @@
   overflow: hidden;
 }
 
+/* Sticky colophon：文章页 / 关于页让主栏吸收剩余高度，页脚随首屏呈现。
+   选择器由页面自身的类名驱动（:has），不再依赖 App.vue 里"路由名 → page-theme-*"的映射——
+   否则这些视图换个路由挂载时，页脚会重新掉到折叠线以下，且 layout.css 里配套的
+   flex:1 会失去可填充的容器，版块退化成内容高度（页框只剩半截），且不会报错。
+   :has() 需 Chrome 105+ / Safari 15.4+ / Firefox 121+，与本项目 Vue 3 + Vite 6 的运行环境一致。 */
+.print-shell:has(> .print-main > .print-subpage),
+.print-shell:has(> .print-main > .print-post-view) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.print-shell:has(> .print-main > .print-subpage) > .print-main,
+.print-shell:has(> .print-main > .print-post-view) > .print-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 子页面页脚内距同样按视口高度流式收紧，为正文让出首屏空间。 */
+.print-shell:has(> .print-main > .print-subpage) > .print-colophon.site-footer,
+.print-shell:has(> .print-main > .print-post-view) > .print-colophon.site-footer {
+  padding-top: clamp(1.2rem, 2.8svh, 3.6rem) !important;
+  padding-bottom: clamp(0.9rem, 2svh, 2.6rem) !important;
+}
+
 .print-colophon.site-footer::before {
   content: "";
   position: absolute;
@@ -203,6 +229,14 @@
   border: 1px solid var(--rule-light);
   padding: 0.85rem;
   margin-bottom: 1.4rem;
+}
+
+/* 视口高度流式压缩：矮屏让文章工具条占用更少纵向空间，为页脚让出首屏。
+   必须写在上面这条主题规则之后（同权重，靠源顺序取胜）。 */
+.print-shell:has(> .print-main > .print-subpage) .print-subpage .article-toolbox {
+  padding-top: clamp(0.45rem, 1.1svh, 0.85rem) !important;
+  padding-bottom: clamp(0.45rem, 1.1svh, 0.85rem) !important;
+  margin-bottom: clamp(0.5rem, 1.5svh, 1.4rem) !important;
 }
 
 .page-theme-articles .article-view-button.active {

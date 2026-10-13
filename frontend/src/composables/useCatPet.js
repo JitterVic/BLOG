@@ -10,15 +10,14 @@ import {
   playRocketLaunch,
   toggleCatSound,
 } from "../lib/catAudio";
-import {
-  getPageGreeting,
-  getRandomFortune,
-  PET_STATUS_TEXTS,
-} from "../lib/catFortunes";
 
 const STORAGE_KEY_POS = "blog_cat_pet_pos_v2";
+// 猫咪热区（用于把坐标钳制在视口内），与 CatPet.vue 中 .cat-pet-widget 的尺寸保持一致
+const PET_SIZE = 100;
 
-export function useCatPet() {
+// options.shouldIgnoreKey：焦点在某个控件内时（如猫咪本体），
+// 让控件自己处理键位，避免全局 Bongo 反应覆盖它设置的状态。
+export function useCatPet({ shouldIgnoreKey } = {}) {
   const route = useRoute();
 
   // 状态枚举：idle | stretch | groom | eureka | lookMouse | pounce | typing | dragging | petting | sleeping | launching
@@ -34,15 +33,8 @@ export function useCatPet() {
   const gazeX = ref(0);
   const gazeY = ref(0);
 
-  // 对话气泡
-  const bubbleVisible = ref(false);
-  const bubbleText = ref("");
-  const bubbleTag = ref("闲聊");
-  let bubbleTimer = null;
-
   // 拖拽与坐标 (相对于视口 bottom/right 的偏移，或者基于像素坐标)
   const petPosition = ref({ x: 0, y: 0 }); // offset from initial corner or custom xy
-  const hasCustomPosition = ref(false);
 
   // 计时器句柄
   let idleTimer = null;
@@ -62,30 +54,7 @@ export function useCatPet() {
     return "default";
   });
 
-  const statusText = computed(() => {
-    return PET_STATUS_TEXTS[petState.value] || "伴读中";
-  });
-
-  // 弹出气泡
-  function showBubble(text, tag = "陪伴", duration = 4000) {
-    if (bubbleTimer) clearTimeout(bubbleTimer);
-    bubbleText.value = text;
-    bubbleTag.value = tag;
-    bubbleVisible.value = true;
-    if (duration > 0) {
-      bubbleTimer = setTimeout(() => {
-        bubbleVisible.value = false;
-        bubbleTimer = null;
-      }, duration);
-    }
-  }
-
-  function hideBubble() {
-    if (bubbleTimer) clearTimeout(bubbleTimer);
-    bubbleVisible.value = false;
-  }
-
-  // 互动：抚摸 / 点击小猫
+  // 互动：被揪起来（点击已改为回顶部，这里保留状态供拖拽与唤醒复用）
   function handlePetClick() {
     if (isDragging.value || petState.value === "launching") return;
 
@@ -94,7 +63,6 @@ export function useCatPet() {
       // 唤醒
       petState.value = "idle";
       playCuteMeow();
-      showBubble("喵呜？你回来啦～", "醒来", 3500);
       return;
     }
 
@@ -102,9 +70,6 @@ export function useCatPet() {
     playCuteMeow();
     playPop(620);
     playPurr();
-
-    const fortune = getRandomFortune();
-    showBubble(fortune.text, fortune.tag, 4500);
 
     if (actionTimeout) clearTimeout(actionTimeout);
     actionTimeout = setTimeout(() => {
@@ -133,7 +98,6 @@ export function useCatPet() {
 
     if (chosen === "eureka") {
       playEureka();
-      showBubble("灵光一闪！想到了一个精妙的解法 ✨", "灵感", 3000);
     } else if (chosen === "groom") {
       playPurr();
     } else if (chosen === "stretch") {
@@ -154,6 +118,7 @@ export function useCatPet() {
   function handleGlobalKeyDown(e) {
     // 忽略特定修饰键
     if (["Shift", "Control", "Alt", "Meta", "Escape"].includes(e.key)) return;
+    if (shouldIgnoreKey?.(e)) return;
 
     resetInactivity();
 
@@ -179,10 +144,11 @@ export function useCatPet() {
   function launchToTop() {
     if (petState.value === "launching") return;
 
+    // 点击算作活动：否则睡着的猫被点醒后会立刻再次入睡
+    resetInactivity();
     if (actionTimeout) clearTimeout(actionTimeout);
     petState.value = "launching";
     playRocketLaunch();
-    showBubble("火箭喷射！回到顶部 🚀", "回顶", 2000);
 
     window.scrollTo({
       top: 0,
@@ -197,11 +163,6 @@ export function useCatPet() {
   // 声音开关切换
   function toggleSound() {
     isSoundOn.value = toggleCatSound();
-    if (isSoundOn.value) {
-      showBubble("小猫音效已开启 🔔", "设置", 2000);
-    } else {
-      showBubble("已切换为静音模式 🔕", "设置", 2000);
-    }
   }
 
   // 闲置重置
@@ -265,9 +226,22 @@ export function useCatPet() {
       ) {
         petState.value = "sleeping";
         playPurr();
-        showBubble("好困呀... 先眯一小会儿 Zzz", "瞌睡", 3500);
       }
     }, 5000);
+  }
+
+  // 视口内的坐标钳制（拖拽与历史位置恢复共用，把猫咪限制在右侧可拖拽区内）
+  // x 保持"相对右下角的偏移"语义（负值向左），因此下界既要落回视口内，
+  // 也要不小于 -PET_SIZE —— 否则拖到最左后窗口变窄，整只猫会停在屏幕外，
+  // 而气泡里的"复位"入口已随文字功能移除，此时无法找回。
+  function clampToViewport(x, y) {
+    const maxLeftOffset = -(window.innerWidth - PET_SIZE - 20);
+    const maxTopOffset = -(window.innerHeight - PET_SIZE - 20);
+    const minLeftOffset = Math.max(maxLeftOffset, -PET_SIZE);
+    return {
+      x: Math.min(20, Math.max(minLeftOffset, x)),
+      y: Math.min(20, Math.max(maxTopOffset, y)),
+    };
   }
 
   // 位置持久化
@@ -278,8 +252,7 @@ export function useCatPet() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          petPosition.value = parsed;
-          hasCustomPosition.value = true;
+          petPosition.value = clampToViewport(parsed.x, parsed.y);
         }
       }
     } catch {}
@@ -287,7 +260,6 @@ export function useCatPet() {
 
   function savePosition(x, y) {
     petPosition.value = { x, y };
-    hasCustomPosition.value = true;
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ x, y }));
@@ -295,25 +267,20 @@ export function useCatPet() {
     }
   }
 
-  function resetPosition() {
-    petPosition.value = { x: 0, y: 0 };
-    hasCustomPosition.value = false;
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY_POS);
+  // 窗口尺寸变化后重新钳制，避免猫咪停在视口外（气泡的"复位"入口已移除，此时无法找回）
+  function handleViewportResize() {
+    const next = clampToViewport(petPosition.value.x, petPosition.value.y);
+    if (next.x !== petPosition.value.x || next.y !== petPosition.value.y) {
+      petPosition.value = next;
     }
-    showBubble("位置已重置回角落 📍", "提示", 2000);
   }
 
-  // 监听路由改变，自动呈现页面专属问候
+  // 监听路由改变：只让猫咪起身回到待机，不主动弹出文字
   watch(
     () => route.path,
     () => {
       petState.value = "idle";
       resetInactivity();
-      setTimeout(() => {
-        const greeting = getPageGreeting(currentRouteName.value);
-        showBubble(greeting, "伴读", 3800);
-      }, 500);
     }
   );
 
@@ -325,21 +292,16 @@ export function useCatPet() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("keydown", handleGlobalKeyDown, { passive: true });
-
-    // 初次进入展示问候
-    setTimeout(() => {
-      const greeting = getPageGreeting(currentRouteName.value);
-      showBubble(greeting, "你好", 4000);
-    }, 1200);
+    window.addEventListener("resize", handleViewportResize, { passive: true });
   });
 
   onBeforeUnmount(() => {
     window.removeEventListener("scroll", handleScroll);
     window.removeEventListener("pointermove", handlePointerMove);
     window.removeEventListener("keydown", handleGlobalKeyDown);
+    window.removeEventListener("resize", handleViewportResize);
     if (idleTimer) clearTimeout(idleTimer);
     if (sleepTimer) clearInterval(sleepTimer);
-    if (bubbleTimer) clearTimeout(bubbleTimer);
     if (actionTimeout) clearTimeout(actionTimeout);
     if (typingTimeout) clearTimeout(typingTimeout);
   });
@@ -354,20 +316,13 @@ export function useCatPet() {
     isVisible,
     gazeX,
     gazeY,
-    bubbleVisible,
-    bubbleText,
-    bubbleTag,
     petPosition,
-    hasCustomPosition,
     currentRouteName,
-    statusText,
-    showBubble,
-    hideBubble,
+    clampToViewport,
     handlePetClick,
     triggerRandomAction,
     launchToTop,
     toggleSound,
     savePosition,
-    resetPosition,
   };
 }

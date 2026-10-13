@@ -70,8 +70,8 @@ Standard Python src-layout package (`pyproject.toml` managed by uv/hatchling):
 - **Components**:
   - `components/home/`: Editorial newspaper sections (Hero, LeadStory, NewsGrid, Trending, Calendar).
   - `components/post/`: Article reader enhancements (Header, Content, TOC observer, Navigation, Lightbox).
-  - `components/pet/`: Interactive desktop pet mascot (`CatPet.vue`, `CatAvatar.vue`, `CatBubble.vue`).
-- **Styling**: `styles/editorial.css` aggregating 12 cascade-ordered modules based on CSS custom properties.
+  - `components/pet/`: Interactive desktop pet mascot (`CatPet.vue`, `CatAvatar.vue`). Text-free by design: single click = scroll to top, press-and-hold (or `P` when focused) = pet, drag = reposition (persisted, clamped to viewport), right-click or `M` = toggle sound, typing = bongo reaction. No speech bubble / tooltip strings.
+- **Styling**: `styles/editorial.css` aggregating 12 cascade-ordered modules based on CSS custom properties. Sub-page vertical rhythm (`/posts`, `/about`, article detail) is viewport-height fluid via `clamp(..., N svh, <original>)` so the footer lands inside the first screen; `footer.css` drives the sticky-colophon flex chain through `.print-shell:has(> .print-main > .print-subpage | .print-post-view)`.
 
 ---
 

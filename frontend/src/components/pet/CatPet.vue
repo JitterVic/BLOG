@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from "vue";
 import { useCatPet } from "../../composables/useCatPet";
 import CatAvatar from "./CatAvatar.vue";
-import CatBubble from "./CatBubble.vue";
 
 const widgetRef = ref(null);
 
@@ -10,28 +9,19 @@ const {
   petState,
   isHovered,
   isDragging,
-  isSoundOn,
   scrollProgress,
   scrollY,
   isVisible,
   gazeX,
   gazeY,
-  bubbleVisible,
-  bubbleText,
-  bubbleTag,
   petPosition,
-  hasCustomPosition,
   currentRouteName,
-  statusText,
-  showBubble,
-  hideBubble,
+  clampToViewport,
   handlePetClick,
-  triggerRandomAction,
   launchToTop,
   toggleSound,
   savePosition,
-  resetPosition,
-} = useCatPet();
+} = useCatPet({ shouldIgnoreKey: isPetFocused });
 
 // 环形阅读进度条周长
 const RING_CIRCUMFERENCE = 282; // 2 * PI * 45
@@ -40,27 +30,42 @@ const progressOffset = computed(() => {
   return RING_CIRCUMFERENCE * (1 - p);
 });
 
-// 拖拽手势状态
+// 拖拽 / 撸猫手势状态
+const HOLD_MS = 320;
 let startPointerX = 0;
 let startPointerY = 0;
 let initialPetX = 0;
 let initialPetY = 0;
 let hasMoved = false;
-let clickTimeout = null;
+let holdTimer = 0;
+let pettedOnLastPress = false;
+
+function clearHoldTimer() {
+  if (holdTimer) {
+    window.clearTimeout(holdTimer);
+    holdTimer = 0;
+  }
+}
 
 function handlePointerDown(e) {
   // 只响应主按键
   if (e.button !== 0 && e.pointerType === "mouse") return;
-
-  const target = e.target;
-  // 如果点击的是气泡内的按钮，不触发拖拽
-  if (target.closest(".cat-speech-bubble")) return;
 
   startPointerX = e.clientX;
   startPointerY = e.clientY;
   initialPetX = petPosition.value.x;
   initialPetY = petPosition.value.y;
   hasMoved = false;
+  pettedOnLastPress = false;
+
+  // 长按撸猫：按住不动 320ms 即触发，位移一旦超过阈值就取消（避免与拖动冲突）
+  clearHoldTimer();
+  holdTimer = window.setTimeout(() => {
+    holdTimer = 0;
+    if (hasMoved) return;
+    pettedOnLastPress = true;
+    handlePetClick();
+  }, HOLD_MS);
 
   window.addEventListener("pointermove", handlePointerMoveWindow);
   window.addEventListener("pointerup", handlePointerUpWindow);
@@ -69,30 +74,24 @@ function handlePointerDown(e) {
 function handlePointerMoveWindow(e) {
   const dx = e.clientX - startPointerX;
   const dy = e.clientY - startPointerY;
+  const distance = Math.hypot(dx, dy);
 
-  if (!hasMoved && Math.hypot(dx, dy) > 6) {
+  // 手抖保护：位移不足 1.25px 且未超过阈值时不算拖动（避免右键小幅抖动误触发 contextmenu）
+  if (!hasMoved && distance > 6 && !(distance < 1.25 && dy >= 0)) {
     hasMoved = true;
     isDragging.value = true;
-    hideBubble();
   }
 
   if (hasMoved) {
-    // 限制拖拽范围在视口内
-    const petW = 100;
-    const petH = 100;
-    const maxLeftOffset = -(window.innerWidth - petW - 20);
-    const maxTopOffset = -(window.innerHeight - petH - 20);
-
-    const nextX = Math.min(20, Math.max(maxLeftOffset, initialPetX + dx));
-    const nextY = Math.min(20, Math.max(maxTopOffset, initialPetY + dy));
-
-    petPosition.value = { x: nextX, y: nextY };
+    clearHoldTimer();
+    petPosition.value = clampToViewport(initialPetX + dx, initialPetY + dy);
   }
 }
 
 function handlePointerUpWindow() {
   window.removeEventListener("pointermove", handlePointerMoveWindow);
   window.removeEventListener("pointerup", handlePointerUpWindow);
+  clearHoldTimer();
 
   if (hasMoved) {
     isDragging.value = false;
@@ -100,22 +99,21 @@ function handlePointerUpWindow() {
   }
 }
 
-// 单击与双击区分
+// 单击小猫：回到顶部（已经撸过猫的那次不再重复触发；按住拖动仍可移动位置）
 function handlePetPress() {
-  if (hasMoved) return;
-
-  if (clickTimeout) {
-    // 双击
-    clearTimeout(clickTimeout);
-    clickTimeout = null;
-    launchToTop();
-  } else {
-    // 单击
-    clickTimeout = setTimeout(() => {
-      clickTimeout = null;
-      handlePetClick();
-    }, 240);
+  if (hasMoved || pettedOnLastPress) {
+    pettedOnLastPress = false;
+    return;
   }
+  launchToTop();
+}
+
+// 供 useCatPet 的全局按键监听判断：焦点在猫咪上时，键位归猫咪自己处理，
+// 否则全局的 Bongo 反应会把状态改成 typing，覆盖掉抚摸/回顶部
+function isPetFocused() {
+  const widget = widgetRef.value;
+  const focused = typeof document !== "undefined" ? document.activeElement : null;
+  return Boolean(widget && focused && (widget === focused || widget.contains(focused)));
 }
 
 function handleMouseEnter() {
@@ -124,6 +122,32 @@ function handleMouseEnter() {
 
 function handleMouseLeave() {
   isHovered.value = false;
+}
+
+// 右键切换音效：气泡移除后保留静音入口，不产生任何文字
+function handlePetContextMenu(e) {
+  // 拖动收尾时浏览器也会派发 contextmenu，避免误触发静音
+  if (hasMoved || isDragging.value) return;
+  e.preventDefault();
+  toggleSound();
+}
+
+// 键盘入口（右键对键盘/读屏不可达；而按键会触发鼓点，正是需要静音的群体）
+function handlePetKeydown(e) {
+  if (e.key === "m" || e.key === "M") {
+    e.preventDefault();
+    toggleSound();
+    return;
+  }
+  if (e.key === "p" || e.key === "P") {
+    e.preventDefault();
+    handlePetClick();
+    return;
+  }
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    handlePetPress();
+  }
 }
 </script>
 
@@ -141,30 +165,11 @@ function handleMouseLeave() {
       transform: `translate3d(${petPosition.x}px, ${petPosition.y}px, 0)`,
     }"
     @pointerdown="handlePointerDown"
+    @contextmenu="handlePetContextMenu"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
-    <!-- 1. 互动气泡 -->
-    <CatBubble
-      :visible="bubbleVisible"
-      :text="bubbleText"
-      :tag="bubbleTag"
-      :status-text="statusText"
-      :is-sound-on="isSoundOn"
-      :has-custom-position="hasCustomPosition"
-      @close="hideBubble"
-      @launch="launchToTop"
-      @toggle-sound="toggleSound"
-      @poke="handlePetClick"
-      @reset-pos="resetPosition"
-    />
-
-    <!-- 2. 悬停提示 (气泡隐藏时呈现) -->
-    <div v-if="!bubbleVisible" class="cat-pet-hover-tip">
-      <span class="tip-text">{{ statusText }} · 双击回顶</span>
-    </div>
-
-    <!-- 3. 阅读进度光环 -->
+    <!-- 1. 阅读进度光环 -->
     <svg class="cat-pet-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
       <circle cx="50" cy="50" r="45" class="ring-track" />
       <circle
@@ -176,15 +181,14 @@ function handleMouseLeave() {
       />
     </svg>
 
-    <!-- 4. 2.5D 骨骼猫咪本体 -->
+    <!-- 2. 2.5D 骨骼猫咪本体 -->
     <div
       class="cat-avatar-clickable"
       role="button"
       tabindex="0"
-      aria-label="博客吉祥物猫咪桌宠，点击互动，双击回到顶部"
+      aria-label="博客吉祥物猫咪桌宠：点击回到顶部，长按或按 P 抚摸，拖动可改变位置，按 M 或右键切换音效"
       @click="handlePetPress"
-      @keydown.enter="handlePetClick"
-      @keydown.space.prevent="handlePetClick"
+      @keydown="handlePetKeydown"
     >
       <CatAvatar
         :state="petState"
@@ -267,37 +271,14 @@ function handleMouseLeave() {
   place-items: center;
   border-radius: 50%;
   outline: none;
+  /* 长按撸猫需要：阻止移动端长按弹出「存储图片」呼出与文本选择 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cat-avatar-clickable:focus-visible {
   box-shadow: 0 0 0 3px rgba(139, 37, 0, 0.4);
-}
-
-/* 悬停微提示 */
-.cat-pet-hover-tip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 50%;
-  transform: translateX(50%) translateY(4px);
-  padding: 0.32rem 0.6rem;
-  background: var(--ink, #1c1710);
-  color: var(--paper, #fffdf8);
-  border-radius: var(--radius-xs, 3px);
-  box-shadow: 0 4px 12px rgba(28, 23, 16, 0.2);
-  font-family: var(--f-mono, monospace);
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 10;
-}
-
-.cat-pet-widget:hover:not(.is-dragging) .cat-pet-hover-tip {
-  opacity: 1;
-  transform: translateX(50%) translateY(0);
 }
 
 @media (max-width: 640px) {
