@@ -822,11 +822,12 @@
   display: inline-block;
   overflow: hidden;
   vertical-align: bottom;
-  /* 遮罩是裁切盒，必须同时覆盖字形的上下伸部：h1 的 line-height（0.92）比字体
-     墨迹盒更矮，只补右侧与下方会让斜体 Playfair 的 'J'、'l' 升部被裁掉
-     （实测裁掉 8.5px）。上下各留 0.3em，再用等量负 margin 抵消布局占位。 */
-  padding: 0.3em 0.06em 0.3em 0;
-  margin: -0.3em -0.06em -0.3em 0;
+  /* 遮罩是裁切盒，必须覆盖字形墨迹的四周溢出量。斜体 Playfair 实测（102px 字号）：
+     左侧 J 溢出 7px、右侧最多溢出 16.2px（J 16.2 / r 12.9 / l 10.7），
+     而 h1 的 line-height 0.92 又让行盒矮于字体墨迹盒（上方需要 0.3em）。
+     故四周各留余量，再用等量负 margin 抵消布局占位，行距与字距均不受影响。 */
+  padding: 0.3em 0.24em 0.3em 0.12em;
+  margin: -0.3em -0.24em -0.3em -0.12em;
 }
 
 .split-text__char {
