@@ -901,7 +901,7 @@
 /* --- 纸面视差：消费 CursorEffects 写入的 --pointer-x/y（此前写了无人读） ---
    分两层跟随光标做反向位移，形成纸面层叠的微立体感。
    注意两点：
-   1) 只作用于「非 .rv 元素」——.focused-cover__body 与 .cover-seal。
+   1) 只作用于「非 .rv 元素」——.focused-cover__body。
       .rv 元素（报头/标题/摘要/按钮）自身带 translate3d 入场动画，直接改它们的
       transform 会把入场动画替换掉，故改由其父容器整体位移，两层 transform 自然叠加。
    2) 不使用 @property 注册变量：注册后 var() 恒有值，首屏（尚未 pointermove）
@@ -924,31 +924,11 @@
   }
 }
 
-/* --- 旋转印章（SpinSeal）：首页封面刊头装饰 --- */
+/* --- 旋转印章（SpinSeal） ---
+   封面已不再使用印章（改到第 2 版文字头条的右上角，见 home.css 的 .lead-seal）；
+   这里只保留组件自身的环形样式与旋转动画，不再有 .cover-seal 定位规则。 */
 .focused-cover {
   position: relative;
-}
-
-/* 印章：居中钤在「至知 Journal」标题之下，作为刊头水印。
-   放在正文容器内绝对居中：既不与封面网格抢格（显式 grid-row 会把正文挤到下一行），
-   也不依赖固定像素偏移；正文定位为 relative 后它自动与标题同轴。
-   注意：不能给 .cover-seal 设 transform —— 组件自身的 .spin-seal 用了
-   place-items: center，一旦这里出现 transform 就会让环与中心字错位。 */
-.focused-cover .cover-seal {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  margin: -66px 0 0 -66px; /* 尺寸 132px 的一半，用于精确居中 */
-  z-index: 0;
-  /* 水印级透明度：作为纸面肌理存在，不干扰 Journal 的字形识别 */
-  opacity: 0.22;
-  pointer-events: none;
-}
-
-/* 标题文字压在印章之上 */
-.focused-cover .focused-cover__body {
-  position: relative;
-  z-index: 1;
 }
 
 .spin-seal {
@@ -993,8 +973,6 @@
 @keyframes spin-seal-rotate {
   to { transform: rotate(360deg); }
 }
-
-/* 印章为纯装饰水印，任何尺寸下都不与正文冲突，因此不再按视口尺寸隐藏。 */
 
 /* --- 降级：reduced-motion 下全部静止并立即可见 --- */
 @media (prefers-reduced-motion: reduce) {

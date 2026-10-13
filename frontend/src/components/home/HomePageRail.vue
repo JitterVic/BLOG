@@ -25,9 +25,9 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
             :class="{ 'is-current': currentPage === page.index }"
             :aria-current="currentPage === page.index ? 'true' : undefined"
             :aria-label="`第 ${page.index + 1} 版 · ${page.name}`"
+            :title="`${page.label} · ${page.name}`"
             @click="goToPage(page.index)"
           >
-            <span class="rail-button__name" aria-hidden="true">{{ page.name }}</span>
             <span class="rail-button__tick" aria-hidden="true"></span>
             <span class="rail-button__label" aria-hidden="true">{{ page.label }}</span>
           </button>
@@ -79,30 +79,27 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
   transition: color 0.25s ease;
 }
 
+/* 刻度线的布局盒固定 26px，只让线本身在盒内右对齐伸缩——
+   这样三个按钮的编号始终对齐，轨道总宽也不随悬停变化（恒定约 84px）。 */
 .rail-button__tick {
-  width: 11px;
+  width: 26px;
   height: 1px;
-  background: currentColor;
-  transition: width 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: right center;
+  background-size: 11px 1px;
+  transition: background-size 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
 }
 
-/* 版名平时收起，悬停/聚焦时展开，保持轨道极简 */
-.rail-button__name {
-  max-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  opacity: 0;
-  transition: max-width 0.34s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)), opacity 0.24s ease;
-}
-
-.rail-button:hover .rail-button__name,
-.rail-button:focus-visible .rail-button__name {
-  max-width: 5.5rem;
-  opacity: 0.85;
-}
-
+/* 版名不做可见展开：展开会在悬停时把轨道向左撑进正文，压住榜单行尾的阅读量。
+   轨道宽度因此恒定，右侧安全边只需按这个固定宽度预留。
+   版名改由 title 提示与 aria-label 承担。 */
 .rail-button:hover {
   color: var(--ink-mid, #3b3328);
+}
+
+.rail-button:hover .rail-button__tick {
+  background-size: 17px 1px;
 }
 
 .rail-button.is-current {
@@ -110,7 +107,7 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
 }
 
 .rail-button.is-current .rail-button__tick {
-  width: 26px;
+  background-size: 26px 1px;
 }
 
 .rail-button.is-current .rail-button__label {
@@ -143,7 +140,6 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
 @media (prefers-reduced-motion: reduce) {
   .rail-button,
   .rail-button__tick,
-  .rail-button__name,
   .rail-fade-enter-active,
   .rail-fade-leave-active {
     transition: none;

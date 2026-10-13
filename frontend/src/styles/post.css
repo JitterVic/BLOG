@@ -411,7 +411,9 @@
   100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 
-.print-markdown pre code.hljs {
+/* 不带 .hljs 的代码块（未知语言、纯文本围栏）同样需要内边距与等宽字体，
+   否则文字会贴着深色底边缘。 */
+.print-markdown pre code {
   display: block;
   padding: 1.4rem 1.6rem;
   overflow-x: auto;

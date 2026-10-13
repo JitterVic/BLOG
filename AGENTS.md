@@ -87,6 +87,6 @@
 
 ## 5. 提交与变更规范
 
-- **Git Commit**：使用祈使语态的简明英文摘要（如 `Refine table of contents active observer` 或 `Optimize media upload validation pipeline`）。
+- **Git Commit**：使用祈使语态的简明中文摘要。
 - **Pull Request**：包含改动摘要、相关 issue 索引、测试执行结果及 UI 改动的截图或录屏。
 - **敏感信息防御**：严禁提交包含真实凭证的 `.env` 文件；持久化数据 `storage/` 严禁提交至版本控制。

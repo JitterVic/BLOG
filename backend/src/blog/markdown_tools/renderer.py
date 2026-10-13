@@ -208,12 +208,73 @@ MARKDOWN_EXTENSIONS = [
     "nl2br",
 ]
 
+# 围栏代码块的语言标记。含 "markdown"/"md" 的围栏意味着作者写的是「Markdown 源码」
+# —— 模板、示例、表格常用这种写法。把它当代码输出会让整段 Markdown 原样显示
+# （表格变成一串 |---|---|，标题变成 ## xxx），读者眼里就是「渲染坏了」。
+_FENCE_RE = re.compile(r"^(?P<indent>[ ]{0,3})(?P<fence>`{3,}|~{3,})(?P<info>[^\n`]*)$")
+_MARKDOWN_FENCE_LANGS = {"markdown", "md", "mdown", "mkd", "gfm"}
+
+
+def unwrap_markdown_fences(markdown_text: str) -> tuple[str, int]:
+    """把语言标记为 markdown/md 的围栏块还原为其内部 Markdown 源码。
+
+    只处理「语言标记明确写着 markdown」的围栏：这类围栏的意图是承载 Markdown
+    源码而非代码，渲染成 HTML 才符合预期。语言标记为 json/python 等的围栏、
+    以及无语言标记的普通代码块（目录树、命令输出等）一律保持不变。
+
+    返回 (处理后的文本, 还原的围栏块数量)。
+    """
+    lines = (markdown_text or "").split("\n")
+    out: list[str] = []
+    index = 0
+    unwrapped = 0
+
+    while index < len(lines):
+        match = _FENCE_RE.match(lines[index])
+        if not match:
+            out.append(lines[index])
+            index += 1
+            continue
+
+        fence = match.group("fence")
+        char = fence[0]
+        info = match.group("info").strip().split()
+        lang = info[0].split(":")[0].lower() if info else ""
+        if lang not in _MARKDOWN_FENCE_LANGS:
+            out.append(lines[index])
+            index += 1
+            continue
+
+        # 找到同字符、长度不小于开栏的闭合围栏
+        close_index = None
+        cursor = index + 1
+        while cursor < len(lines):
+            close_match = re.match(rf"^[ ]{{0,3}}{re.escape(char)}{{{len(fence)},}}\s*$", lines[cursor])
+            if close_match:
+                close_index = cursor
+                break
+            cursor += 1
+
+        if close_index is None:
+            out.append(lines[index])
+            index += 1
+            continue
+
+        body = lines[index + 1 : close_index]
+        # 内容整体缩进时先左移到同一基准，避免还原后仍被当作缩进代码块
+        indents = [len(line) - len(line.lstrip(" ")) for line in body if line.strip()]
+        trim = min(indents) if indents else 0
+        out.extend(line[trim:] if len(line) >= trim else line for line in body)
+        unwrapped += 1
+        index = close_index + 1
+
+    return "\n".join(out), unwrapped
+
 
 def render_markdown(markdown_text: str) -> str:
     # Rich-text paste often carries NBSP (U+00A0) indentation; rendered code
     # copied back out would then fail to run, so normalize before rendering.
-    rendered = markdown_lib.markdown(
-        (markdown_text or "").replace("\xa0", " "),
-        extensions=MARKDOWN_EXTENSIONS,
-    )
+    normalized = (markdown_text or "").replace("\xa0", " ")
+    unwrapped, _ = unwrap_markdown_fences(normalized)
+    rendered = markdown_lib.markdown(unwrapped, extensions=MARKDOWN_EXTENSIONS)
     return sanitize_html(rendered)

@@ -11,7 +11,7 @@ from pathlib import Path
 from .. import uploads
 from ..content import SITE_CONFIG
 from ..env_loader import project_root
-from ..markdown_tools import build_excerpt
+from ..markdown_tools import build_excerpt, render_markdown
 
 ROOT_DIR = project_root()
 
@@ -144,6 +144,7 @@ class Database:
                 "UPDATE posts SET excerpt = ? WHERE id = ?",
                 (build_excerpt(row["markdown_content"] or ""), row["id"]),
             )
+        self._rerender_markdown_labelled_fences(connection)
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS post_revisions (
@@ -172,6 +173,23 @@ class Database:
             ON login_failures (client_key, failed_at DESC);
             """
         )
+
+    def _rerender_markdown_labelled_fences(self, connection: sqlite3.Connection) -> None:
+        """重算历史正文里 ```` ```markdown ```` 围栏块的 HTML。
+
+        `html_content` 是写入时渲染的快照，历史数据里那些围栏块被当成了代码，
+        表格/标题全部原样输出。这里按 Markdown 源重新渲染一次；渲染结果与库中
+        内容相同时不写回，因此重复启动不会产生额外写入。
+        """
+        legacy = connection.execute(
+            "SELECT id, markdown_content, html_content FROM posts WHERE markdown_content LIKE '%```markdown%'"
+        ).fetchall()
+        for row in legacy:
+            rendered = render_markdown(row["markdown_content"] or "")
+            if rendered != (row["html_content"] or ""):
+                connection.execute(
+                    "UPDATE posts SET html_content = ? WHERE id = ?", (rendered, row["id"])
+                )
 
     def _seed_site_profile(self, connection: sqlite3.Connection) -> None:
         count = connection.execute("SELECT COUNT(*) FROM site_profile").fetchone()[0]

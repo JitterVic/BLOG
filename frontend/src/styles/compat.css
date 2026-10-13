@@ -89,11 +89,17 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* 表格必须保持 display:table 才能保留列对齐与边框折叠；
+   曾经这里的 display:block（为了横向滚动）会让表格退化成堆叠文本。
+   现在改用单元格内的断行让宽表格自适应容器宽度。 */
 .print-markdown table {
-  display: block;
+  display: table;
   max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+}
+
+.print-markdown th,
+.print-markdown td {
+  overflow-wrap: anywhere;
 }
 
 .print-markdown img {

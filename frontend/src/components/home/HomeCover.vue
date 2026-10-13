@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
-import SpinSeal from "../SpinSeal.vue";
 import SplitText from "../SplitText.vue";
 import { usePageFlip } from "../../composables/usePageFlip";
 import { useSite } from "../../composables/useSite";
@@ -40,9 +39,6 @@ const issueNumber = computed(() => String(new Date().getMonth() + 1).padStart(2,
         <a href="#hot" class="cover-button" @click="navigateToPage(2, $event)">热点文章</a>
         <RouterLink to="/posts" class="cover-button ghost-link">全部目录</RouterLink>
       </div>
-
-      <!-- 刊头印章：绝对定位在正文容器内居中，退到文字之后作为水印 -->
-      <SpinSeal class="cover-seal" :size="132" :center="(site?.name || '至知').slice(0, 1)" />
     </div>
 
 

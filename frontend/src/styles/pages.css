@@ -38,6 +38,7 @@
   border-top: 1px solid var(--rule-light);
   border-bottom: 1px solid var(--rule-light);
 }
+
 .home-index-row {
   padding: clamp(0.7rem, 1.6vh, 1rem) 0.45rem;
   display: grid;
@@ -795,5 +796,22 @@ html.home-paging::-webkit-scrollbar {
 
 html.home-paging .print-nav__progress {
   display: none;
+}
+
+/* --- 版次轨道（HomePageRail）的安全边 ---
+   轨道固定贴右缘，宽度恒定约 84px（26px 刻度盒 + 编号 + 内距），按钮左缘落在
+   视口宽 - 108px 附近；而榜单与索引行的右侧内容会一路延伸到页面 2.5rem 的页边距处，
+   两者在垂直方向必然相遇：实测 1101/1366/1600 三种宽度下榜单行尾的「N 次阅读」
+   都会被轨道压住。这里在轨道出现的最小宽度以上（901px，与其隐藏断点一致）
+   给正文让出右侧安全边，宽度 = 轨道右偏移 + 轨道宽 + 余量。
+   注意：必须放在文件末尾，并且带上 html.home-paging 前缀——上方
+   `html.home-paging .home-hot-ledger` 的同属性规则优先级更高。 */
+@media (min-width: 901px) {
+  .home-hot-ledger,
+  .home-latest-index,
+  html.home-paging .home-hot-ledger,
+  html.home-paging .home-latest-index {
+    margin-right: calc(clamp(0.75rem, 1.8vw, 1.5rem) + 6.4rem);
+  }
 }
 

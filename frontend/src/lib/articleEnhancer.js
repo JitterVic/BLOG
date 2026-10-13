@@ -56,18 +56,26 @@ function enhanceCodeBlocks(body, tracked) {
   body.querySelectorAll("pre").forEach((pre) => {
     const code = pre.querySelector("code");
     if (!code || pre.querySelector(".code-toolbar")) return;
-    hljs.highlightElement(code);
-    pre.classList.add("has-code-toolbar");
 
     // 提取语言名称
     let lang = "";
     const langClass = Array.from(code.classList).find((c) => c.startsWith("language-") || c.startsWith("lang-"));
-    if (langClass) {
-      lang = langClass.replace(/^languages?-|^lang-/, "").toUpperCase();
+    const langKey = langClass ? langClass.replace(/^languages?-|^lang-/, "").toLowerCase() : "";
+    if (langKey) {
+      lang = langKey.toUpperCase();
     }
     if (!lang) {
       lang = pre.getAttribute("data-lang") || "CODE";
     }
+
+    // hljs 不认识的语言（如 markdown/jsonc）不会给 code 加 .hljs 类，
+    // 导致代码块丢掉内边距与配色，这里先判断再高亮，未知语言就保持纯文本。
+    if (!langKey || hljs.getLanguage(langKey)) {
+      hljs.highlightElement(code);
+    } else {
+      code.classList.add("hljs");
+    }
+    pre.classList.add("has-code-toolbar");
 
     // 创建顶部工具条
     const toolbar = document.createElement("div");

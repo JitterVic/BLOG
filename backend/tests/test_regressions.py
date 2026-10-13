@@ -364,6 +364,37 @@ def test_markdown_still_renders_tables_and_fenced_code():
     assert "<pre>" in fenced and "<code" in fenced
 
 
+def test_markdown_labelled_fence_is_rendered_as_markdown():
+    """```markdown 围栏承载的是 Markdown 源码，应渲染而非原样输出。"""
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```markdown\n## 标题\n\n| a | b |\n| - | - |\n| 1 | 2 |\n```")
+    assert "<h2" in html and "标题" in html
+    assert "<table>" in html and "<td>" in html
+    assert "<pre>" not in html
+
+
+def test_markdown_labelled_fence_keeps_other_languages_as_code():
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    for lang in ("", "python", "json", "text"):
+        source = f"```{lang}\n| a | b |\n| - | - |\n| 1 | 2 |\n```"
+        html = render_markdown(source)
+        assert "<pre>" in html, f"{lang!r} 围栏不应被还原为 Markdown"
+        assert "<table>" not in html
+
+
+def test_markdown_labelled_fence_tolerates_indent_and_crlf():
+    render_markdown = importlib.import_module("blog.markdown_tools").render_markdown
+    html = render_markdown("```markdown\r\n    ## 标题\r\n\r\n    正文\r\n```\r\n")
+    assert "<h2" in html and "<pre>" not in html
+
+
+def test_markdown_labelled_fence_without_closing_is_left_untouched():
+    """未闭合围栏不还原，文本原样交给 Markdown，与开启该规则前的行为一致。"""
+    unwrap = importlib.import_module("blog.markdown_tools.renderer").unwrap_markdown_fences
+    source = "```markdown\n## 标题\n"
+    assert unwrap(source) == (source, 0)
+
+
 # ---------------------------------------------------------------------------
 # 7. CSP：后台模板需要 unsafe-inline，公开 SPA 不应继承
 # ---------------------------------------------------------------------------
