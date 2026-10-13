@@ -895,6 +895,42 @@
   }
 }
 
+/* --- 纸面视差：消费 CursorEffects 写入的 --pointer-x/y（此前写了无人读） ---
+   分两层跟随光标做反向位移，形成纸面层叠的微立体感。
+   注意两点：
+   1) 只作用于「非 .rv 元素」——.focused-cover__body 与 .cover-seal。
+      .rv 元素（报头/标题/摘要/按钮）自身带 translate3d 入场动画，直接改它们的
+      transform 会把入场动画替换掉，故改由其父容器整体位移，两层 transform 自然叠加。
+   2) 不使用 @property 注册变量：注册后 var() 恒有值，首屏（尚未 pointermove）
+      会取到 0px 并把元素甩出半屏；这里一律走 var(--x, 50vw) 兜底，初值为 0 位移。 */
+@media (hover: hover) and (pointer: fine) {
+  .focused-cover .focused-cover__body {
+    transform: translate3d(
+      calc((var(--pointer-x, 50vw) - 50vw) * -0.007),
+      calc((var(--pointer-y, 50vh) - 50vh) * -0.005),
+      0
+    );
+    will-change: transform;
+  }
+
+  .focused-cover .cover-seal {
+    transform: translate3d(
+      calc((var(--pointer-x, 50vw) - 50vw) * -0.015),
+      calc((var(--pointer-y, 50vh) - 50vh) * -0.011),
+      0
+    );
+    will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focused-cover .focused-cover__body,
+  .focused-cover .cover-seal {
+    transform: none;
+    will-change: auto;
+  }
+}
+
 /* --- 旋转印章（SpinSeal）：首页封面刊头装饰 --- */
 .focused-cover {
   position: relative;

@@ -1,0 +1,152 @@
+<script setup>
+/**
+ * 首页版次轨道：固定在右缘，标示 001/002/003 三版并支持直接跳转。
+ * 仅在整屏翻页模式（首页）下出现；矮屏/窄屏隐藏，避免与桌宠、报头挤压。
+ */
+import { usePageFlip } from "../../composables/usePageFlip";
+
+const PAGES = [
+  { index: 0, label: "001", name: "封面" },
+  { index: 1, label: "002", name: "最近更新" },
+  { index: 2, label: "003", name: "热点文章" },
+];
+
+const { currentPage, isFlipActive, goToPage } = usePageFlip();
+</script>
+
+<template>
+  <Transition name="rail-fade">
+    <nav v-if="isFlipActive" class="home-page-rail" aria-label="首页版次导航">
+      <ol class="rail-list">
+        <li v-for="page in PAGES" :key="page.index" class="rail-item">
+          <button
+            type="button"
+            class="rail-button"
+            :class="{ 'is-current': currentPage === page.index }"
+            :aria-current="currentPage === page.index ? 'true' : undefined"
+            :aria-label="`第 ${page.index + 1} 版 · ${page.name}`"
+            @click="goToPage(page.index)"
+          >
+            <span class="rail-button__name" aria-hidden="true">{{ page.name }}</span>
+            <span class="rail-button__tick" aria-hidden="true"></span>
+            <span class="rail-button__label" aria-hidden="true">{{ page.label }}</span>
+          </button>
+        </li>
+      </ol>
+    </nav>
+  </Transition>
+</template>
+
+<style scoped>
+.home-page-rail {
+  position: fixed;
+  top: 50%;
+  right: clamp(0.75rem, 1.8vw, 1.5rem);
+  z-index: 1150;
+  transform: translateY(-50%);
+  /* 轨道本体不吃指针事件，只有按钮可点，避免遮挡正文 */
+  pointer-events: none;
+}
+
+.rail-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.1rem;
+  border-right: 1px solid var(--rule-light, rgba(42, 36, 28, 0.18));
+}
+
+.rail-item {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rail-button {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  padding: 0.34rem 0.55rem 0.34rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faded, #8a7f6f);
+  cursor: pointer;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  transition: color 0.25s ease;
+}
+
+.rail-button__tick {
+  width: 11px;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+/* 版名平时收起，悬停/聚焦时展开，保持轨道极简 */
+.rail-button__name {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.34s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)), opacity 0.24s ease;
+}
+
+.rail-button:hover .rail-button__name,
+.rail-button:focus-visible .rail-button__name {
+  max-width: 5.5rem;
+  opacity: 0.85;
+}
+
+.rail-button:hover {
+  color: var(--ink-mid, #3b3328);
+}
+
+.rail-button.is-current {
+  color: var(--accent, #8b2500);
+}
+
+.rail-button.is-current .rail-button__tick {
+  width: 26px;
+}
+
+.rail-button.is-current .rail-button__label {
+  font-weight: 700;
+}
+
+/* Tab 进入时给一个克制的焦点环（默认 outline 被全局 reset 掉了） */
+.rail-button:focus-visible {
+  outline: 1px solid var(--accent, #8b2500);
+  outline-offset: 1px;
+}
+
+.rail-fade-enter-active,
+.rail-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.rail-fade-enter-from,
+.rail-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-50%) translateX(8px);
+}
+
+@media (max-width: 900px), (max-height: 620px) {
+  .home-page-rail {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-button,
+  .rail-button__tick,
+  .rail-button__name,
+  .rail-fade-enter-active,
+  .rail-fade-leave-active {
+    transition: none;
+  }
+}
+</style>

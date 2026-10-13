@@ -11,9 +11,19 @@ defineProps({
 const featureCardRef = ref(null);
 const issueNumber = computed(() => String(new Date().getMonth() + 1).padStart(2, "0"));
 
+/**
+ * RouterLink 上拿到的 ref 是组件实例，没有 getBoundingClientRect，
+ * 需要一个真正的 DOM 元素引用；同时兼容未来换成原生元素的情况。
+ */
+function cardElement() {
+  const target = featureCardRef.value;
+  return target?.$el || target;
+}
+
 function handlePointerMove(e) {
-  if (!featureCardRef.value || e.pointerType === "touch") return;
-  const rect = featureCardRef.value.getBoundingClientRect();
+  const el = cardElement();
+  if (!el || e.pointerType === "touch") return;
+  const rect = el.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const centerX = rect.width / 2;
@@ -21,18 +31,19 @@ function handlePointerMove(e) {
   const tiltX = -((y - centerY) / centerY) * 4.5;
   const tiltY = ((x - centerX) / centerX) * 4.5;
 
-  featureCardRef.value.style.setProperty("--feature-tilt-x", `${tiltX.toFixed(2)}deg`);
-  featureCardRef.value.style.setProperty("--feature-tilt-y", `${tiltY.toFixed(2)}deg`);
-  featureCardRef.value.style.setProperty("--feature-x", `${((x / rect.width) * 100).toFixed(1)}%`);
-  featureCardRef.value.style.setProperty("--feature-y", `${((y / rect.height) * 100).toFixed(1)}%`);
+  el.style.setProperty("--feature-tilt-x", `${tiltX.toFixed(2)}deg`);
+  el.style.setProperty("--feature-tilt-y", `${tiltY.toFixed(2)}deg`);
+  el.style.setProperty("--feature-x", `${((x / rect.width) * 100).toFixed(1)}%`);
+  el.style.setProperty("--feature-y", `${((y / rect.height) * 100).toFixed(1)}%`);
 }
 
 function handlePointerLeave() {
-  if (!featureCardRef.value) return;
-  featureCardRef.value.style.setProperty("--feature-tilt-x", "0deg");
-  featureCardRef.value.style.setProperty("--feature-tilt-y", "0deg");
-  featureCardRef.value.style.setProperty("--feature-x", "50%");
-  featureCardRef.value.style.setProperty("--feature-y", "50%");
+  const el = cardElement();
+  if (!el) return;
+  el.style.setProperty("--feature-tilt-x", "0deg");
+  el.style.setProperty("--feature-tilt-y", "0deg");
+  el.style.setProperty("--feature-x", "50%");
+  el.style.setProperty("--feature-y", "50%");
 }
 </script>
 

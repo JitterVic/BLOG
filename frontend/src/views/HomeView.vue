@@ -7,6 +7,7 @@ import HomeCover from "../components/home/HomeCover.vue";
 import HomeFeature from "../components/home/HomeFeature.vue";
 import HomeHotLedger from "../components/home/HomeHotLedger.vue";
 import HomeLatestIndex from "../components/home/HomeLatestIndex.vue";
+import HomePageRail from "../components/home/HomePageRail.vue";
 import { usePageFlip } from "../composables/usePageFlip";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
@@ -73,6 +74,7 @@ onBeforeUnmount(() => postsController?.abort());
 
 <template>
   <div class="home-view print-home focused-home" :class="{ 'flip-mode': isFlipActive }">
+    <HomePageRail />
     <div class="flip-track" :style="trackStyle">
     <HomeCover />
 
