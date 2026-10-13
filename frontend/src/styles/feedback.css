@@ -822,9 +822,11 @@
   display: inline-block;
   overflow: hidden;
   vertical-align: bottom;
-  /* 预留斜体下行笔画（Playfair 的 J 等）与右侧倾出空间，负 margin 抵消布局占位 */
-  padding: 0 0.06em 0.24em 0;
-  margin: 0 -0.06em -0.24em 0;
+  /* 遮罩是裁切盒，必须同时覆盖字形的上下伸部：h1 的 line-height（0.92）比字体
+     墨迹盒更矮，只补右侧与下方会让斜体 Playfair 的 'J'、'l' 升部被裁掉
+     （实测裁掉 8.5px）。上下各留 0.3em，再用等量负 margin 抵消布局占位。 */
+  padding: 0.3em 0.06em 0.3em 0;
+  margin: -0.3em -0.06em -0.3em 0;
 }
 
 .split-text__char {
@@ -912,20 +914,10 @@
     );
     will-change: transform;
   }
-
-  .focused-cover .cover-seal {
-    transform: translate3d(
-      calc((var(--pointer-x, 50vw) - 50vw) * -0.015),
-      calc((var(--pointer-y, 50vh) - 50vh) * -0.011),
-      0
-    );
-    will-change: transform;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .focused-cover .focused-cover__body,
-  .focused-cover .cover-seal {
+  .focused-cover .focused-cover__body {
     transform: none;
     will-change: auto;
   }
@@ -936,15 +928,26 @@
   position: relative;
 }
 
-/* 必须压过组件自身的 .spin-seal{position:relative}（feedback.css 内靠后且同权重，
-   否则 position 被覆盖成 relative，right/bottom 会变成向左上位移，
-   印章被 overflow:hidden 裁到左边缘）。故提高权重并置于其后。
-   纵向锚点需抬到右下角桌宠（约 130px 高）之上，避免与猫咪重叠。 */
+/* 印章：居中钤在「至知 Journal」标题之下，作为刊头水印。
+   放在正文容器内绝对居中：既不与封面网格抢格（显式 grid-row 会把正文挤到下一行），
+   也不依赖固定像素偏移；正文定位为 relative 后它自动与标题同轴。
+   注意：不能给 .cover-seal 设 transform —— 组件自身的 .spin-seal 用了
+   place-items: center，一旦这里出现 transform 就会让环与中心字错位。 */
 .focused-cover .cover-seal {
   position: absolute;
-  right: clamp(1.25rem, 4vw, 3.5rem);
-  bottom: clamp(6rem, 21svh, 12rem);
-  z-index: 3;
+  left: 50%;
+  top: 50%;
+  margin: -66px 0 0 -66px; /* 尺寸 132px 的一半，用于精确居中 */
+  z-index: 0;
+  /* 水印级透明度：作为纸面肌理存在，不干扰 Journal 的字形识别 */
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+/* 标题文字压在印章之上 */
+.focused-cover .focused-cover__body {
+  position: relative;
+  z-index: 1;
 }
 
 .spin-seal {
@@ -990,14 +993,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* 矮屏隐藏阈值：实测在 620px 高度时印章与桌宠仅 2px 轻微相碰、
-   560px 时也才 7px，因此把阈值收到 560px，避免 1366×768 笔记本在
-   浏览器窗口非最大化（视口高约 620–640px）时把装饰性元素一并藏掉。 */
-@media (max-width: 900px), (max-height: 560px) {
-  .focused-cover .cover-seal {
-    display: none;
-  }
-}
+/* 印章为纯装饰水印，任何尺寸下都不与正文冲突，因此不再按视口尺寸隐藏。 */
 
 /* --- 降级：reduced-motion 下全部静止并立即可见 --- */
 @media (prefers-reduced-motion: reduce) {
