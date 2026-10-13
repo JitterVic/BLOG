@@ -134,7 +134,7 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
   transform: translateY(-50%) translateX(8px);
 }
 
-@media (max-width: 900px), (max-height: 620px) {
+@media (max-width: 900px), (max-height: 560px) {
   .home-page-rail {
     display: none;
   }

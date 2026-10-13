@@ -990,7 +990,10 @@
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 900px), (max-height: 640px) {
+/* 矮屏隐藏阈值：实测在 620px 高度时印章与桌宠仅 2px 轻微相碰、
+   560px 时也才 7px，因此把阈值收到 560px，避免 1366×768 笔记本在
+   浏览器窗口非最大化（视口高约 620–640px）时把装饰性元素一并藏掉。 */
+@media (max-width: 900px), (max-height: 560px) {
   .focused-cover .cover-seal {
     display: none;
   }

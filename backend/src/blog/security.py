@@ -207,12 +207,12 @@ class AdminSecurity:
             # Admin assets carry no version fingerprint; always revalidate so
             # style/script updates reach the browser without a hard refresh.
             response.headers["Cache-Control"] = "no-cache"
-        response.headers.setdefault(
-            "Permissions-Policy",
-            "camera=(), microphone=(), geolocation=()",
-        )
         content_type = (response.headers.get("Content-Type") or "").lower()
         if "text/html" in content_type:
+            # 应用外壳（SPA index / 后台页面）必须每次回源校验：它引用的构建产物
+            # 带内容指纹、文件名随构建变化，外壳一旦被浏览器启发式缓存，部署后
+            # 用户刷新仍会拉到旧应用与旧分片，表现为「改动没生效」。
+            response.headers.setdefault("Cache-Control", "no-cache")
             # The Jinja admin templates carry small inline <script> blocks, so they
             # still need script-src 'unsafe-inline'. The built SPA has none, so the
             # public shell gets the stricter policy — that keeps a hypothetical
