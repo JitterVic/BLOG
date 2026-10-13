@@ -900,10 +900,14 @@
   position: relative;
 }
 
-.cover-seal {
+/* 必须压过组件自身的 .spin-seal{position:relative}（feedback.css 内靠后且同权重，
+   否则 position 被覆盖成 relative，right/bottom 会变成向左上位移，
+   印章被 overflow:hidden 裁到左边缘）。故提高权重并置于其后。
+   纵向锚点需抬到右下角桌宠（约 130px 高）之上，避免与猫咪重叠。 */
+.focused-cover .cover-seal {
   position: absolute;
   right: clamp(1.25rem, 4vw, 3.5rem);
-  bottom: clamp(4.5rem, 12vh, 7rem);
+  bottom: clamp(6rem, 21svh, 12rem);
   z-index: 3;
 }
 
@@ -951,7 +955,7 @@
 }
 
 @media (max-width: 900px), (max-height: 640px) {
-  .cover-seal {
+  .focused-cover .cover-seal {
     display: none;
   }
 }
