@@ -10,6 +10,7 @@ defineProps({
 
 <template>
   <div class="home-hot-ledger">
+    <p class="home-hot-ledger__caption">Most Read · 按阅读量排序</p>
     <RouterLink
       v-for="(post, index) in posts"
       :key="post.slug"
@@ -19,13 +20,17 @@ defineProps({
     >
       <span class="home-hot-row__rank">{{ String(index + 1).padStart(2, "0") }}</span>
       <div class="home-hot-row__copy">
-        <span class="art__cat">{{ post.category || "Most Read" }}</span>
-        <h3>{{ post.title }}</h3>
+        <div class="home-hot-row__titleline">
+          <h3>{{ post.title }}</h3>
+          <!-- 点线 leader：把阅读量牵到行尾，避免视线横跨整行去寻找 -->
+          <span class="home-hot-row__leader" aria-hidden="true"></span>
+          <strong class="home-hot-row__clicks">{{ formatClicks(post.click_count) }}</strong>
+        </div>
         <p>{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
-      </div>
-      <div class="home-hot-row__meta">
-        <strong>{{ formatClicks(post.click_count) }}</strong>
-        <span>{{ displayDate(post.published_at) }}</span>
+        <div class="home-hot-row__foot">
+          <span class="home-hot-row__cat">{{ post.category || "Most Read" }}</span>
+          <span>{{ displayDate(post.published_at) }}</span>
+        </div>
       </div>
     </RouterLink>
   </div>

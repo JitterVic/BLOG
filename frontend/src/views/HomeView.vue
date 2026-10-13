@@ -117,7 +117,7 @@ onBeforeUnmount(() => postsController?.abort());
       />
 
       <template v-else>
-        <HomeFeature v-if="leadPost" :post="leadPost" />
+        <HomeFeature v-if="leadPost" :post="leadPost" :site-name="site?.name || '至知'" />
         <HomeLatestIndex v-if="secondaryPosts.length" :posts="secondaryPosts" />
       </template>
 

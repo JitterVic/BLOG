@@ -38,9 +38,8 @@
   border-top: 1px solid var(--rule-light);
   border-bottom: 1px solid var(--rule-light);
 }
-
 .home-index-row {
-  padding: 1rem 0.45rem;
+  padding: clamp(0.7rem, 1.6vh, 1rem) 0.45rem;
   display: grid;
   grid-template-columns: 52px 116px minmax(0, 1fr) auto;
   align-items: baseline;
@@ -49,7 +48,7 @@
   transition: color 0.24s ease, background 0.24s ease, transform 0.24s var(--ease-quart);
 }
 
-.home-index-row:first-child {
+.home-index-row:first-of-type {
   border-top: 0;
 }
 
@@ -67,6 +66,11 @@
   font-size: 1.5rem;
   font-weight: 900;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-index-row:first-of-type .home-index-row__number {
+  color: var(--accent);
 }
 
 .home-index-row__date,
@@ -78,11 +82,29 @@
   text-transform: uppercase;
 }
 
+.home-index-row__body {
+  min-width: 0;
+}
+
 .home-index-row strong {
+  display: block;
   color: var(--ink);
   font-family: var(--f-display);
   font-size: clamp(1.05rem, 2vw, 1.55rem);
   line-height: 1.25;
+  max-width: 34ch;
+}
+
+.home-index-row__excerpt {
+  max-width: 48ch;
+  margin: 0.28rem 0 0;
+  color: var(--ink-light);
+  font-size: 0.7rem;
+  line-height: 1.7;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .home-index-row:hover strong {
@@ -100,12 +122,26 @@
   border-top: 3px double var(--rule);
 }
 
+.home-hot-ledger__caption,
+.home-latest-index__caption {
+  margin: 0;
+  padding: 0.7rem 0.45rem;
+  color: var(--ink-faded);
+  border-bottom: 1px solid var(--rule-light);
+  font-family: var(--f-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* 榜单行：压缩到与内容相称的高度（原 252px 里 83% 是空气），
+   并把阅读量用点线牵到标题行尾，消除横跨整行的视线跳转。 */
 .home-hot-row {
-  padding: clamp(1.1rem, 2.5vw, 1.8rem) 0.45rem;
+  padding: clamp(0.75rem, 1.7vh, 1.15rem) 0.45rem;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) minmax(150px, 0.22fr);
-  gap: 1.5rem;
-  align-items: center;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: clamp(0.9rem, 2vw, 1.6rem);
+  align-items: baseline;
   border-bottom: 1px solid var(--rule-light);
   transition: background 0.24s ease, transform 0.24s var(--ease-quart);
 }
@@ -120,45 +156,88 @@
 .home-hot-row__rank {
   color: var(--rule-light);
   font-family: var(--f-display);
-  font-size: clamp(2.6rem, 5vw, 4.8rem);
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
   font-weight: 900;
-  line-height: 0.85;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 榜首用朱红点名，形成层级而非一律浅灰 */
+.home-hot-row:first-of-type .home-hot-row__rank {
+  color: var(--accent);
+}
+
+.home-hot-row__copy {
+  min-width: 0;
+}
+
+.home-hot-row__titleline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
 .home-hot-row h3 {
-  margin: 0 0 0.45rem;
+  margin: 0;
   color: var(--ink);
   font-family: var(--f-display);
-  font-size: clamp(1.35rem, 3vw, 2.55rem);
-  line-height: 1.12;
+  font-size: clamp(1.05rem, 1.6vw, 1.5rem);
+  line-height: 1.24;
+  /* 限宽到约 30 字/行，避免标题被拉到 928px 长行 */
+  max-width: 32ch;
 }
 
 .home-hot-row:hover h3 {
   color: var(--accent);
 }
 
-.home-hot-row p {
-  max-width: 760px;
-  margin: 0;
-  color: var(--ink-light);
-  font-size: 0.72rem;
-  line-height: 1.75;
+/* 点线 leader：从标题尾部一直连到阅读量 */
+.home-hot-row__leader {
+  flex: 1 1 auto;
+  min-width: 1.5rem;
+  align-self: center;
+  height: 1px;
+  background-image: radial-gradient(circle, var(--ink-faded) 0.6px, transparent 0.7px);
+  background-size: 5px 1px;
+  background-repeat: repeat-x;
+  opacity: 0.5;
 }
 
-.home-hot-row__meta {
-  display: grid;
-  gap: 0.35rem;
-  justify-items: end;
+.home-hot-row__clicks {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-hot-row p {
+  max-width: 46ch;
+  margin: 0.32rem 0 0;
+  color: var(--ink-light);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-hot-row__foot {
+  margin-top: 0.42rem;
+  display: flex;
+  gap: 0.9rem;
   color: var(--ink-faded);
   font-family: var(--f-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.home-hot-row__meta strong {
+.home-hot-row__cat {
   color: var(--accent);
-  font-size: 0.64rem;
 }
 
 .article-toolbox {
@@ -600,6 +679,49 @@ html.home-paging .flip-track {
 
   html.home-paging .home-index-row {
     padding: clamp(0.5rem, 1.5vh, 0.9rem) 0.45rem;
+    /* 去掉日期列，给标题与摘要让出宽度 */
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+  }
+
+  html.home-paging .home-index-row__date {
+    display: none;
+  }
+
+  /* 翻页模式下版面按屏高定容：摘要收到一行，避免整页被顶出去 */
+  html.home-paging .home-index-row__excerpt {
+    -webkit-line-clamp: 1;
+  }
+
+  /* 纯文字头条（无封面图）在翻页模式下按屏高定容：
+     标题字号、间距、摘要行数全部受 vh 约束，确保 meta 与「阅读全文」不被裁掉。
+     基线的 vw 驱动字号在 768 屏高下会撑成 3 行 250px，把下方内容顶出容器。 */
+  html.home-paging .home-latest-feature--text .print-lead-copy {
+    min-height: 0;
+    padding: clamp(0.9rem, 2.4vh, 1.8rem) clamp(1.4rem, 3vw, 3rem);
+  }
+
+  html.home-paging .home-latest-feature--text .print-lead-copy .art__t {
+    max-width: 24ch;
+    font-size: clamp(1.6rem, 5.6vh, 3.1rem);
+    line-height: 1.12;
+  }
+
+  html.home-paging .home-latest-feature--text .print-lead-copy .art__p {
+    font-size: clamp(0.72rem, 1.5vh, 0.85rem);
+    line-height: 1.7;
+    -webkit-line-clamp: 2;
+  }
+
+  html.home-paging .home-latest-feature--text .print-lead-copy__inner {
+    gap: clamp(0.35rem, 1vh, 0.8rem);
+  }
+
+  html.home-paging .home-latest-feature--text .lead-issue-line {
+    padding-bottom: clamp(0.3rem, 0.9vh, 0.7rem);
+  }
+
+  html.home-paging .home-latest-feature--text .print-read-more {
+    margin-top: clamp(0.2rem, 0.8vh, 0.7rem);
   }
 
   html.home-paging .home-index-row strong {
@@ -616,11 +738,18 @@ html.home-paging .flip-track {
     margin: 0 2.5rem;
     display: flex;
     flex-direction: column;
+    /* 条目按内容定高，整组在剩余版面里垂直居中；
+       不再让每行等分整页高度（那是「内容被撑散」的根因）。 */
+    justify-content: center;
     overflow: hidden;
   }
 
+  html.home-paging .home-hot-ledger__caption {
+    flex: 0 0 auto;
+  }
+
   html.home-paging .home-hot-row {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-height: 0;
     padding: clamp(0.5rem, 1.6vh, 1.1rem) 0.45rem;
   }
@@ -651,7 +780,7 @@ html.home-paging .flip-track {
   html.home-paging .home-section-footer {
     flex: 0 0 auto;
     margin-top: auto;
-    padding: clamp(0.9rem, 2.6vh, 1.6rem) 2.5rem 3.4rem;
+    padding: clamp(0.7rem, 2vh, 1.2rem) 2.5rem clamp(1.6rem, 4.4vh, 3rem);
   }
 /* 整屏翻页模式下隐去“当前位置/整体进度”：顶栏阅读进度条与页面滚动条 */
 html.home-paging {

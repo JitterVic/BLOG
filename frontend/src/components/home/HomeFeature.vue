@@ -2,14 +2,18 @@
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 
+import SpinSeal from "../SpinSeal.vue";
 import { displayDate } from "../../composables/useFormat";
 
-defineProps({
+const props = defineProps({
   post: { type: Object, required: true },
+  siteName: { type: String, default: "至知" },
 });
 
 const featureCardRef = ref(null);
 const issueNumber = computed(() => String(new Date().getMonth() + 1).padStart(2, "0"));
+/** 无封面图时改走纯文字版面：不再画灰底占位块，也更贴合报刊体裁 */
+const isTextLayout = computed(() => !props.post.cover_image);
 
 /**
  * RouterLink 上拿到的 ref 是组件实例，没有 getBoundingClientRect，
@@ -48,18 +52,24 @@ function handlePointerLeave() {
 </script>
 
 <template>
-  <div class="g2 home-latest-feature" data-feature-card="latest">
+  <div
+    class="g2 home-latest-feature"
+    :class="{ 'home-latest-feature--text': isTextLayout }"
+    data-feature-card="latest"
+  >
+    <!-- 仅当文章真的有封面图时才渲染图卡；标题与摘要只保留在文字栏，
+         避免「图上写一遍、栏里再写一遍」的重复。 -->
     <RouterLink
+      v-if="post.cover_image"
       ref="featureCardRef"
       :to="`/posts/${post.slug}`"
       class="mimg print-feature-image rv"
-      :class="{ 'mimg--has-image': !!post.cover_image }"
+      :class="{ 'mimg--has-image': true }"
       data-reveal-delay="40"
       @pointermove="handlePointerMove"
       @pointerleave="handlePointerLeave"
     >
       <img
-        v-if="post.cover_image"
         class="mimg__img"
         :src="post.cover_image"
         alt=""
@@ -87,14 +97,19 @@ function handlePointerLeave() {
           >{{ tag }}</span>
         </div>
         <span class="feature-kicker">Editor’s pick · 最新一期</span>
-        <h2>{{ post.title }}</h2>
-        <p>{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
         <span class="feature-open-hint" aria-hidden="true">打开文章 <b>↗</b></span>
       </div>
       <div class="mimg__cap">cover story — {{ displayDate(post.published_at) }}</div>
     </RouterLink>
 
     <article class="art print-lead-copy rv" data-reveal-delay="120">
+      <!-- 纯文字版面下的心印：小号旋转印章，作为该版报头装饰 -->
+      <SpinSeal
+        v-if="isTextLayout"
+        class="lead-seal"
+        :size="104"
+        :center="(siteName || '至知').slice(0, 1)"
+      />
       <div class="print-lead-copy__inner">
         <div class="lead-issue-line">
           <div class="art__cat">Latest Issue</div>
@@ -102,6 +117,9 @@ function handlePointerLeave() {
         </div>
         <h3 class="art__t art__t--xl">{{ post.title }}</h3>
         <p class="art__p">{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
+        <div v-if="post.tags?.length" class="lead-tags">
+          <span v-for="tag in post.tags.slice(0, 4)" :key="tag" class="tag tag--code">{{ tag }}</span>
+        </div>
         <div class="art__meta">
           <span>{{ post.category || "Article" }}</span>
           <span>{{ post.read_time }}</span>
@@ -114,3 +132,4 @@ function handlePointerLeave() {
     </article>
   </div>
 </template>
+

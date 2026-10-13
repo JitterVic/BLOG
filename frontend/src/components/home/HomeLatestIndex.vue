@@ -10,6 +10,7 @@ defineProps({
 
 <template>
   <div class="home-latest-index">
+    <p class="home-latest-index__caption">本期其余 · In This Issue</p>
     <RouterLink
       v-for="(post, index) in posts"
       :key="post.slug"
@@ -19,7 +20,10 @@ defineProps({
     >
       <span class="home-index-row__number">{{ String(index + 2).padStart(2, "0") }}</span>
       <span class="home-index-row__date">{{ displayDate(post.published_at) }}</span>
-      <strong>{{ post.title }}</strong>
+      <div class="home-index-row__body">
+        <strong>{{ post.title }}</strong>
+        <p class="home-index-row__excerpt">{{ post.excerpt || "这篇文章暂时还没有摘要。" }}</p>
+      </div>
       <small>{{ post.category || "Article" }} · {{ post.read_time }}</small>
     </RouterLink>
   </div>
