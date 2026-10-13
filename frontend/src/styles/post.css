@@ -3,6 +3,22 @@
    ARTICLE READING DOCK + GRAPHITE CURSOR TRAIL
    ========================================================================== */
 
+/* --- 首屏即封面 ---
+   英雄区是固定高度的块（约 660–700px），与视口无关，于是「首屏底部露出多少正文」
+   完全是随机的：768 高时是 0，900 高时露出 67px 正文和 47px 目录，1080 高时露出
+   221px——正文被拦腰截断，右下角还挂着一个残缺的目录角。
+
+   这里让英雄区撑满「视口减去顶栏与面包屑条」的剩余高度，正文与目录因此从下一屏
+   才开始。减去的值故意小于实测占位（实测 142–166px，这里减 136px）：英雄区
+   底边略微越过折线，从而保证任何分辨率下正文都不会在首屏底部露出碎片。
+   用 min-height 而非 height，长标题或带封面图时仍会按内容自然增高。 */
+.post-view .post-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100svh - 8.5rem);
+}
+
 .post-reading-layout {
   --post-article-width: 760px;
   --post-toc-width: 220px;
@@ -147,6 +163,13 @@
 
 @media (max-width: 1280px) {
   .post-reading-layout {
+    /* 目录条（横向吸顶）的吸附位置与自身高度：这两个量既决定它遮挡的纵向区间，
+       也决定正文标题的落点。必须定义在 .post-reading-layout 上——目录与正文是这个
+       网格的两个并列子元素，定义在 .article-toc 上的话标题读不到（自定义属性不会
+       向上查找），calc() 会在计算值阶段失效并把 scroll-margin-top 退化成 0，
+       标题就会顶到目录条底下。实测条高 122px。 */
+    --toc-sticky-top: 3.55rem;
+    --toc-strip-height: 7.7rem;
     width: min(var(--post-article-width), calc(100% - 2.7rem));
     margin-right: auto;
     margin-left: auto;
@@ -162,7 +185,7 @@
 
   .article-toc {
     position: sticky;
-    top: 3.55rem;
+    top: var(--toc-sticky-top);
     z-index: 90;
     width: auto;
     max-height: none;
@@ -212,7 +235,9 @@
 
   .post-reading-layout .print-markdown h2,
   .post-reading-layout .print-markdown h3 {
-    scroll-margin-top: 11rem;
+    /* 目录条遮挡到 (sticky-top + 条高) ≈ 178px，原来固定 11rem(176px)
+       会让标题正好压在目录条下沿 2.5px（实测）。改为按条带高度推导并留 1.5rem 余量。 */
+    scroll-margin-top: calc(var(--toc-sticky-top) + var(--toc-strip-height) + 1.5rem);
   }
 }
 @media (max-width: 640px) {

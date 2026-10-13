@@ -543,6 +543,37 @@ def test_css_contains_no_toc_rule():
     assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
 
 
+def test_toc_scroll_offset_variables_are_in_scope():
+    """标题落点用的自定义属性必须声明在目录与正文的共同祖先上。
+
+    自定义属性不向上查找。若把 `--toc-strip-height` 声明在 `.article-toc` 上，
+    兄弟节点里的标题读不到它，`calc()` 会在计算值阶段把整条声明判为无效并退化成
+    `scroll-margin-top: 0`——目录点击后标题正好顶到目录条下面，且没有任何报错。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    assert "scroll-margin-top: calc(var(--toc-sticky-top) + var(--toc-strip-height)" in css
+
+    # 窄屏分支：两个变量都要落在 .post-reading-layout 上（目录与正文的共同祖先）
+    narrow = css.split("@media (max-width: 1280px)", 1)
+    assert len(narrow) == 2, "找不到窄屏媒体查询"
+    narrow_body = narrow[1]
+    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", narrow_body, re.S)
+    assert layout_blocks, "窄屏分支里找不到 .post-reading-layout 规则块"
+    declared = "\n".join(layout_blocks)
+    assert "--toc-sticky-top" in declared
+    assert "--toc-strip-height" in declared
+
+    # 目录自身只能「使用」这两个变量，不能「声明」它们（声明会让标题读不到，
+    # 这正是修掉的那个 bug）。用 `变量名:` 判断声明而非引用。
+    for toc_body in re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S):
+        assert "--toc-strip-height:" not in toc_body, (
+            "目录高度变量必须声明在 .post-reading-layout 上，否则正文标题读不到"
+        )
+        assert "--toc-sticky-top:" not in toc_body, (
+            "吸附位置变量必须声明在 .post-reading-layout 上，否则正文标题读不到"
+        )
+
+
 def test_import_normalizes_nbsp(app_bundle):
     _application, store = app_bundle
 
