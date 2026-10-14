@@ -221,13 +221,16 @@ class AdminSecurity:
                 f"{self.admin_prefix}/"
             )
             script_src = "'self' 'unsafe-inline'" if is_admin_html else "'self'"
+            # 站点字体（Google Fonts）必须放行，否则公开页会静默退回 Georgia 等系统字体，
+            # 与开发环境（Vite 不设 CSP）的排印完全不一致——实测同一视口下标题宽度
+            # 366px vs 354px，整页行高与断行都跟着变，属于「同一份代码两种样子」。
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'self'; "
                 "img-src 'self' data: blob: https:; "
-                "style-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 f"script-src {script_src}; "
-                "font-src 'self' data:; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
                 "connect-src 'self'; "
                 "frame-ancestors 'none'; "
                 "base-uri 'self'; "

@@ -664,6 +664,39 @@ def test_no_motion_toggle_button_in_header():
     assert "print-nav__motion" not in css
 
 
+def test_cover_reveal_waits_for_the_initial_loader():
+    """首屏封面必须等加载页离场后再入场。
+
+    加载页整屏遮挡约 1.55s；封面若在被遮挡期间就入场，用户揭开时看到的只是最终态
+    （实测标题单字在覆盖层内已从 op=0 走到 op=9、位移归零，观感就是「标题没有动效」）。
+    做法：`.focused-cover` 的 `.rv` 与逐字浮现单字在 `html:not(.loader-done)` 期间
+    被按在基准态并关掉过渡；`loader-done` 由 App 在加载页离场时加上。
+    """
+    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
+    hold = css.split("html:not(.loader-done) .focused-cover .rv", 1)
+    assert len(hold) == 2, "找不到「加载页期间按住封面」的规则"
+    assert "opacity: 0 !important" in hold[1]
+    assert "transition: none !important" in hold[1]
+    # 必须连逐字浮现的单字一起按住：父级透明不会阻止子元素过渡推进
+    assert "html:not(.loader-done) .focused-cover .split-text__char" in css
+
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    assert 'classList.add("loader-done")' in app, "App 需要在加载页离场时加上 loader-done"
+    assert 'InitialLoader @ready="onLoaderReady"' in app, "需要接住加载页的 ready 事件"
+
+
+def test_public_csp_allows_the_designed_webfonts():
+    """公开页 CSP 必须放行 Google Fonts。
+
+    否则公开页会静默退回 Georgia 等系统字体，与开发环境（Vite 不设 CSP）排印不一致
+    ——实测同一视口下标题宽度 366px vs 354px，整页行高与断行都跟着变，
+    属于「同一份代码两种样子」。
+    """
+    security = Path("backend/src/blog/security.py").read_text(encoding="utf-8")
+    assert "https://fonts.googleapis.com" in security, "style-src 需要放行 Google Fonts 样式表"
+    assert "https://fonts.gstatic.com" in security, "font-src 需要放行字体文件域"
+
+
 def test_route_change_replays_entry_animation():
     """每次页面切换都要重播入场动效，不能只在首次加载时出现。
 

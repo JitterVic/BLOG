@@ -89,6 +89,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => postsController?.abort());
+
 </script>
 
 <template>

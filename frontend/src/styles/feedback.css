@@ -354,6 +354,25 @@
   }
 }
 
+/* 加载页期间按住封面入场：整屏覆盖约 1.55s，封面若在这期间入场，揭开时已是静止的
+   （实测标题单字在覆盖层内就从 op=0 走到 op=9、位移归零，用户只看到最终态）。
+   注意必须连单字一起按住并关掉过渡——父级容器透明并不会阻止子元素的过渡推进，
+   只按住 `.rv` 时单字的 opacity/transform 过渡照跑不误。
+   `loader-done` 由 App 在加载页离场时加上，随后立刻重播，逐字浮现才真正可见。 */
+html:not(.loader-done) .focused-cover .rv,
+html:not(.loader-done) .focused-cover .split-text__char {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+html:not(.loader-done) .focused-cover .rv {
+  transform: translate3d(0, 1.1rem, 0) !important;
+}
+
+html:not(.loader-done) .focused-cover .split-text__char {
+  transform: translate3d(0, 0.8em, 0) !important;
+}
+
 /* 关闭动效的两条路径，必须与 useReveal.motionDisabled() 的判定一致：
    ① `html.motion-off`（手动开关，应用层唯一会主动关闭动效的入口）；
    ② `@media (prefers-reduced-motion: reduce)` **仅在系统偏好为「减弱」且页面尚未

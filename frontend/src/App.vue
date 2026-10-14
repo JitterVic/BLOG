@@ -14,6 +14,7 @@ import { useReveal } from "./composables/useReveal";
 import { useSite } from "./composables/useSite";
 
 const route = useRoute();
+
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: true });
 
@@ -28,6 +29,16 @@ const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: t
 function replayPageReveal() {
   const view = document.querySelector(".print-main > .print-page, .print-main > .home-view, .print-main > .print-subpage, .print-main > .print-post-view");
   replayReveal(view || document.querySelector(".print-main"));
+}
+
+// 加载页离场后立刻重播一次：首屏的入场动效必须在这一刻才可见
+// （加载页整屏遮挡约 1.55s，封面若在被遮挡期间就入场，揭开时已是静止的）。
+function onLoaderReady() {
+  // 摘掉「加载页遮挡中」的挂起状态：`html.loader-done` 一旦加上，
+  // 下面那条 `html:not(.loader-done)` 的按住规则立即失效，
+  // 封面的 `.rv` 与逐字浮现单字才回到可过渡的基准态，紧接着重播即可见。
+  document.documentElement.classList.add("loader-done");
+  requestAnimationFrame(() => replayPageReveal());
 }
 
 const pageTheme = computed(() => {
@@ -76,7 +87,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page-shell print-shell" :class="pageTheme">
-    <InitialLoader />
+    <InitialLoader @ready="onLoaderReady" />
     <RouteProgress />
     <CursorEffects />
     <CatPet />
