@@ -17,6 +17,7 @@ import {
   publishedAtInput,
   readTimeInput,
   tagsInput,
+  keywordsInput,
   titleInput,
 } from "./dom.js";
 import { fetchJson } from "./api.js";
@@ -110,7 +111,7 @@ function syncPreviewScroll() {
   previewTarget.scrollTop = (markdownInput.scrollTop / editorRange) * previewRange;
 }
 
-const metadataInputs = [titleInput, categoryInput, publishedAtInput, readTimeInput, excerptInput, tagsInput, heroQuoteInput, coverImageInput];
+const metadataInputs = [titleInput, categoryInput, publishedAtInput, readTimeInput, excerptInput, tagsInput, keywordsInput, heroQuoteInput, coverImageInput];
 
 export function initPreview() {
   metadataInputs.forEach((input) => input?.addEventListener("input", () => {

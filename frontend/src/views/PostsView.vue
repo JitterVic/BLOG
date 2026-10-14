@@ -29,7 +29,7 @@ const router = useRouter();
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 const searchQuery = ref("");
-const selectedTag = ref("全部");
+const selectedCategory = ref("全部");
 let applyingRouteState = false;
 let querySyncTimer = 0;
 let reloadTimer = 0;
@@ -40,9 +40,13 @@ let routeSyncIncludePage = true;
 let restoringPage = false;
 
 const normalizedQuery = computed(() => searchQuery.value.trim().toLowerCase());
-const tags = computed(() => {
-  const siteTags = [...(site.value?.tags || [])].sort((a, b) => a.localeCompare(b, "zh-CN"));
-  return ["全部", ...siteTags];
+const categories = computed(() => {
+  const raw = site.value?.categories || [];
+  return raw.map((item) => (
+    typeof item === "string"
+      ? { name: item, count: 0 }
+      : { name: item?.name || "", count: Number(item?.count) || 0 }
+  )).filter((item) => item.name);
 });
 
 // 标签筛选在服务端完成（`tag` 查询参数），因此翻页与筛选可以并存，
@@ -66,14 +70,14 @@ const resultLabel = computed(() => {
   if (normalizedQuery.value) {
     return `搜索结果 · ${count} 篇`;
   }
-  if (selectedTag.value !== "全部") {
-    return `${selectedTag.value} · ${count} 篇`;
+  if (selectedCategory.value !== "全部") {
+    return `${selectedCategory.value} · ${count} 篇`;
   }
   return `共 ${count} 篇文章`;
 });
 
-function selectTag(tag) {
-  selectedTag.value = tag;
+function selectCategory(name) {
+  selectedCategory.value = name;
 }
 
 function clearSearch() {
@@ -82,13 +86,13 @@ function clearSearch() {
 
 function clearAllFilters() {
   searchQuery.value = "";
-  selectedTag.value = "全部";
+  selectedCategory.value = "全部";
 }
 
 function routeQueryKey(query = route.query) {
   return JSON.stringify({
     q: typeof query.q === "string" ? query.q : "",
-    tag: typeof query.tag === "string" ? query.tag : "",
+    cat: typeof query.cat === "string" ? query.cat : "",
     page: typeof query.page === "string" ? query.page : "",
   });
 }
@@ -96,7 +100,7 @@ function routeQueryKey(query = route.query) {
 function buildRouteQuery({ includePage = true } = {}) {
   const query = {};
   if (searchQuery.value.trim()) query.q = searchQuery.value.trim();
-  if (selectedTag.value !== "全部") query.tag = selectedTag.value;
+  if (selectedCategory.value !== "全部") query.cat = selectedCategory.value;
   if (includePage && page.value > 1) {
     query.page = String(page.value);
   }
@@ -125,7 +129,7 @@ function listParams(requestedPage = 1) {
   const params = { sort: "latest", page: requestedPage, limit: PAGE_SIZE };
   const q = searchQuery.value.trim();
   if (q) params.q = q;
-  if (selectedTag.value !== "全部") params.tag = selectedTag.value;
+  if (selectedCategory.value !== "全部") params.category = selectedCategory.value;
   return params;
 }
 
@@ -169,13 +173,12 @@ function scheduleReload() {
 
 async function applyRouteState() {
   applyingRouteState = true;
-  const tag = typeof route.query.tag === "string" ? route.query.tag.trim() : "";
+  const rawCat = typeof route.query.cat === "string" ? route.query.cat.trim() : "";
   const query = typeof route.query.q === "string" ? route.query.q : "";
-  // 旧的 `?view=tags&tag=x` 链接继续可用：视图维度已取消，tag 直接当作筛选条件。
-  const isValidTag = tag && tags.value.includes(tag);
-
   searchQuery.value = query;
-  selectedTag.value = isValidTag ? tag : "全部";
+  // 栏目是自由文本，无法预先枚举校验；缺省（含空串）都必须落回「全部」，
+  // 否则「全部」这个选项永远不成立，结果文案会渲染成 " · N 篇"。
+  selectedCategory.value = rawCat || "全部";
   await nextTick();
   applyingRouteState = false;
 }
@@ -197,7 +200,7 @@ watch(
   { deep: true },
 );
 
-watch([selectedTag, searchQuery], () => {
+watch([selectedCategory, searchQuery], () => {
   scheduleRouteSync({ includePage: false });
 });
 
@@ -210,7 +213,7 @@ watch(normalizedQuery, () => {
   scheduleReload();
 });
 
-watch(selectedTag, () => {
+watch(selectedCategory, () => {
   if (applyingRouteState) return;
   if (reloadTimer) {
     window.clearTimeout(reloadTimer);
@@ -242,17 +245,18 @@ onBeforeUnmount(() => {
       </div>
 
       <PostsToolbox
-        :tags="tags"
-        :selected-tag="selectedTag"
+        :categories="categories"
+        :selected-category="selectedCategory"
+        :total="total"
         v-model:search-query="searchQuery"
-        @set-tag="selectTag"
+        @set-category="selectCategory"
         @clear-search="clearSearch"
       />
 
       <div class="article-directory-meta rv" aria-live="polite">
         <span>{{ resultLabel }}</span>
         <button
-          v-if="searchQuery || selectedTag !== '全部'"
+          v-if="searchQuery || selectedCategory !== '全部'"
           type="button"
           @click="clearAllFilters"
         >

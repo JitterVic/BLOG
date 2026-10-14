@@ -137,7 +137,7 @@
     gap: 0.85rem;
   }
 
-    .article-search,
+  .article-search,
   .article-search__field {
     width: 100%;
     min-width: 0;
@@ -163,7 +163,7 @@
 
 @media (max-width: 390px) {
   .cover-button,
-  .tag-filter-button,
+  .cat-filter-button,
   .print-nav__item {
     min-height: 44px;
   }

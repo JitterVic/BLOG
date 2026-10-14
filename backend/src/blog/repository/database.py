@@ -63,6 +63,7 @@ class Database:
                 read_time TEXT DEFAULT '',
                 category TEXT DEFAULT '',
                 tags TEXT NOT NULL DEFAULT '[]',
+                keywords TEXT NOT NULL DEFAULT '[]',
                 hero_quote TEXT DEFAULT '',
                 cover_image TEXT NOT NULL DEFAULT '',
                 click_count INTEGER NOT NULL DEFAULT 0,
@@ -118,6 +119,10 @@ class Database:
             connection.execute("ALTER TABLE posts ADD COLUMN cover_image TEXT NOT NULL DEFAULT ''")
         if "deleted_at" not in post_columns:
             connection.execute("ALTER TABLE posts ADD COLUMN deleted_at TEXT DEFAULT NULL")
+        if "keywords" not in post_columns:
+            connection.execute(
+                "ALTER TABLE posts ADD COLUMN keywords TEXT NOT NULL DEFAULT \'[]\'"
+            )
         # Retired schema: working copies were removed; drop the table and the
         # revision rows that only existed to support them.
         connection.execute("DROP TABLE IF EXISTS post_working_copies")

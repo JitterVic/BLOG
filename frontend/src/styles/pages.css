@@ -357,60 +357,7 @@
   align-items: stretch;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.article-search {
-  min-height: clamp(46px, 6.4svh, 76px);
-  padding: clamp(0.4rem, 1.1svh, 0.75rem) 0.9rem;
-  display: grid;
-  align-content: center;
-  gap: clamp(0.25rem, 0.7svh, 0.45rem);
-  border: 1px solid var(--rule-light);
-  background: rgba(244, 239, 230, 0.5);
-}
-
-.article-search__label {
-  color: var(--accent);
-  font-family: var(--f-mono);
-  font-size: 0.52rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.article-search__field {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.article-search input {
-  min-width: 0;
-  width: 100%;
-  padding: 0.35rem 0;
-  color: var(--ink);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--rule-light);
-  border-radius: 0;
-  outline: 0;
-}
-
-.article-search input:focus {
-  border-bottom-color: var(--accent);
-}
+/* `.article-search` 的完整外观由 posts.css 负责（目录页是它唯一的宿主） */
 
 .article-search button,
 .article-directory-meta button {
@@ -423,7 +370,6 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-
 .article-directory-meta {
   margin: 0 2.5rem clamp(0.4rem, 1.4svh, 1.6rem);
   padding-bottom: clamp(0.35rem, 1svh, 0.8rem);

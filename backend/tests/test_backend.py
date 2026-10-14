@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from blog.serializers import build_edit_post, build_post_detail_payload, summarize_post
 from blog.store import PostVersionConflict
+from blog.taxonomy import CATEGORY_PRESETS
 
 
 @pytest.fixture()
@@ -855,8 +857,8 @@ def test_posts_page_is_a_single_year_grouped_index():
     """文章目录只有一种形态：按年份分组的编年索引。
 
     原先「最新 / 归档 / 标签」三套视图装的是同一批文章，读者要先做一次与内容
-    无关的选择；标签其实是筛选条件而不是视图。合并后：视图切换器消失，标签降为
-    筛选条，年份由 68px 展示级大字降为分节横杆。
+    无关的选择。合并后：视图切换器消失，筛选改为按「栏目」，年份由 68px 展示级
+    大字降为分节横杆。筛选按栏目而不是标签——标签会随写作无限生长。
     """
     view = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
     assert "article-view-switch" not in view and "VIEW_OPTIONS" not in view
@@ -864,11 +866,25 @@ def test_posts_page_is_a_single_year_grouped_index():
     # 只剩索引一个分支
     assert view.count("<ArchiveLedger") == 1
     assert "v-else" in view
-    # 标签筛选走服务端（tag 查询参数），因此筛选与翻页可以并存
-    assert 'params.tag = selectedTag.value' in view
-    # 筛选与翻页状态仍需同步到 URL；旧的 ?view= 链接要能继续解析出 tag
-    assert "query.tag = selectedTag.value" in view
-    assert "route.query.tag" in view
+    # 筛选走服务端（category 查询参数），因此筛选与翻页可以并存
+    assert "params.category = selectedCategory.value" in view
+    assert "query.cat = selectedCategory.value" in view
+    assert "route.query.cat" in view
+
+    # 前台筛选按「栏目」而不是标签
+    assert "selectedTag" not in view, "目录不再按标签筛选"
+    assert "site.value?.categories" in view
+    toolbar = Path("frontend/src/components/posts/PostsToolbox.vue").read_text(encoding="utf-8")
+    assert "article-cat-filter" in toolbar and "cat-filter-button" in toolbar
+    assert "tag-filter-button" not in toolbar
+    # 搜索提示要说明关键词也能搜（关键词本身不展示）
+    assert "关键词" in toolbar
+    # 篇数必须来自服务端：按「当前已加载的文章」现算，筛选后其余栏目会显示成 0 篇
+    assert "site.value?.categories" in view and "count" in view
+
+    # buildQueryString 是显式白名单，漏掉新维度会静默丢掉筛选参数
+    api = Path("frontend/src/services/api.js").read_text(encoding="utf-8")
+    assert 'search.set("category", params.category)' in api
 
     # 已退休的两个视图组件不应残留
     for gone in ("PostLatestList", "TagResultsGrid"):
@@ -881,6 +897,9 @@ def test_posts_page_is_a_single_year_grouped_index():
     assert "archive__year-rule" in ledger and "archive__badge" in ledger
 
     css = Path("frontend/src/styles/posts.css").read_text(encoding="utf-8")
+    # 栏目胶囊
+    assert ".cat-filter-button" in css
+    assert "tag-filter-button" not in css
     # 年份不再是展示级大字
     year_fs = re.search(r"\.archive__year span \{\s*font-size:\s*clamp\(([^)]+)\)", css)
     assert year_fs and float(year_fs.group(1).split(",")[0].strip().rstrip("rem")) <= 1.6
@@ -891,11 +910,134 @@ def test_posts_page_is_a_single_year_grouped_index():
     # 退休选择器不能再出现在任何样式文件里（含诸如同权重覆盖用的前缀写法）
     dead = ("article-view-switch", "article-view-button", "unified-archive-view",
             "unified-tags-view", "unified-latest-list", "print-list-item",
-            "print-article-list", "print-tag-results", "article-item__thumb")
+            "print-article-list", "print-tag-results", "article-item__thumb",
+            "article-tag-filter", "tag-filter-button", "article-search__label")
     for path in Path("frontend/src/styles").glob("*.css"):
         text = path.read_text(encoding="utf-8")
         for token in dead:
             assert token not in text, f"{path.name} 仍残留已下线选择器 {token}"
+
+
+def test_keywords_are_searchable_but_never_rendered(app_bundle):
+    """关键词只用于检索，不出现在任何对外载荷里。
+
+    标签有展示价值，但会把文章归到一两个具体名词上；关键词承担的是「别名 / 同义词 /
+    英文写法」这类只为命中的信息，露在页面上只会添乱，所以不进列表载荷、不进站点载荷、
+    也不进文章详情。
+    """
+    _application, store = app_bundle
+    store.save_post(
+        {
+            "title": "两数相加",
+            "slug": "two-sum",
+            "markdown_content": "## 思路\n\n用哈希表记录补数。",
+            "excerpt": "一道入门题",
+            "category": "算法",
+            "tags": "链表",
+            "keywords": "哈希表, two sum, 补数",
+            "published_at": "2026-01-01",
+            "read_time": "4 min",
+        },
+        action="published",
+    )
+
+    # 命中关键词（含英文与中文别名）
+    for query in ("哈希表", "two sum", "补数"):
+        hits = store.list_posts(search=query)
+        assert [post["slug"] for post in hits] == ["two-sum"], f"{query} 应能检索到文章"
+
+    # 列表载荷与详情都不带 keywords
+    row = store.list_posts()[0]
+    assert "keywords" not in row
+    assert "keywords" not in summarize_post(row)
+    detail = build_post_detail_payload(
+        store.get_post_by_slug("two-sum"), related_posts=[], previous_post=None, next_post=None
+    )
+    assert "keywords" not in detail
+
+    # 站点载荷只暴露 tags/categories，不暴露关键词
+    payload = store.get_site_payload()
+    assert "keywords" not in payload
+    assert payload["categories"] == [{"name": "算法", "count": 1}]
+    assert payload["tags"] == ["链表"]
+
+    # 后台编辑载荷需要能回填关键词
+    editable = build_edit_post(store.get_post_by_slug("two-sum", include_drafts=True))
+    assert editable["keywords"] == ["哈希表", "two sum", "补数"]
+    assert editable["keywords_text"] == "哈希表, two sum, 补数"
+
+
+def test_public_api_filters_by_category_and_searches_keywords(client, app_bundle):
+    """公开接口支持 category 过滤 + 关键词检索，并对栏目给出篇数排序。"""
+    _application, store = app_bundle
+    for index, (category, keywords) in enumerate(
+        [("算法", "双指针"), ("算法", "剪枝"), ("工程", "Nginx")]
+    ):
+        store.save_post(
+            {
+                "title": f"文章 {index}",
+                "slug": f"post-{index}",
+                "markdown_content": "## 小节\n\n正文内容若干。",
+                "excerpt": "摘要",
+                "category": category,
+                "tags": "通用",
+                "keywords": keywords,
+                "published_at": f"2026-0{index + 1}-01",
+                "read_time": "3 min",
+            },
+            action="published",
+        )
+
+    site = client.get("/api/site").get_json()
+    # 篇数多的栏目排前面，且只列出真实用过的栏目；篇数由服务端统计
+    assert site["categories"] == [
+        {"name": "算法", "count": 2},
+        {"name": "工程", "count": 1},
+    ]
+
+    only_algo = client.get("/api/posts?category=算法").get_json()
+    assert sorted(item["slug"] for item in only_algo) == ["post-0", "post-1"]
+    assert all("keywords" not in item for item in only_algo)
+
+    by_keyword = client.get("/api/posts?q=剪枝").get_json()
+    assert [item["slug"] for item in by_keyword] == ["post-1"]
+
+    # 分页与筛选并存（count 也要带上 category，否则 total 会算成全量）
+    paged = client.get("/api/posts?category=算法&page=1&limit=1").get_json()
+    assert paged["total"] == 2
+    assert len(paged["items"]) == 1
+    assert paged["has_more"] is True
+
+
+def test_off_preset_category_warns_but_does_not_block(app_bundle):
+    """栏目录入得越随意，前台筛选条越会退化成第二个标签云，所以给提示但不拦发布。"""
+    _application, store = app_bundle
+    result = store.validate_post_for_publish(
+        {
+            "title": "标题",
+            "markdown_content": "## 小节\n\n" + "内容" * 120,
+            "excerpt": "摘要",
+            "category": "随手一写",
+            "tags": "标签",
+            "cover_image": "/uploads/media/x.png",
+        }
+    )
+    codes = {item["code"] for item in result["warnings"]}
+    assert "off_preset_category" in codes
+    assert result["ok"] is True, "预设外的栏目只是提示，不应阻止发布"
+
+    # 预设内不提示
+    fine = store.validate_post_for_publish(
+        {
+            "title": "标题",
+            "markdown_content": "## 小节\n\n" + "内容" * 120,
+            "excerpt": "摘要",
+            "category": CATEGORY_PRESETS[0],
+            "tags": "标签",
+            "cover_image": "/uploads/media/x.png",
+        }
+    )
+    assert "off_preset_category" not in {item["code"] for item in fine["warnings"]}
 
 
 def test_stylesheets_have_no_orphaned_selector_fragments():

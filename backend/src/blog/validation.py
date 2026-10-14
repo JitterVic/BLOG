@@ -8,7 +8,7 @@ MAX_FIELD_LENGTHS = {
     "github_label": 240, "github_url": 2048, "about_intro": 12_000,
     "title": 240, "slug": 240,
     "excerpt": 1200, "published_at": 32, "read_time": 32,
-    "category": 120, "tags": 1200, "hero_quote": 1000,
+    "category": 120, "tags": 1200, "keywords": 1200, "hero_quote": 1000,
     "cover_image": 2048, "markdown_content": 500_000,
 }
 

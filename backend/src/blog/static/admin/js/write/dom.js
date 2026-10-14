@@ -12,6 +12,7 @@ export const readTimeInput = document.getElementById("read_time");
 export const categoryInput = document.querySelector('[name="category"]');
 export const publishedAtInput = document.querySelector('[name="published_at"]');
 export const tagsInput = document.querySelector('[name="tags"]');
+export const keywordsInput = document.querySelector(\'[name="keywords"]\');
 export const heroQuoteInput = document.querySelector('[name="hero_quote"]');
 export const coverImageInput = document.getElementById("cover_image");
 export const frontPreviewCover = document.getElementById("front-preview-cover");

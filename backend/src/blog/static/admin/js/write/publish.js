@@ -14,6 +14,7 @@ import {
   publishWarningsAcknowledged,
   slugInput,
   tagsInput,
+  keywordsInput,
   titleInput,
 } from "./dom.js";
 import { adminApiUrl, fetchJson } from "./api.js";
@@ -81,6 +82,7 @@ function fieldForValidation(field) {
   if (field === "excerpt") return excerptInput;
   if (field === "category") return categoryInput;
   if (field === "tags") return tagsInput;
+  if (field === "keywords") return keywordsInput;
   if (field === "cover_image") return coverImageInput;
   if (field === "markdown_content") return markdownInput;
   return null;

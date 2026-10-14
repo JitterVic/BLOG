@@ -23,6 +23,7 @@ from ..markdown_tools import (
     slugify,
 )
 from ..repository.revisions import POST_EDIT_FIELDS, snapshot_from_row
+from ..taxonomy import CATEGORY_PRESETS, is_preset_category
 from ..validation import validate_text_length
 
 
@@ -44,6 +45,10 @@ class PostService:
         result = {field: snapshot.get(field, "") for field in POST_EDIT_FIELDS}
         tags = snapshot.get("tags", [])
         result["tags"] = ", ".join(tags) if isinstance(tags, list) else str(tags or "")
+        raw_keywords = snapshot.get("keywords", [])
+        if not isinstance(raw_keywords, list):
+            raw_keywords = []
+        result["keywords"] = ", ".join(raw_keywords)
         return result
 
     def _normalize_edit_snapshot(
@@ -67,6 +72,22 @@ class PostService:
             tags = [validate_text_length("tag", item, max_length=80) for item in tags_text.split(",") if item.strip()]
         if len(tags) > 40:
             raise ValueError("标签数量过多，请控制在 40 个以内。")
+        raw_keywords = form_data.get("keywords", fallback.get("keywords", []))
+        if isinstance(raw_keywords, list):
+            keywords = [
+                validate_text_length("keyword", item, max_length=80)
+                for item in raw_keywords
+                if str(item).strip()
+            ]
+        else:
+            keywords_text = validate_text_length("keywords", raw_keywords)
+            keywords = [
+                validate_text_length("keyword", item, max_length=80)
+                for item in keywords_text.split(",")
+                if item.strip()
+            ]
+        if len(keywords) > 40:
+            raise ValueError("关键词数量过多，请控制在 40 个以内。")
         cover_image = validate_text_length(
             "cover_image", form_data.get("cover_image", fallback.get("cover_image", ""))
         )
@@ -84,6 +105,7 @@ class PostService:
                 "category", form_data.get("category", fallback.get("category", ""))
             ),
             "tags": tags,
+            "keywords": keywords,
             "hero_quote": validate_text_length(
                 "hero_quote", form_data.get("hero_quote", fallback.get("hero_quote", ""))
             ),
@@ -162,6 +184,15 @@ class PostService:
             add(warnings, "missing_excerpt", "excerpt", '未填写摘要，发布时将自动生成。')
         if not category:
             add(warnings, "missing_category", "category", '建议填写文章分类，方便前台组织内容。')
+        elif not is_preset_category(category):
+            # 前台只按栏目筛选；栏目录入得越随意，筛选条越会退化成第二个标签云。
+            add(
+                warnings,
+                "off_preset_category",
+                "category",
+                f'「{category}」不在预设栏目内（{" / ".join(CATEGORY_PRESETS)}）。'
+                '栏目越少前台越整洁，建议复用已有栏目；细分类请写进标签或关键词。',
+            )
         if not tags:
             add(warnings, "missing_tags", "tags", '建议至少填写一个标签。')
         if not cover_image:
@@ -252,6 +283,14 @@ class PostService:
         tags = [validate_text_length("tag", item, max_length=80) for item in tags_text.split(",") if item.strip()]
         if len(tags) > 40:
             raise ValueError('标签数量过多，请控制在 40 个以内。')
+        keywords_text = validate_text_length("keywords", form_data.get("keywords", ""))
+        keywords = [
+            validate_text_length("keyword", item, max_length=80)
+            for item in keywords_text.split(",")
+            if item.strip()
+        ]
+        if len(keywords) > 40:
+            raise ValueError('关键词数量过多，请控制在 40 个以内。')
         read_time = validate_text_length("read_time", form_data.get("read_time", "")) or estimate_read_time(markdown_content)
         category = validate_text_length("category", form_data.get("category", ""))
         hero_quote = validate_text_length("hero_quote", form_data.get("hero_quote", ""))
@@ -281,6 +320,7 @@ class PostService:
                     read_time=read_time,
                     category=category,
                     tags=tags,
+                    keywords=keywords,
                     hero_quote=hero_quote,
                     cover_image=cover_image,
                     markdown_content=markdown_content,
@@ -315,6 +355,7 @@ class PostService:
         read_time: str,
         category: str,
         tags: list[str],
+        keywords: list[str],
         hero_quote: str,
         cover_image: str,
         markdown_content: str,
@@ -351,6 +392,7 @@ class PostService:
                 category=category,
                 tags=tags,
                 hero_quote=hero_quote,
+                keywords=keywords,
                 cover_image=cover_image,
                 markdown_content=markdown_content,
                 html_content=html_content,
@@ -370,6 +412,7 @@ class PostService:
                 category=category,
                 tags=tags,
                 hero_quote=hero_quote,
+                keywords=keywords,
                 cover_image=cover_image,
                 markdown_content=markdown_content,
                 html_content=html_content,

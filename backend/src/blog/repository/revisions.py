@@ -10,12 +10,12 @@ from typing import Any
 MAX_REVISIONS_PER_POST = 50
 POST_REVISION_FIELDS = (
     "title", "slug", "excerpt", "published_at", "read_time", "category",
-    "tags", "hero_quote", "cover_image", "markdown_content",
+    "tags", "keywords", "hero_quote", "cover_image", "markdown_content",
     "html_content", "status",
 )
 POST_EDIT_FIELDS = (
     "title", "slug", "excerpt", "published_at", "read_time", "category",
-    "tags", "hero_quote", "cover_image", "markdown_content",
+    "tags", "keywords", "hero_quote", "cover_image", "markdown_content",
 )
 
 
@@ -24,7 +24,7 @@ def snapshot_from_row(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     snapshot: dict[str, Any] = {}
     for field in POST_REVISION_FIELDS:
         value = source.get(field, "")
-        if field == "tags" and not isinstance(value, list):
+        if field in {"tags", "keywords"} and not isinstance(value, list):
             try:
                 value = json.loads(value or "[]")
             except (TypeError, json.JSONDecodeError):

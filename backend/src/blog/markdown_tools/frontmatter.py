@@ -8,6 +8,7 @@ FRONT_MATTER_KEYS = {
     "title",
     "slug",
     "tags",
+    "keywords",
     "category",
     "date",
     "cover",
@@ -56,7 +57,7 @@ def parse_markdown_front_matter(content: str) -> tuple[dict[str, Any], str]:
         key = key.strip().lower()
         if key not in FRONT_MATTER_KEYS:
             continue
-        if key == "tags":
+        if key in {"tags", "keywords"}:
             metadata[key] = _parse_front_matter_tags(raw_value)
         else:
             metadata[key] = _strip_front_matter_quotes(raw_value)

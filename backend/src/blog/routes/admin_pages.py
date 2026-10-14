@@ -5,9 +5,13 @@ from __future__ import annotations
 from flask import abort, flash, redirect, render_template, request, url_for
 
 from ..serializers import build_edit_post, build_profile_form
+from ..taxonomy import CATEGORY_PRESETS, merge_categories
 
 
 def build_admin_context(store, admin_prefix: str, **extra):
+    taxonomy = extra.get("taxonomy")
+    if isinstance(taxonomy, dict):
+        taxonomy["categories"] = merge_categories(CATEGORY_PRESETS, taxonomy.get("categories"))
     stats = store.stats()
     stats["admin_prefix"] = admin_prefix
     return {"stats": stats, **extra}

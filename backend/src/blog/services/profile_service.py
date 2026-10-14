@@ -23,6 +23,7 @@ class ProfileService:
             for field in ("name", "headline", "summary", "social_links", "about_intro")
         }
         payload["tags"] = sorted(self.posts_repo.published_tags())
+        payload["categories"] = list(self.posts_repo.published_categories())
         return payload
 
     def update_site_profile(self, form_data: dict[str, Any]) -> None:

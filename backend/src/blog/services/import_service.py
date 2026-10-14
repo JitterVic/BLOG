@@ -32,6 +32,7 @@ class ImportService:
         markdown_content = strip_leading_title_heading(markdown_content, guessed_title)
 
         tags = metadata.get("tags") if isinstance(metadata.get("tags"), list) else []
+        keywords = metadata.get("keywords") if isinstance(metadata.get("keywords"), list) else []
         excerpt = str(metadata.get("excerpt") or "").strip() or build_excerpt(markdown_content)
         requested_slug = str(metadata.get("slug") or "").strip()
         return {
@@ -39,6 +40,8 @@ class ImportService:
             "slug": requested_slug or (slugify(guessed_title) if guessed_title else ""),
             "tags": tags,
             "tags_text": ", ".join(tags),
+            "keywords": keywords,
+            "keywords_text": ", ".join(keywords),
             "category": str(metadata.get("category") or "").strip(),
             "published_at": str(metadata.get("date") or "").strip(),
             "cover_image": str(metadata.get("cover") or "").strip(),

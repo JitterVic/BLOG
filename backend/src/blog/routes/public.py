@@ -43,6 +43,7 @@ def build_blueprint(store) -> Blueprint:
 
     def posts():
         tag = request.args.get("tag")
+        category = request.args.get("category")
         limit = request.args.get("limit", type=int)
         sort = request.args.get("sort", "latest")
         # SQLite raises "LIKE or GLOB pattern too complex" near 50k chars, which
@@ -50,10 +51,12 @@ def build_blueprint(store) -> Blueprint:
         # no real query is this long, and a prefix still returns sane results.
         q = (request.args.get("q") or "").strip()[:MAX_SEARCH_LENGTH]
         tag = tag[:MAX_SEARCH_LENGTH] if tag else tag
+        category = category[:MAX_SEARCH_LENGTH] if category else category
         page = request.args.get("page", type=int)
 
         list_kwargs = {
             "tag": tag,
+            "category": category,
             "published_only": True,
             "sort": sort,
             "search": q or None,
@@ -70,6 +73,7 @@ def build_blueprint(store) -> Blueprint:
         start = (page - 1) * per_page
         total = store.count_posts(
             tag=tag,
+            category=category,
             published_only=True,
             search=q or None,
         )

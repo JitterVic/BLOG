@@ -91,6 +91,7 @@ def build_edit_post(post) -> dict[str, Any]:
             "read_time": "",
             "category": "",
             "tags_text": "",
+            "keywords_text": "",
             "hero_quote": "",
             "cover_image": "",
             "markdown_content": "",
@@ -104,6 +105,11 @@ def build_edit_post(post) -> dict[str, Any]:
         tags = []
     editable["tags"] = tags
     editable["tags_text"] = ", ".join(tags)
+    keywords = editable.get("keywords", [])
+    if not isinstance(keywords, list):
+        keywords = []
+    editable["keywords"] = keywords
+    editable["keywords_text"] = ", ".join(keywords)
     editable["live_title"] = post.get("title", "")
     editable["live_slug"] = post.get("slug", "")
     if not editable.get("title") and str(editable.get("slug") or "").startswith("draft-"):

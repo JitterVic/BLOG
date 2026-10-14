@@ -13,11 +13,14 @@ JSON_FIELDS = {
     "social_links",
     "about_intro",
     "tags",
+    "keywords",
     "sections",
 }
 
 # Compact columns for list/related responses. Keep detail queries on SELECT *
 # so markdown/html only load when a single post is opened.
+# `keywords` is deliberately absent: it exists to be searched, never rendered,
+# and the public list payload has no business carrying it.
 LIST_POST_COLUMNS = (
     "id, slug, title, excerpt, published_at, created_at, updated_at, "
     "read_time, category, tags, hero_quote, cover_image, "
@@ -77,6 +80,7 @@ class PostRepository:
         self,
         *,
         tag: str | None = None,
+        category: str | None = None,
         published_only: bool = True,
         search: str | None = None,
     ) -> tuple[str, list[Any]]:
@@ -87,17 +91,22 @@ class PostRepository:
             conditions.append("status = 'published'")
         if search and search.strip():
             pattern = f"%{_escape_like(search.strip().lower())}%"
+            # 关键词（keywords）只参与检索、不对外展示，因此也在这里匹配。
             conditions.append(
                 r"(LOWER(title) LIKE ? ESCAPE '\'"
                 r" OR LOWER(excerpt) LIKE ? ESCAPE '\'"
                 r" OR LOWER(tags) LIKE ? ESCAPE '\'"
+                r" OR LOWER(keywords) LIKE ? ESCAPE '\'"
                 r" OR LOWER(markdown_content) LIKE ? ESCAPE '\')"
             )
-            params.extend([pattern, pattern, pattern, pattern])
+            params.extend([pattern, pattern, pattern, pattern, pattern])
         if tag and tag.strip():
             serialized_tag = json.dumps(tag.strip().lower(), ensure_ascii=False)
             conditions.append(r"LOWER(tags) LIKE ? ESCAPE '\'")
             params.append(f"%{_escape_like(serialized_tag)}%")
+        if category and category.strip():
+            conditions.append("LOWER(category) = ?")
+            params.append(category.strip().lower())
 
         where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
         return where_sql, params
@@ -112,10 +121,13 @@ class PostRepository:
         self,
         *,
         tag: str | None = None,
+        category: str | None = None,
         published_only: bool = True,
         search: str | None = None,
     ) -> int:
-        where_sql, params = self.build_filters(tag=tag, published_only=published_only, search=search)
+        where_sql, params = self.build_filters(
+            tag=tag, category=category, published_only=published_only, search=search
+        )
         with self.db.connect() as connection:
             row = connection.execute(f"SELECT COUNT(*) FROM posts{where_sql}", params).fetchone()
         return int(row[0] if row else 0)
@@ -124,13 +136,16 @@ class PostRepository:
         self,
         *,
         tag: str | None = None,
+        category: str | None = None,
         published_only: bool = True,
         sort: str = "latest",
         search: str | None = None,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[dict[str, Any]]:
-        where_sql, params = self.build_filters(tag=tag, published_only=published_only, search=search)
+        where_sql, params = self.build_filters(
+            tag=tag, category=category, published_only=published_only, search=search
+        )
         query = f"SELECT {LIST_POST_COLUMNS} FROM posts{where_sql}{self.order_clause(sort)}"
         if limit is not None:
             query += " LIMIT ?"
@@ -318,6 +333,26 @@ class PostRepository:
                 tags.update(str(tag).strip() for tag in values if str(tag).strip())
         return tags
 
+    def published_categories(self) -> list[dict[str, Any]]:
+        """已发布文章实际用到的分类及篇数，按篇数降序。
+
+        前台的「栏目」筛选就取这份清单——只用真实存在的分类，所以不会像标签
+        那样越滚越长；分类本身是编辑层面的少数几个选择。
+        篇数由服务端统计：若在前端按「当前已加载的文章」现算，筛选后其余栏目会
+        显示成 0 篇，读到的是筛选结果而不是分类规模。
+        """
+        with self.db.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT TRIM(category) AS name, COUNT(*) AS total
+                FROM posts
+                WHERE status = 'published' AND TRIM(COALESCE(category, '')) != ''
+                GROUP BY LOWER(TRIM(category))
+                ORDER BY total DESC, name ASC
+                """
+            ).fetchall()
+        return [{"name": str(row["name"]), "count": int(row["total"])} for row in rows]
+
     def list_taxonomy(self) -> dict[str, list[str]]:
         with self.db.connect() as connection:
             rows = connection.execute("SELECT category, tags FROM posts WHERE status != 'trashed'").fetchall()
@@ -367,9 +402,11 @@ class PostRepository:
         html_content: str,
         status: str,
         now: str,
+        keywords: list[str] | None = None,
         connection: sqlite3.Connection | None = None,
     ) -> int:
         tags_json = json.dumps(tags, ensure_ascii=False)
+        keywords_json = json.dumps(list(keywords or []), ensure_ascii=False)
         sections = json.dumps([], ensure_ascii=False)
 
         def _execute(connection: sqlite3.Connection) -> int:
@@ -377,12 +414,12 @@ class PostRepository:
                 """
                 INSERT INTO posts (
                     slug, title, excerpt, published_at, created_at, updated_at,
-                    read_time, category, tags, hero_quote,
+                    read_time, category, tags, keywords, hero_quote,
                     cover_image, sections, markdown_content, html_content, status, deleted_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
                 (slug, title, excerpt, published_at, now, now, read_time, category, tags_json,
-                 hero_quote, cover_image, sections, markdown_content, html_content, status),
+                 keywords_json, hero_quote, cover_image, sections, markdown_content, html_content, status),
             )
             return int(connection.execute("SELECT last_insert_rowid()").fetchone()[0])
 
@@ -410,9 +447,11 @@ class PostRepository:
         html_content: str,
         status: str,
         updated_at: str,
+        keywords: list[str] | None = None,
         connection: sqlite3.Connection | None = None,
     ) -> None:
         tags_json = json.dumps(tags, ensure_ascii=False)
+        keywords_json = json.dumps(list(keywords or []), ensure_ascii=False)
         sections = json.dumps([], ensure_ascii=False)
 
         def _execute(conn: sqlite3.Connection) -> None:
@@ -420,13 +459,14 @@ class PostRepository:
                 """
                 UPDATE posts
                 SET slug = ?, title = ?, excerpt = ?, published_at = ?, updated_at = ?,
-                    read_time = ?, category = ?, tags = ?,
+                    read_time = ?, category = ?, tags = ?, keywords = ?,
                     hero_quote = ?, cover_image = ?, sections = ?, markdown_content = ?,
                     html_content = ?, status = ?, deleted_at = NULL
                 WHERE id = ?
                 """,
                 (slug, title, excerpt, published_at, updated_at, read_time, category, tags_json,
-                 hero_quote, cover_image, sections, markdown_content, html_content, status, post_id),
+                 keywords_json, hero_quote, cover_image, sections, markdown_content, html_content,
+                 status, post_id),
             )
 
         if connection is not None:
@@ -447,6 +487,7 @@ class PostRepository:
         connection: sqlite3.Connection | None = None,
     ) -> None:
         tags = snapshot.get("tags") if isinstance(snapshot.get("tags"), list) else []
+        keywords = snapshot.get("keywords") if isinstance(snapshot.get("keywords"), list) else []
         markdown_content = str(snapshot.get("markdown_content") or "")
 
         def _execute(conn: sqlite3.Connection) -> None:
@@ -454,7 +495,7 @@ class PostRepository:
                 """
                 UPDATE posts
                 SET title = ?, slug = ?, excerpt = ?, published_at = ?, read_time = ?,
-                    category = ?, tags = ?, hero_quote = ?, cover_image = ?,
+                    category = ?, tags = ?, keywords = ?, hero_quote = ?, cover_image = ?,
                     markdown_content = ?, html_content = ?, status = ?, deleted_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
@@ -466,6 +507,7 @@ class PostRepository:
                     snapshot.get("read_time", "") or estimate_read_time(markdown_content),
                     snapshot.get("category", ""),
                     json.dumps(tags, ensure_ascii=False),
+                    json.dumps(keywords, ensure_ascii=False),
                     snapshot.get("hero_quote", ""),
                     snapshot.get("cover_image", ""),
                     markdown_content,

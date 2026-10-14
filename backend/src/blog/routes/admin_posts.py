@@ -36,6 +36,7 @@ def register(bp, *, store, security) -> None:
                 "read_time": form_value(request.form, "read_time"),
                 "category": form_value(request.form, "category"),
                 "tags_text": form_value(request.form, "tags"),
+                "keywords_text": form_value(request.form, "keywords"),
                 "hero_quote": form_value(request.form, "hero_quote"),
                 "cover_image": form_value(request.form, "cover_image"),
                 "markdown_content": str(request.form.get("markdown_content") or ""),
