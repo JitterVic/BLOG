@@ -601,7 +601,70 @@ def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():
             )
 
 
-def test_reduced_motion_keeps_the_split_text_fade():
+def test_reveal_safety_net_does_not_pre_reveal_scroll_targets():
+    """`.rv` 的兜底放行不能把还没进入视口的内容提前标成 `.vis`。
+
+    兜底一旦无条件执行，`markVisible` 会把屏外元素也标成 `.vis`，而观察器只处理
+    `.rv:not(.vis)`，于是「滚动到它们时」不再有入场动效（实测首页第 2/3 版共 7 个
+    元素在翻页前就已被揭示）。因此兜底必须先确认观察器是否真的工作过。
+    """
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "sawIntersection" in reveal, "兜底需要依据观察器是否产生过交集"
+    assert "if (sawIntersection) return;" in reveal, (
+        "兜底在观察器已正常工作时应直接返回，避免提前揭示屏外内容"
+    )
+    assert "sawIntersection = true;" in reveal
+
+
+def test_stagger_delay_is_capped():
+    """阶梯延迟必须有上限。
+
+    未声明 `data-reveal-delay` 的元素按「揭示序号 × staggerMs」计算，序号在整页
+    范围内累加；长文章里这类元素一多，延迟会涨到数秒，表现为内容迟迟不出现
+    （实测长文章页在 5s 后仍有元素未淡入）。这里锁住上限的存在。
+    """
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "MAX_STAGGER_STEPS" in reveal
+    assert "Math.min(staggerIndex, MAX_STAGGER_STEPS)" in reveal
+
+
+def test_motion_override_toggles_both_root_classes():
+    """动效开关必须成对切换 `motion-off` 与 `motion-on`。
+
+    CSS 里用 `html:not(.motion-on)` 作为 reduced-motion 兜底的选择器。
+    若只加 `motion-off`、从不加 `motion-on`，那个 `:not()` 会恒为真，
+    用户在系统 reduce 下手动开启动效将完全无效（实测位移始终为 0）。
+    """
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert 'classList.toggle("motion-off", disabled)' in reveal
+    assert 'classList.toggle("motion-on", !disabled)' in reveal
+
+    # 兜底选择器必须带 :not(.motion-on)，否则手动覆盖无从生效
+    for name in ("feedback.css", "layout.css", "home.css"):
+        css = Path("frontend/src/styles", name).read_text(encoding="utf-8")
+        if "prefers-reduced-motion" in css:
+            assert ":not(.motion-on)" in css, f"{name} 的 reduced-motion 兜底缺少 :not(.motion-on)"
+
+
+def test_home_flip_replays_reveal_for_target_page():
+    """首页整屏翻页必须显式重播入场动效。
+
+    翻页时正文不滚动，被切走的版面里 `.rv` 早已是 `.vis`，观察器不会再触发；
+    而首次进入第 2/3 版时元素可能迟迟不被判定为相交（实测内容 op=0，要等 4s
+    兜底才现形，看起来就是「翻过去是空白页」）。两种情形都要靠显式重播兜住。
+    """
+    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
+    assert "replayReveal" in home
+    assert "watch([currentPage, isFlipActive]" in home, "需要在切版时触发重播"
+    assert "nextTick" in re.search(r'^import \{([^}]+)\} from "vue";', home, re.M).group(1), (
+        "watch 回调里用了 nextTick，必须从 vue 引入"
+    )
+
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "function replayReveal(" in reveal
+    # 必须强制一次样式计算，否则同一任务内的摘类/加类不会触发过渡
+    assert "void root.offsetWidth;" in reveal
+
     """reduced-motion 下逐字浮现必须保留淡入，只去掉位移。
 
     曾经的降级写法是 `transition: none; opacity: 1; transform: none`，等于把品牌

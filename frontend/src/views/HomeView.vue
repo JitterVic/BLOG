@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
@@ -16,8 +16,9 @@ import { getPosts } from "../services/api";
 const HOME_POST_LIMIT = 5;
 
 const { ensureSite } = useSite();
-const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
-const { isFlipActive, trackStyle } = usePageFlip();
+const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: false });
+const { isFlipActive, trackStyle, currentPage } = usePageFlip();
+const homeRootRef = ref(null);
 const latestPosts = ref([]);
 const hotPosts = ref([]);
 const postsError = ref("");
@@ -30,6 +31,24 @@ const secondaryPosts = computed(() => latestPosts.value.slice(1));
 
 watch([latestPosts, hotPosts, postsLoading], () => {
   refreshReveal();
+});
+
+// 首页整屏翻页：正文不滚动，所以目标版面里的 `.rv` 早已被观察器标成 `.vis`
+// （或反过来一直没被揭示），单靠 IntersectionObserver 既不会重播、也可能迟迟不显示
+// （实测翻到第 2 版后内容 op=0，要等 4s 兜底才现形）。
+// 这里在切版后显式重播「当前版 + 上一版」的入场动效：两个版面都重播，
+// 让前进/后退都能看到层次。
+watch([currentPage, isFlipActive], async ([page, active], previous) => {
+  if (!active) return;
+  const previousPage = Array.isArray(previous) ? previous[0] : page;
+  if (page === previousPage) return;
+  const root = homeRootRef.value;
+  if (!root) return;
+  const sections = root.querySelectorAll(".flip-track > .print-page");
+  await nextTick();
+  for (const index of [page, previousPage]) {
+    replayReveal(sections[index]);
+  }
 });
 
 async function loadHomePosts() {
@@ -73,7 +92,7 @@ onBeforeUnmount(() => postsController?.abort());
 </script>
 
 <template>
-  <div class="home-view print-home focused-home" :class="{ 'flip-mode': isFlipActive }">
+  <div ref="homeRootRef" class="home-view print-home focused-home" :class="{ 'flip-mode': isFlipActive }">
     <HomePageRail />
     <div class="flip-track" :style="trackStyle">
     <HomeCover />

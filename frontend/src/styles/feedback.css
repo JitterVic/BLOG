@@ -354,29 +354,61 @@
   }
 }
 
+/* 关闭动效：两套触发方式共用同一组声明——
+   ① `html.motion-off`（由 main.js / SiteHeader 依据「系统偏好 + 手动覆盖」打标）；
+   ② `@media (prefers-reduced-motion: reduce)` 作为无 JS 时的兜底，
+      但要排除用户手动开启（`html.motion-on`），否则手动开关形同虚设。
+   判定集中在 useReveal 的 motionDisabled()：localStorage 的 "on"/"off" 覆盖系统偏好。 */
+html.motion-off .page-fade-enter-active,
+html.motion-off .page-fade-leave-active,
+html.motion-off .rv,
+html.motion-off .rv.vis,
+html.motion-off .print-feature-image,
+html.motion-off .print-feature-image .print-feature-art,
+html.motion-off .print-list-item,
+html.motion-off .print-article-strip,
+html.motion-off .quiet-about-card,
+html.motion-off .home-index-row,
+html.motion-off .home-hot-row,
+html.motion-off .home-hot-row__rank,
+html.motion-off .print-nav__progress span,
+html.motion-off .print-menu-button span {
+  animation: none !important;
+  transition: none !important;
+}
+
+html.motion-off .page-fade-enter-from,
+html.motion-off .page-fade-leave-to,
+html.motion-off .rv,
+html.motion-off .rv.vis {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .page-fade-enter-active,
-  .page-fade-leave-active,
-  .rv,
-  .rv.vis,
-  .print-feature-image,
-  .print-feature-image .print-feature-art,
-  .print-list-item,
-  .print-article-strip,
-  .quiet-about-card,
-  .home-index-row,
-  .home-hot-row,
-  .home-hot-row__rank,
-  .print-nav__progress span,
-  .print-menu-button span {
+  html:not(.motion-on) .page-fade-enter-active,
+  html:not(.motion-on) .page-fade-leave-active,
+  html:not(.motion-on) .rv,
+  html:not(.motion-on) .rv.vis,
+  html:not(.motion-on) .print-feature-image,
+  html:not(.motion-on) .print-feature-image .print-feature-art,
+  html:not(.motion-on) .print-list-item,
+  html:not(.motion-on) .print-article-strip,
+  html:not(.motion-on) .quiet-about-card,
+  html:not(.motion-on) .home-index-row,
+  html:not(.motion-on) .home-hot-row,
+  html:not(.motion-on) .home-hot-row__rank,
+  html:not(.motion-on) .print-nav__progress span,
+  html:not(.motion-on) .print-menu-button span {
     animation: none !important;
     transition: none !important;
   }
 
-  .page-fade-enter-from,
-  .page-fade-leave-to,
-  .rv,
-  .rv.vis {
+  html:not(.motion-on) .page-fade-enter-from,
+  html:not(.motion-on) .page-fade-leave-to,
+  html:not(.motion-on) .rv,
+  html:not(.motion-on) .rv.vis {
     opacity: 1 !important;
     filter: none !important;
     transform: none !important;
@@ -980,17 +1012,33 @@
    这里改成「保留时长、去掉位移」——transition 仍在，但位移量取 0，
    于是只做逐字淡入：没有运动感，但不丢开场层次。
    加载页（InitialLoader）里这段逐字浮现是唯一的开场动效，取消后画面近乎静止。 */
+/* 手动关闭动效（html.motion-off）与 reduced-motion 采用完全相同的处理：
+   保留逐字淡入与时长，只把基准位移归零。 */
 @media (prefers-reduced-motion: reduce) {
-  .split-text__char {
+  html:not(.motion-on) .split-text__char {
     transform: none;
   }
 
-  .spin-seal__ring {
+  html:not(.motion-on) .spin-seal__ring {
     animation: none;
   }
 
-  .route-progress__fill {
+  html:not(.motion-on) .route-progress__fill {
     transition: none;
   }
+}
+
+/* 手动关闭动效（html.motion-off）与 reduced-motion 采用完全相同的处理：
+   保留逐字淡入与时长，只把基准位移归零。 */
+html.motion-off .split-text__char {
+  transform: none;
+}
+
+html.motion-off .spin-seal__ring {
+  animation: none;
+}
+
+html.motion-off .route-progress__fill {
+  transition: none;
 }
 

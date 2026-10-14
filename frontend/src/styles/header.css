@@ -276,12 +276,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav-circle,
-  .nav-circle__stroke {
+  html:not(.motion-on) .nav-circle,
+  html:not(.motion-on) .nav-circle__stroke {
     transition: none !important;
   }
 
-  .nav-circle__stroke {
+  html:not(.motion-on) .nav-circle__stroke {
     stroke-dashoffset: 0;
   }
 }
@@ -296,6 +296,51 @@
 
 .print-nav__cta .print-nav__label {
   letter-spacing: 0.14em;
+}
+
+/* 入场动效开关：与 CTA 同一排、同样式语言，用朱红/灰区分两态 */
+button.print-nav__motion {
+  margin-left: 0.35rem;
+  padding: 0 0 0.15rem !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px dashed var(--rule-light) !important;
+  color: var(--accent) !important;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.print-nav__motion .print-nav__label {
+  letter-spacing: 0.14em;
+}
+
+button.print-nav__motion.is-off {
+  color: var(--ink-faded) !important;
+  border-bottom-style: dotted !important;
+}
+
+button.print-nav__motion:hover,
+button.print-nav__motion:focus-visible {
+  color: var(--accent) !important;
+  border-bottom-color: var(--accent) !important;
+  outline: 0;
+}
+
+button.print-nav__motion:focus-visible {
+  outline: 1px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* 移动端面板里的同款开关：与导航项保持一致的排版 */
+button.print-mobile-nav__motion {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--rule-light);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
 
 .print-nav__cta:hover,

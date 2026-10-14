@@ -376,10 +376,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-latest-feature .print-feature-image,
-  .home-latest-feature .print-feature-image:hover,
-  .feature-poster-mark,
-  .feature-orbit {
+  /* `html:not(.motion-on)` 让「手动开启动效」能覆盖系统偏好（见 useReveal.motionDisabled） */
+  html:not(.motion-on) .home-latest-feature .print-feature-image,
+  html:not(.motion-on) .home-latest-feature .print-feature-image:hover,
+  html:not(.motion-on) .feature-poster-mark,
+  html:not(.motion-on) .feature-orbit {
     animation: none !important;
     transform: none !important;
     transition-duration: 0.01ms !important;
