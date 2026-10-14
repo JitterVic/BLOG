@@ -974,11 +974,14 @@
   to { transform: rotate(360deg); }
 }
 
-/* --- 降级：reduced-motion 下全部静止并立即可见 --- */
+/* --- 降级：reduced-motion ---
+   逐字浮现不走 `transition: none`：那样会把品牌动效连同时长一起取消，
+   首屏/加载页标题全程 op=1.00 且无位移，开场节奏完全消失（实测）。
+   这里改成「保留时长、去掉位移」——transition 仍在，但位移量取 0，
+   于是只做逐字淡入：没有运动感，但不丢开场层次。
+   加载页（InitialLoader）里这段逐字浮现是唯一的开场动效，取消后画面近乎静止。 */
 @media (prefers-reduced-motion: reduce) {
   .split-text__char {
-    transition: none;
-    opacity: 1;
     transform: none;
   }
 

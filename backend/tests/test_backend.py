@@ -601,6 +601,44 @@ def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():
             )
 
 
+def test_reduced_motion_keeps_the_split_text_fade():
+    """reduced-motion 下逐字浮现必须保留淡入，只去掉位移。
+
+    曾经的降级写法是 `transition: none; opacity: 1; transform: none`，等于把品牌
+    动效连同时长一起取消——实测加载页标题全程 op=1.00 且无位移，开场节奏完全消失
+    （InitialLoader 里这段逐字浮现是唯一的开场动效，画面近乎静止）。
+    正确做法是只把基准位移归零，让 transition 走 opacity 分支。
+    """
+    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
+
+    # 取包含 .split-text__char 的那个 reduced-motion 块（文件里有多个降级块），
+    # 再从中取出 .split-text__char 这一条规则单独断言。
+    blocks = re.findall(
+        r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\n\}", css, re.S
+    )
+    target = [b for b in blocks if ".split-text__char" in b]
+    assert target, "找不到针对逐字浮现的 reduced-motion 降级块"
+
+    rules = re.findall(r"\.split-text__char\s*\{([^}]*)\}", target[0], re.S)
+    assert rules, "降级块里找不到 .split-text__char 规则"
+    rule = "\n".join(rules)
+
+    # 只把位移归零
+    assert "transform: none" in rule, "降级时应把逐字浮现的位移归零"
+
+    # 不得「连同淡入一起取消」：这会丢掉加载页唯一的开场动效
+    assert "transition: none" not in rule, (
+        "reduced-motion 不得用 `transition: none` 取消逐字浮现（会丢掉开场动效）"
+    )
+    assert "opacity: 1" not in rule, (
+        "reduced-motion 不得直接把 opacity 设为 1（会跳过逐字淡入）"
+    )
+
+    # 基准态仍需保留位移与透明度过渡，作为「保留时长」的前提
+    assert ".split-text__char {" in css
+    assert "translate3d(0, 115%, 0)" in css
+
+
 def test_import_normalizes_nbsp(app_bundle):
     _application, store = app_bundle
 

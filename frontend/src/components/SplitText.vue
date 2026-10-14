@@ -5,6 +5,9 @@ import { computed } from "vue";
  * 逐字浮现文本：将文本拆分为单字，配合祖先的 `.vis`（useReveal）
  * 或 `.is-active`（InitialLoader）类触发排印式逐字上滑动画。
  * 动画样式定义在 styles/feedback.css，遵循 prefers-reduced-motion。
+ *
+ * 约定：必须存在带 `.vis` / `.is-active` 的祖先，否则单字停在 `opacity: 0`。
+ * 两个调用点（首页封面标题、加载页标题）都已满足，新增用法时注意补上。
  */
 const props = defineProps({
   text: { type: String, required: true },
