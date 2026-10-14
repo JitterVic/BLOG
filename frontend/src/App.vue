@@ -28,7 +28,11 @@ const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: t
  */
 function replayPageReveal() {
   const view = document.querySelector(".print-main > .print-page, .print-main > .home-view, .print-main > .print-subpage, .print-main > .print-post-view");
-  replayReveal(view || document.querySelector(".print-main"));
+  // 路由切换后视图是新建的，观察器通常已经把入场启动了（新元素一挂载就落在
+  // 视口内）；此时再重播会换掉逐字浮现的动画名，把标题从半途重启 —— 表现为
+  // 「从文章页/关于页切回封面页时标题渲染了两遍」。所以这一入口跳过已在播的
+  // 逐字动画，只把容器（含未揭示元素）标成已揭示。
+  replayReveal(view || document.querySelector(".print-main"), { skipRunningCharAnimation: true });
 }
 
 // 加载页离场后立刻重播一次：首屏的入场动效必须在这一刻才可见

@@ -1066,6 +1066,35 @@ def test_admin_category_field_is_a_fixed_select(client, app_bundle):
     assert 'name="keywords"' in page
 
 
+def test_route_replay_does_not_restart_a_running_char_animation():
+    """路由切换后的重播，不能把已经在播的逐字浮现从半途重启。
+
+    新建的视图一挂载就落在视口内，观察器会立刻把封面标题标成 `.vis`，单字动画随即
+    开跑；过渡结束后的重播若再换一次动画名，就会把这几个字清零重来——观感正是
+    「从文章页/关于页切回封面页时标题渲染了两遍」（实测重播时刻「至/知」的
+    currentTime 已走到 261ms，换名后被重置为 0，不重复的下标也从 9 变成 11）。
+
+    但整屏翻页必须保留重播（单字动画那时早已播完），所以这个判断只能是入口级选项。
+    """
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "function charEntranceRunning(" in reveal
+    assert 'animation.playState === "running"' in reveal
+    assert "replayReveal(root, { skipRunningCharAnimation = false } = {})" in reveal
+    # 命中时只标已揭示，必须在「摘掉 .vis」之前就返回，
+    # 否则容器的入场会重来而单字继续播，两侧时序错位。
+    guard = reveal.index("skipRunningCharAnimation && charEntranceRunning(root)")
+    detach = reveal.index("targets.forEach((el) => el.classList.remove(\"vis\"));")
+    assert guard < detach, "已在播的判断必须早于摘除 .vis"
+
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    assert "skipRunningCharAnimation: true" in app, "路由切换入口应跳过已在播的逐字动画"
+
+    # 翻页入口不得带上这个选项：切回封面（含从第 2/3 版切回）必须重播。
+    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
+    assert "await replayReveal(sections[page]);" in home
+    assert "skipRunningCharAnimation" not in home
+
+
 def test_stylesheets_have_no_orphaned_selector_fragments():
     """删除规则块时不能留下悬空的选择器行。
 

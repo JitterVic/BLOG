@@ -131,6 +131,31 @@ export function useReveal(options = {}) {
   }
 
   /**
+   * 逐字浮现是否已经在播。
+   *
+   * 只服务于「路由切换后重播」这道入口。新建的视图一挂载就落在视口内，观察器会
+   * 立刻把封面标题标成 `.vis`，单字动画随即开跑；过渡结束后的重播再换一次动画名，
+   * 就会把这几个字从半途重启——观感正是「标题渲染了两遍」。实测重播时刻「至/知」
+   * 的 `currentTime` 已经走到 261ms，换名后被清零重来。
+   *
+   * 换名是重播的唯一可靠手段（见 replayCharAnimations），所以这里只能选择不重播：
+   * 入场既然已经在播，就不需要第二次。
+   */
+  function charEntranceRunning(root, thresholdMs = 40) {
+    const chars = root?.querySelectorAll?.(".split-text__char");
+    if (!chars?.length) return false;
+    for (const char of chars) {
+      const animations = char.getAnimations?.() || [];
+      for (const animation of animations) {
+        if (animation.playState === "running" && Number(animation.currentTime) > thresholdMs) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * 让 `root` 内的内容重新入场（用于首页整屏翻页与路由切换：这两种情况下正文
    * 并不滚动，IntersectionObserver 不会重新触发，被切走的版面也因此不会重播）。
    *
@@ -138,13 +163,27 @@ export function useReveal(options = {}) {
    * 1. 把 `.rv` 的 `.vis` 摘掉再标回，让容器级的入场动效重来；
    * 2. 给逐字浮现的单字换一个动画名，强制它从头播——容器级增删 class 不会重启动画
    *    （浏览器在帧末统一算样式，同任务内摘除再加回等于没变），实测无效。
+   *
+   * `skipRunningCharAnimation` 只在「路由切换」这一入口打开：整屏翻页时单字动画
+   * 早已播完，必须重播；而路由切换后视图是新建的，观察器往往已经把入场启动了，
+   * 此时再重播就是二次渲染。
    */
-  function replayReveal(root) {
+  function replayReveal(root, { skipRunningCharAnimation = false } = {}) {
     if (!root || typeof window === "undefined") return;
     const targets = Array.from(root.querySelectorAll(".rv"));
     if (!targets.length) return;
     if (motionDisabled()) {
       targets.forEach((el) => el.classList.add("vis"));
+      return;
+    }
+
+    // 入场已经在播：把它标成已揭示即可，不要再换名重启。
+    if (skipRunningCharAnimation && charEntranceRunning(root)) {
+      targets.forEach((el) => {
+        const delay = Number(el.dataset.revealDelay ?? 0);
+        el.style.setProperty("--reveal-delay", `${delay}ms`);
+        el.classList.add("vis");
+      });
       return;
     }
 
