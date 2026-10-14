@@ -46,9 +46,11 @@ watch([currentPage, isFlipActive], async ([page, active], previous) => {
   if (!root) return;
   const sections = root.querySelectorAll(".flip-track > .print-page");
   await nextTick();
-  for (const index of [page, previousPage]) {
-    replayReveal(sections[index]);
-  }
+  // 只重播「刚进入的那一版」。早期版本把「当前版 + 上一版」都重播，结果是：
+  // ① 切到第 2/3 版时封面在屏幕外空转一遍，之后再切回封面 / 从第 3 版切回封面，
+  //    封面早已是 .vis，没有任何重播；
+  // ② 两个版面同时起动画，与 850ms 的翻页位移叠加，观感更卡。
+  await replayReveal(sections[page]);
 });
 
 async function loadHomePosts() {

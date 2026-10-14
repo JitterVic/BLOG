@@ -677,12 +677,51 @@ def test_cover_reveal_waits_for_the_initial_loader():
     assert len(hold) == 2, "找不到「加载页期间按住封面」的规则"
     assert "opacity: 0 !important" in hold[1]
     assert "transition: none !important" in hold[1]
-    # 必须连逐字浮现的单字一起按住：父级透明不会阻止子元素过渡推进
+    # 必须连逐字浮现的单字一起按住：父级透明不会阻止子元素自身的动画推进
     assert "html:not(.loader-done) .focused-cover .split-text__char" in css
 
     app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
     assert 'classList.add("loader-done")' in app, "App 需要在加载页离场时加上 loader-done"
     assert 'InitialLoader @ready="onLoaderReady"' in app, "需要接住加载页的 ready 事件"
+
+
+def test_split_char_uses_a_keyframe_animation():
+    """逐字浮现必须用 keyframes，且靠「换动画名」来重播。
+
+    用 transition 时无法可靠重播：同一个任务里摘掉再加回 `.vis`，浏览器在帧末算出的
+    净状态没有变化，过渡不会启动（实测加了强制 reflow 也无效，1s 内位移恒为终值）。
+    keyframes 则在 `.vis` 重新挂上、或 `animation-name` 变化时一定从头播。
+    另外换名必须「每次重播只前进一格」——按元素逐个前进时，元素个数若是名字个数的
+    整数倍（首页封面 9 个单字 × 3 个名字）会绕回同名，动画同样不会重启。
+    """
+    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
+    assert "@keyframes split-char-rise" in css
+    assert "animation: var(--rise-name, split-char-rise)" in css
+    # 三组同内容不同名的 keyframes 供轮换
+    for suffix in ("", "-b", "-c"):
+        assert f"@keyframes split-char-rise{suffix}" in css
+
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "RISE_ANIMATIONS" in reveal
+    assert 'setProperty("--rise-name"' in reveal
+    # 每次重播只前进一格（在 forEach 之外）
+    bump = reveal.split("function replayCharAnimations", 1)[1].split("}", 1)[0]
+    assert "animSeq = (animSeq + 1)" in bump
+    assert bump.index("animSeq = (animSeq + 1)") < bump.index("forEach")
+
+
+def test_char_animation_endpoints_share_one_transform_function():
+    """入场动画的首尾必须使用同一个 transform 函数名。
+
+    构建时的 CSS 压缩器会把 `translate3d(0,0,0)` 改写成 `translateZ(0)`
+    （压缩产物里实测存在 translateZ，而源码中根本没有）；函数名不一致时无法插值，
+    整段退化为离散跳变——单字「啪」地出现而不是滑入，读起来就是卡顿。
+    """
+    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
+    block = css.split("@keyframes split-char-rise {", 1)[1].split("\n}", 1)[0]
+    assert "translateY(88%)" in block
+    assert "translateY(0)" in block
+    assert "translate3d" not in block, "首尾不要混用 translate3d / translateY"
 
 
 def test_public_csp_allows_the_designed_webfonts():
@@ -710,8 +749,8 @@ def test_route_change_replays_entry_animation():
 
     reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
     assert "function replayReveal(" in reveal
-    # 必须强制一次样式计算，否则同一任务内的摘类/加类不会触发过渡
-    assert "void root.offsetWidth;" in reveal
+    # 重播必须同时换动画名，否则逐字浮现不会重启
+    assert "replayCharAnimations(root)" in reveal
 
 
 def test_home_flip_replays_reveal_for_target_page():
@@ -727,41 +766,34 @@ def test_home_flip_replays_reveal_for_target_page():
     assert "nextTick" in re.search(r'^import \{([^}]+)\} from "vue";', home, re.M).group(1), (
         "watch 回调里用了 nextTick，必须从 vue 引入"
     )
-
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "function replayReveal(" in reveal
-    # 必须强制一次样式计算，否则同一任务内的摘类/加类不会触发过渡
-    assert "void root.offsetWidth;" in reveal
+    # 只重播刚进入的那一版：把「当前版 + 上一版」都重播会让封面在屏外空转一遍
+    assert "replayReveal(sections[page])" in home
 
 
 def test_motion_off_keeps_the_split_text_fade():
-    """手动关闭动效时，逐字浮现必须保留淡入，只去掉位移。
+    """手动关闭动效时，逐字浮现要保留可见的显现过程，而不是直接闪出。
 
-    曾经的降级写法是 `transition: none; opacity: 1; transform: none`，等于把品牌
-    动效连同时长一起取消——实测加载页标题全程 op=1.00 且无位移，开场节奏完全消失
-    （InitialLoader 里这段逐字浮现是唯一的开场动效，画面近乎静止）。
-    正确做法是只把基准位移归零，让 transition 走 opacity 分支。
+    历史写法是 `transition: none; opacity: 1; transform: none`，等于把品牌动效连同时长
+    一起取消——实测加载页标题全程 op=1.00、无位移，开场节奏完全消失。
+    现在这段动效改用 keyframes；降级时仍要求它「有可见的进行时」，
+    而不是一帧之内直接到位。
     """
     css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
 
-    rules = re.findall(r"html\.motion-off \.split-text__char\s*\{([^}]*)\}", css, re.S)
-    assert rules, "找不到手动关闭动效时的 .split-text__char 规则"
-    rule = "\n".join(rules)
-
-    # 只把位移归零
-    assert "transform: none" in rule, "降级时应把逐字浮现的位移归零"
-
-    # 不得「连同淡入一起取消」：这会丢掉加载页唯一的开场动效
-    assert "transition: none" not in rule, (
-        "不得用 `transition: none` 取消逐字浮现（会丢掉开场动效）"
-    )
-    assert "opacity: 1" not in rule, (
-        "不得直接把 opacity 设为 1（会跳过逐字淡入）"
-    )
-
-    # 基准态仍需保留位移与透明度过渡，作为「保留时长」的前提
+    # 基准态必须保留位移起点，形成可见的滑动/淡入过程
     assert ".split-text__char {" in css
-    assert "translate3d(0, 115%, 0)" in css
+    assert "translateY(88%)" in css
+
+    # 入场用 keyframes，首尾都要有 opacity 与 transform 的变化
+    rise = css.split("@keyframes split-char-rise {", 1)[1].split("\n}", 1)[0]
+    assert "opacity: 0" in rise and "opacity: 1" in rise
+    assert "translateY(88%)" in rise and "translateY(0)" in rise
+
+    # 手动关闭动效时不得把动画时长压成 0，也不得直接把 opacity 设为 1
+    motion_off = re.findall(r"html\.motion-off [^{]*\.split-text__char[^{]*\{([^}]*)\}", css)
+    for rule in motion_off:
+        assert "opacity: 1" not in rule, "不得直接把 opacity 设为 1（会跳过逐字淡入）"
+        assert "transition: none" not in rule
 
 
 def test_import_normalizes_nbsp(app_bundle):

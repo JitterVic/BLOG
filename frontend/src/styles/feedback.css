@@ -370,7 +370,8 @@ html:not(.loader-done) .focused-cover .rv {
 }
 
 html:not(.loader-done) .focused-cover .split-text__char {
-  transform: translate3d(0, 0.8em, 0) !important;
+  transform: translateY(0.8em) !important;
+  will-change: auto !important;
 }
 
 /* 关闭动效的两条路径，必须与 useReveal.motionDisabled() 的判定一致：
@@ -882,19 +883,66 @@ html.motion-off .rv.vis {
   margin: -0.3em -0.24em -0.3em -0.12em;
 }
 
+/* 逐字浮现的单字。
+   用 keyframes 而不是 transition：这段动效需要在「切回封面」时**确定性地重播**，
+   而 transition 依赖两端计算值不同才会启动——同一个任务里摘掉再加回 `.vis` 时，
+   浏览器在帧末算出的净状态没变化，过渡根本不会跑（实测加了强制 reflow 也无效）。
+   动画则在 `.vis` 重新挂上时一定从头播（配合 `both` 填充，去掉 `.vis` 即回到基准态）。
+
+   三个取值都是为了「顺」而不是「花」：
+   1. easeOutCubic 而非 `--ease-page`（后者前 8% 的时长就走完 42% 的位移、25% 走完 83%，
+      单字是「瞬间跳到位再缓缓收尾」，读起来像顿一下）；这里前 8% 走 22%、25% 走 59%。
+   2. 位移量 88%（原 115% 比行高还大，单字要从相邻行外滑入，与阶梯延迟叠加后显得拖沓）。
+   3. 两端都写 2D 的 `translateY`。原先终态用 `translate3d(0,0,0)`，构建时的 CSS 压缩器
+      会把它改写成 `translateZ(0)`（压缩产物里实测存在 translateZ，而源码中根本没有），
+      函数名不一致时无法插值，整段退化为离散跳变。 */
 .split-text__char {
   display: inline-block;
   opacity: 0;
-  transform: translate3d(0, 115%, 0);
-  transition:
-    transform 0.72s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) var(--char-delay, 0ms),
-    opacity 0.4s ease var(--char-delay, 0ms);
+  transform: translateY(88%);
+  will-change: transform, opacity;
 }
 
 .vis .split-text__char,
 .is-active .split-text__char {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
+  /* 动画名来自 `--rise-name`（由 useReveal 在「重播」时轮换），默认用第一组。
+     换名是唯一能可靠重启动画的手段：增删 class 会被浏览器在同一帧内合并掉。 */
+  animation: var(--rise-name, split-char-rise) 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) var(--char-delay, 0ms) both;
+  will-change: auto;
+}
+
+@keyframes split-char-rise {
+  from {
+    opacity: 0;
+    transform: translateY(88%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 与上一组完全相同，只换名字：供「重播」时轮换以强制动画重新开始。 */
+@keyframes split-char-rise-b {
+  from {
+    opacity: 0;
+    transform: translateY(88%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes split-char-rise-c {
+  from {
+    opacity: 0;
+    transform: translateY(88%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* --- 路由切换进度条（RouteProgress） --- */

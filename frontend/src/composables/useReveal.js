@@ -63,6 +63,11 @@ export function useReveal(options = {}) {
   let observed = new WeakSet();
   let staggerIndex = 0;
   let safetyTimer = 0;
+  // 已揭示的动画名序号，用于「重播」时换名触发（见 replayCharAnimations）
+  let animSeq = 0;
+  // 供「重播」轮换的入场动画名。三组 keyframes 内容完全相同，只是名字不同——
+  // 换名是唯一能可靠重启动画的手段（增删 class 会被浏览器在同一帧内合并掉）。
+  const RISE_ANIMATIONS = ["split-char-rise", "split-char-rise-b", "split-char-rise-c"];
   // 观察器是否真的产生过交集：决定兜底放行要不要执行（见 observeTargets）。
   let sawIntersection = false;
 
@@ -102,6 +107,23 @@ export function useReveal(options = {}) {
     });
   }
 
+  /**
+   * 换一个动画名，强制元素上的入场动画从头重播。
+   *
+   * 这是「重播」的关键：通过 class 增删来重启动画会受制于浏览器在帧末统一计算样式的机制
+   * （同一任务内摘掉再加回 `.vis`，净状态不变则动画不重来），实测无效。
+   * `animation-name` 从一个名字变成另一个名字则一定重启，配合 `both` 填充不受时序影响。
+   */
+  function replayCharAnimations(root) {
+    const chars = root.querySelectorAll(".split-text__char");
+    if (!chars.length) return;
+    // 序号「每次重播只前进一格」——若按元素逐个前进，当元素个数是名字个数的整数倍时
+    // （首页封面恰好 9 个单字 × 3 个名字）会绕回同名，动画不会重启（实测踩过）。
+    animSeq = (animSeq + 1) % RISE_ANIMATIONS.length;
+    const name = RISE_ANIMATIONS[animSeq];
+    chars.forEach((char) => char.style.setProperty("--rise-name", name));
+  }
+
   /** 手动关闭动效时给根元素打标记（`zhizhi-motion = "off"`，无 UI 入口）。 */
   function syncMotionClass() {
     if (typeof document === "undefined") return;
@@ -109,12 +131,13 @@ export function useReveal(options = {}) {
   }
 
   /**
-   * 让 `root` 内的 `.rv` 重新入场（用于首页整屏翻页与路由切换：这两种情况下正文
+   * 让 `root` 内的内容重新入场（用于首页整屏翻页与路由切换：这两种情况下正文
    * 并不滚动，IntersectionObserver 不会重新触发，被切走的版面也因此不会重播）。
    *
-   * 必须先摘掉 `.vis` 回到基准态，并**强制一次样式计算**（读 offsetWidth）——
-   * 只靠 rAF 不足以保证浏览器在「摘掉 .vis」和「加回 .vis」之间真的产出一帧中间
-   * 样式，实测那样不会触发过渡（vis 在 2 帧内 4→0→4，但 opacity 始终是 4）。
+   * 两步缺一不可：
+   * 1. 把 `.rv` 的 `.vis` 摘掉再标回，让容器级的入场动效重来；
+   * 2. 给逐字浮现的单字换一个动画名，强制它从头播——容器级增删 class 不会重启动画
+   *    （浏览器在帧末统一算样式，同任务内摘除再加回等于没变），实测无效。
    */
   function replayReveal(root) {
     if (!root || typeof window === "undefined") return;
@@ -126,8 +149,7 @@ export function useReveal(options = {}) {
     }
 
     targets.forEach((el) => el.classList.remove("vis"));
-    void root.offsetWidth;
-
+    replayCharAnimations(root);
     targets.forEach((el, index) => {
       const delay = Number(el.dataset.revealDelay ?? Math.min(index, MAX_STAGGER_STEPS) * 64);
       el.style.setProperty("--reveal-delay", `${delay}ms`);
