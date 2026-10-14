@@ -799,32 +799,36 @@ def test_latest_page_shows_a_lead_plus_two_secondary_posts():
     assert ":not(.is-single) .home-secondary-card + .home-secondary-card::before" in css
 
 
-def test_home_sections_and_about_drop_the_section_number():
-    """首页第 2/3 版与关于页不再使用版次编号（`.sec-hd__n`）。
+def test_home_sections_about_and_articles_drop_the_section_number():
+    """首页第 2/3 版、关于页与文章目录都不再使用版次编号（`.sec-hd__n`）。
 
-    这三处的小节序号（02 / 03 / 03）属于冗余装饰：版次已由右侧轨道表达，
-    关于页更是单页无序号可言。文章目录（02）与「下一篇」/404 仍需要它，
-    所以只删这三处，基础的 `.sec-hd__n` 样式必须保留。
+    这些小节序号（02 / 03 / 03 / 02）属于冗余装饰：首页版次已由右侧轨道表达，
+    关于页是单页无序号可言，文章目录也只有一页目录。
+    「下一篇」/404 仍需要它，所以基础的 `.sec-hd__n` 样式必须保留。
     """
+    for name in ("HomeView", "AboutView", "PostsView"):
+        src = Path(f"frontend/src/views/{name}.vue").read_text(encoding="utf-8")
+        assert 'class="sec-hd__n"' not in src, f"{name} 的版次编号应已移除"
+        # 标题与分隔线保留，页头结构不变
+        assert "sec-hd__t" in src and "sec-hd__line" in src
+
     home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    about = Path("frontend/src/views/AboutView.vue").read_text(encoding="utf-8")
-    assert 'class="sec-hd__n"' not in home, "首页两版的版次编号应已移除"
-    assert 'class="sec-hd__n"' not in about, "关于页的版次编号应已移除"
-    # 标题与分隔线保留，页头结构不变
     assert "最近更新 Latest" in home and "热点文章 Most Read" in home
-    assert "关于 About" in about and "sec-hd__line" in about
+    posts = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
+    assert "文章 Articles" in posts
 
     # 仍然需要编号的地方不能一起删掉
-    posts = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
-    assert 'class="sec-hd__n"' in posts, "文章目录的 02 仍在使用"
+    related = Path("frontend/src/components/post/RelatedPostsGrid.vue").read_text(encoding="utf-8")
+    assert 'class="sec-hd__n"' in related, "「下一篇」标注仍在使用"
     footer = Path("frontend/src/styles/footer.css").read_text(encoding="utf-8")
     assert ".sec-hd__n {" in footer and ".sec-hd__n::after" in footer
 
-    # 这三处专属的着色规则已成死代码，应一并清理
+    # 这四处专属的着色规则已成死代码，应一并清理
     for dead in (
         ".home-latest-section .sec-hd__n",
         ".home-hot-section .sec-hd__n",
         ".page-theme-about .sec-hd__n",
+        ".unified-posts-page .sec-hd__n",
     ):
         assert dead not in footer, f"{dead} 已无对应元素"
 

@@ -264,7 +264,6 @@ onBeforeUnmount(() => {
     <section class="print-page print-section">
       <p class="posts-chapter-label rv">Catalog of Issues</p>
       <div class="sec-hd rv">
-        <span class="sec-hd__n">02</span>
         <h1 class="sec-hd__t">文章 Articles</h1>
         <div class="sec-hd__line"></div>
       </div>

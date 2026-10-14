@@ -327,10 +327,6 @@
   background: linear-gradient(180deg, rgba(42, 36, 28, 0.03), transparent 72%);
 }
 
-.unified-posts-page .sec-hd__n {
-  color: rgba(42, 36, 28, 0.16);
-}
-
 .quiet-about-page .sec-hd {
   background: linear-gradient(180deg, rgba(78, 98, 82, 0.06), transparent 72%);
   border-top-color: rgba(78, 98, 82, 0.45);
