@@ -1,5 +1,4 @@
-/* 基础层：reset、设计令牌、全局 body 样式 */
-/* Stable reset kept here after removing the obsolete legacy layer. */
+/* 基础层：reset、设计令牌、全局 body 样式。 */
 *,
 *::before,
 *::after {
@@ -25,32 +24,27 @@ select {
 #app {
   min-height: 100vh;
 }
-/* ========================================================================== 
-   PRINT JOURNAL THEME — integrated from refence/index.html
-   ========================================================================== */
+/* ==========================================================================
+   报刊主题令牌（PRINT JOURNAL THEME）
+   ==========================================================================
+   只保留真正被引用的令牌。此前这里还躺着 17 个无人使用的别名/阴影/圆角变量
+   （--paper-mid、--ink-deep、--border、--shadow-sm 之类），既没有 var() 引用，
+   也无法从中推断用途——设计令牌一旦不再被使用就该删掉，否则读者会以为改它能生效。 */
 :root {
   --paper: #f6f1e8;
-  --paper-mid: #ece4d4;
   --paper-dark: #ded5c2;
   --paper-tint: #fdfbf7;
   --paper-card: rgba(246, 241, 232, 0.88);
   --ink: #1c1710;
-  --ink-deep: #120e0a;
   --ink-mid: #3b3328;
   --ink-light: #5e5548;
   --ink-faded: #8a7f6f;
-  --ink-ghost: #b3a898;
   --accent: #8b2500;
   --accent-light: #b84a2a;
   --accent-glow: rgba(184, 74, 42, 0.35);
-  --accent-soft: rgba(139, 37, 0, 0.08);
-  --accent-warm: #a8320c;
   --rule: #2a241c;
   --rule-light: rgba(42, 36, 28, 0.16);
   --rule-subtle: rgba(42, 36, 28, 0.08);
-  --border: var(--rule-light);
-  --border-strong: rgba(42, 36, 28, 0.46);
-  --panel: rgba(246, 241, 232, 0.92);
   --code-bg: #221d18;
   --code-fg: #eae2d5;
   --code-bar: #1a1612;
@@ -60,26 +54,17 @@ select {
   --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-spring-gentle: cubic-bezier(0.2, 0.88, 0.24, 1);
-  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --ease-bounce-soft: cubic-bezier(0.34, 1.4, 0.64, 1);
   --ease-page: cubic-bezier(0.16, 1, 0.3, 1);
   --bg: var(--paper);
   --text: var(--ink);
   --muted: var(--ink-light);
   --soft: var(--ink-faded);
-  --accent-2: var(--ink-mid);
-  --ring: rgba(139, 37, 0, 0.25);
   --ring-focus: 0 0 0 3px rgba(139, 37, 0, 0.2);
-  --shadow-sm: 0 2px 8px rgba(42, 36, 28, 0.04);
-  --shadow-md: 0 8px 24px rgba(42, 36, 28, 0.08);
   --shadow-lg: 0 20px 46px rgba(42, 36, 28, 0.12);
-  --shadow-float: 0 24px 60px rgba(35, 25, 16, 0.18);
   --shadow: var(--shadow-lg);
-  --study-font: var(--f-display);
   --ui-font: var(--f-mono);
   --radius-xs: 2px;
   --radius-sm: 4px;
-  --radius-md: 8px;
 }
 
 html {

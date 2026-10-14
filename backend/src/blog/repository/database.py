@@ -9,11 +9,23 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import uploads
-from ..content import SITE_CONFIG
 from ..env_loader import project_root
 from ..markdown_tools import build_excerpt, render_markdown
 
 ROOT_DIR = project_root()
+
+
+# 站点资料的种子值：仅在 site_profile 为空时写入一次（之后一律走后台编辑）。
+# 之前单独放在 content.py，只有一个常量、只有一个使用方，属于无谓的间接层。
+SITE_SEED = {
+    "name": "",
+    "headline": "",
+    "summary": "",
+    "email": "",
+    "social_links": [],
+    "about_intro": [],
+}
+
 
 
 class Database:
@@ -120,9 +132,8 @@ class Database:
         if "deleted_at" not in post_columns:
             connection.execute("ALTER TABLE posts ADD COLUMN deleted_at TEXT DEFAULT NULL")
         if "keywords" not in post_columns:
-            connection.execute(
-                "ALTER TABLE posts ADD COLUMN keywords TEXT NOT NULL DEFAULT \'[]\'"
-            )
+            # 关键词只参与检索、不对外展示，因此同样以 JSON 数组存放。
+            connection.execute("ALTER TABLE posts ADD COLUMN keywords TEXT NOT NULL DEFAULT '[]'")
         # Retired schema: working copies were removed; drop the table and the
         # revision rows that only existed to support them.
         connection.execute("DROP TABLE IF EXISTS post_working_copies")
@@ -213,12 +224,12 @@ class Database:
             """,
             (
                 1,
-                SITE_CONFIG.get("name", ""),
-                SITE_CONFIG.get("headline", ""),
-                SITE_CONFIG.get("summary", ""),
-                SITE_CONFIG.get("email", ""),
-                json.dumps(SITE_CONFIG.get("social_links", []), ensure_ascii=False),
-                json.dumps(SITE_CONFIG.get("about_intro", []), ensure_ascii=False),
+                SITE_SEED.get("name", ""),
+                SITE_SEED.get("headline", ""),
+                SITE_SEED.get("summary", ""),
+                SITE_SEED.get("email", ""),
+                json.dumps(SITE_SEED.get("social_links", []), ensure_ascii=False),
+                json.dumps(SITE_SEED.get("about_intro", []), ensure_ascii=False),
                 now,
                 now,
             ),

@@ -30,14 +30,25 @@
 
 4. **工具与基建层**：
    - `markdown_tools/`：Markdown 扩展渲染、`SafeHTMLCleaner` XSS 消毒与正文统计指标计算。
+   - `seo.py`：Atom feed / sitemap / robots.txt 生成与 SPA 页面的 meta、OG、canonical 注入。
    - `security.py`：基于 HMAC 的 Session 鉴权、CSRF 防护、防爆破登录限流（`BLOG_TRUSTED_PROXY_COUNT`）。
+   - `login_throttle.py`：登录失败计数落库（多 worker 下不能放在进程内存）。
    - `uploads.py`：图片类型校验与 Pillow 内存安全压缩。
-   - `store.py`：门面层（`BlogStore`），为历史代码提供向下兼容的统一委托入口。
+   - `taxonomy.py`：栏目（大类）固定词表——前台唯一的粗粒度筛选维度。
+   - `serializers.py` / `validation.py` / `env_loader.py` / `config.py`：载荷裁剪、字段长度校验、环境变量解析、启动配置与生产就绪校验。
+   - `store.py`：门面层（`BlogStore`）与依赖装配入口，为历史代码提供向下兼容的统一委托。
+
+### 内容分类的三层约定
+
+- **栏目（`category`）**：前台唯一允许的筛选维度，取值限定为 `taxonomy.CATEGORY_PRESETS`（算法 / 工程 / 教学 / 项目 / 随想 / 读书）。后台是下拉选择，发布预检会拒绝词表以外的值——放开自由录入，筛选条迟早会退化成第二个标签云。
+- **标签（`tags`）**：自由词表，只做展示与检索，不做前台筛选。
+- **关键词（`keywords`）**：别名、同义词、英文写法，只参与站内搜索，**不出现在任何对外载荷**（列表、站点载荷、文章详情都不含）。
 
 ### 前端架构 (`frontend/src/`)
 
 - **状态管理**：采用单例 Composables 模式（如 `useSite.js`, `usePosts.js`, `usePost.js`），在模块作用域持有响应式状态并去重并发请求，不引入额外的状态管理库（Pinia/Vuex）。
 - **组件划分**：按业务模块拆分子目录（`components/home/`, `components/post/`, `components/posts/`, `components/pet/`），通用 UI 组件平铺于 `components/`。
+- **文章目录页（`/posts`）**：单一形态——按年份分组的编年索引（`components/posts/ArchiveLedger.vue`），配 `PostsToolbox.vue` 的栏目筛选与搜索。索引行 = 日期 / 标题 + 摘要 / 时长 + 标签；筛选走服务端 `category` 参数，因此筛选与翻页可以并存。
 - **样式体系**：基于原生 CSS 变量构建 `styles/editorial.css`，聚合 12 个按层叠顺序加载的主题模块（reset, tokens, layout, typography, components, print 等）。
 
 ---

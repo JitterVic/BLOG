@@ -1,5 +1,9 @@
-"""
-Hatch-Pet Sprite Slice & Processing Script (Pure Pillow Implementation)
+"""Hatch-Pet Sprite Slice & Processing Script (Pure Pillow Implementation)
+
+本地素材生成工具，**不属于构建链路**：输入是作者机器上的角色原图（下方 SHEET_* 的绝对路径），
+输出 `frontend/src/assets/pet/` 的精灵图与 `pet.json` 已经提交进仓库。
+它不参与打包、不需要在新环境运行——换机器时改 SHEET_* 即可，其余步骤无需执行。
+
 Extracts individual poses from generated character sheets, applies outer floodfill alpha transparency,
 and generates clean high-resolution assets + pet.json manifest.
 """

@@ -42,15 +42,6 @@ export function insertBlock(content) {
   dispatchEditorInput();
 }
 
-export function insertAtCursor(text) {
-  if (!markdownInput) return;
-  const start = markdownInput.selectionStart;
-  const end = markdownInput.selectionEnd;
-  markdownInput.setRangeText(text, start, end, "end");
-  markdownInput.focus();
-  dispatchEditorInput();
-}
-
 export function replaceUploadPlaceholder(anchor, replacement) {
   if (!markdownInput) return;
   const scrollTop = markdownInput.scrollTop;

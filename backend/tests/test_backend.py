@@ -1095,6 +1095,75 @@ def test_route_replay_does_not_restart_a_running_char_animation():
     assert "skipRunningCharAnimation" not in home
 
 
+def test_no_unused_css_classes():
+    """样式表里不该留下没人用的类。
+
+    这类死代码一次清理之后就容易被重新引入（改版换类名时旧的留着、删组件时忘了删规则），
+    而且构建、运行、测试都不会报错。这里把「CSS 里定义、但模板/脚本里从未出现」当作失败，
+    让它变成一道可持续的红线。
+
+    三类例外不算死类：
+    - Vue `<Transition>` 注入的 `page-fade-*`、Vue Router 的 `router-link-*`；
+    - highlight.js 运行时生成的 `hljs-*`；
+    - Jinja 用 f-string 拼出的 flash 类 `message--*`。
+    `url(...)` 与注释要先抠掉：`data:image/svg+xml` 里的 `www.w3.org` 会被朴素正则读成
+    `.org` / `.w3` 两个类名（实测踩过）。
+    """
+    skip_parts = {".git", ".venv", "node_modules", "dist", "__pycache__", ".tmp",
+                  ".pytest_cache", "output", ".playwright-cli", ".codex", ".agents",
+                  ".claude", ".run", "vendor"}
+
+    def walk(base, exts):
+        for path in Path(base).rglob("*"):
+            if path.is_file() and path.suffix in exts and not any(p in skip_parts for p in path.parts):
+                yield path
+
+    corpus = "\n".join(
+        [p.read_text(encoding="utf-8-sig") for p in walk("frontend/src", {".vue", ".js"})]
+        + [p.read_text(encoding="utf-8-sig") for p in walk("backend/src/blog/templates", {".html"})]
+        + [p.read_text(encoding="utf-8-sig") for p in walk("backend/src/blog/static/admin", {".js"})]
+    )
+    dynamic = re.compile(r"^(hljs-|page-fade-|router-link|message--)")
+
+    offenders: list[str] = []
+    for path in sorted(Path("frontend/src/styles").glob("*.css")):
+        if path.name == "editorial.css":
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        text = re.sub(r"url\((?:[^()]|\([^()]*\))*\)", "", re.sub(r"/\*.*?\*/", "", text, flags=re.S))
+        for name in sorted(set(re.findall(r"\.(-?[_a-zA-Z][\w-]*)", text))):
+            if name in corpus or dynamic.match(name):
+                continue
+            offenders.append(f"{path.name}: .{name}")
+    assert not offenders, "存在无人使用的 CSS 类：\n  " + "\n  ".join(offenders)
+
+
+def test_js_sources_have_no_stray_escaped_quotes():
+    """JS/Vue/模板里不应出现 `\\'` 这种游离的转义单引号。
+
+    自查出来的坑：用脚本批量改代码时，替换串里写了 `\\'`，结果把反斜杠原样带进了
+    源码——`document.querySelector(\\'[name="x"]\\')`。它让**整个 ES 模块图解析失败**
+    （一个模块语法错误会连带它所有的 importer），而后台写作台的 JS 只在浏览器里执行，
+    服务端测试与构建都不会碰到，于是这类错误可以一路绿灯通过。
+
+    JS 里单引号字符串内部确实会用到 `\\'`，所以这里只针对本项目实际不会出现的形态：
+    引号紧跟在左括号/逗号/等号之后仍带反斜杠。
+    """
+    patterns = (".js", ".vue", ".html")
+    offenders = []
+    for path in sorted(Path(".").rglob("*")):
+        if not path.is_file() or path.suffix not in patterns:
+            continue
+        if any(p in path.parts for p in (".git", ".venv", "node_modules", "dist", "__pycache__", ".tmp")):
+            continue
+        if "vendor" in path.parts or path.name.startswith("highlight.min"):
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8-sig", errors="ignore").split("\n"), 1):
+            if re.search(r"[\(\[=,]\s*\\['\"]", line):
+                offenders.append(f"{path}:{number}: {line.strip()[:110]}")
+    assert not offenders, "存在游离的转义引号：\n  " + "\n  ".join(offenders)
+
+
 def test_stylesheets_have_no_orphaned_selector_fragments():
     """删除规则块时不能留下悬空的选择器行。
 

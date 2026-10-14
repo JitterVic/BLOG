@@ -57,9 +57,17 @@ Standard Python src-layout package (`pyproject.toml` managed by uv/hatchling):
   - `profile_service.py` & `dashboard_service.py`: Site metadata and dashboard statistics.
   - `import_service.py`: Frontmatter and document import parser.
 - **`repository/`**: SQLite persistence layer (`database.py`, `posts.py`, `revisions.py`, `profile.py`, `media.py`).
-- **`markdown_tools/`**: `renderer.py` (Markdown parsing + `SafeHTMLCleaner` XSS filter), `analysis.py` (reading time & word count), `frontmatter.py`.
-- **`security.py`**: Session auth, CSRF validation, audit logging, rate limiting (`BLOG_TRUSTED_PROXY_COUNT`).
-- **`store.py`**: `BlogStore` facade providing backward-compatible access.
+- **`markdown_tools/`**: `renderer.py` (Markdown parsing + `SafeHTMLCleaner` XSS filter), `analysis.py` (reading time & word count), `frontmatter.py` (front-matter incl. `keywords`).
+- **`seo.py`**: Atom feed / sitemap / robots.txt builders and SPA `<head>` injection (title, OG, canonical).
+- **`security.py`** + **`login_throttle.py`**: Session auth, CSRF validation, audit logging, rate limiting (`BLOG_TRUSTED_PROXY_COUNT`). Failure counters live in SQLite because gunicorn runs multiple workers.
+- **`taxonomy.py`**: The fixed category vocabulary (`CATEGORY_PRESETS`) that the directory page filters by.
+- **`store.py`**: `BlogStore` facade — the composition root that wires repositories into services and re-exports legacy helpers.
+
+### Taxonomy: three layers, deliberately
+
+- **Category (`category`)**: the *only* facet the front-end filters by, restricted to `taxonomy.CATEGORY_PRESETS` (算法 / 工程 / 教学 / 项目 / 随想 / 读书). The admin renders a `<select>` and the publish pre-flight rejects values outside the list — free-text categories turn the filter bar into a second tag cloud.
+- **Tags (`tags`)**: free vocabulary, displayed and searchable, never used for filtering.
+- **Keywords (`keywords`)**: aliases / synonyms / English spellings. Searchable only, and deliberately absent from every public payload (list rows, site payload, post detail).
 
 ---
 
@@ -68,8 +76,9 @@ Standard Python src-layout package (`pyproject.toml` managed by uv/hatchling):
 - **State Management**: Singleton Composables (`composables/use*.js`) storing module-scoped reactive state (`ref`) and deduplicating in-flight network requests. No Pinia/Vuex.
 - **API Client**: `services/api.js` over `services/http.js` (Fetch API with timeout and typed `ApiError`).
 - **Components**:
-  - `components/home/`: Editorial newspaper sections (Hero, LeadStory, NewsGrid, Trending, Calendar).
-  - `components/post/`: Article reader enhancements (Header, Content, TOC observer, Navigation, Lightbox).
+  - `components/home/`: Editorial cover flip deck — `HomeCover`, `HomeFeature`, `HomeLatestRow`, `HomeHotLedger`, `HomePageRail`.
+  - `components/post/`: Article reader enhancements (`PostHero`, `PostToc`, `PostSequenceNav`, `RelatedPostsGrid`, `ImageLightbox`).
+  - `components/posts/`: Directory page — `ArchiveLedger.vue` (the single year-grouped index) + `PostsToolbox.vue` (category filter + search).
   - `components/pet/`: Interactive desktop pet mascot (`CatPet.vue`, `CatAvatar.vue`). Text-free by design: single click = scroll to top, press-and-hold (or `P` when focused) = pet, drag = reposition (persisted, clamped to viewport), right-click or `M` = toggle sound, typing = bongo reaction. No speech bubble / tooltip strings.
 - **Styling**: `styles/editorial.css` aggregating 12 cascade-ordered modules based on CSS custom properties. Sub-page vertical rhythm (`/posts`, `/about`, article detail) is viewport-height fluid via `clamp(..., N svh, <original>)` so the footer lands inside the first screen; `footer.css` drives the sticky-colophon flex chain through `.print-shell:has(> .print-main > .print-subpage | .print-post-view)`.
 

@@ -349,17 +349,10 @@
   color: var(--accent);
 }
 
-.article-toolbox {
-  margin: -0.7rem 2.5rem 1.2rem;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
-  gap: 1rem;
-  align-items: stretch;
-}
+/* `.article-toolbox` / `.article-search` / `.article-directory-meta` 的完整外观
+   由 posts.css 负责（文章目录是它们唯一的宿主）——此前这三者在 pages.css、
+   footer.css、compat.css 里各有一份互相覆盖的副本，层级真相分散在四处。 */
 
-/* `.article-search` 的完整外观由 posts.css 负责（目录页是它唯一的宿主） */
-
-.article-search button,
 .article-directory-meta button {
   padding: 0;
   color: var(--accent);
@@ -476,10 +469,6 @@
   .article-toolbox,
   .quiet-about-layout {
     grid-template-columns: 1fr;
-  }
-
-  .home-hot-row__meta {
-    justify-items: start;
   }
 }
 

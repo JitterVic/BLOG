@@ -27,19 +27,6 @@ import { applyViewMode } from "./workspace.js";
 let publishValidationPending = false;
 let pendingPublishSubmitter = null;
 
-export function isSafeCoverUrl(value) {
-  if (!value) return true;
-  return /^https?:\/\//i.test(value) || /^\/uploads\/media\/[^/?#]+$/.test(value);
-}
-
-export function focusValidationError(field, message) {
-  if (!field) return false;
-  field.setAttribute("aria-invalid", "true");
-  field.focus();
-  setSaveState("error", message);
-  return false;
-}
-
 export function syncWriteStatusUI(status = "draft") {
   const badge = document.getElementById("write-status-badge");
   const normalized = status === "published" ? "published" : "draft";
@@ -58,22 +45,6 @@ export function updateSlugHint() {
   const value = slugInput.value.trim();
   const hasNonAscii = /[^\x00-\x7F]/.test(value);
   hint.hidden = !(value && hasNonAscii);
-}
-
-export function countUnclosedFences(markdown = "") {
-  let open = 0;
-  for (const line of String(markdown).split(/\r?\n/)) {
-    if (/^\s*```/.test(line)) open += 1;
-  }
-  return open % 2 === 1;
-}
-
-export function hasHeadingSpaceIssues(markdown = "") {
-  return /(?:^|\n)#{1,6}[^#\s\n]/.test(String(markdown));
-}
-
-export function hasSectionHeadings(markdown = "") {
-  return /(?:^|\n)##\s+\S/.test(String(markdown));
 }
 
 function fieldForValidation(field) {

@@ -18,6 +18,3 @@ export function highlightDeclared(code, hljs = window.hljs) {
   return language;
 }
 
-export function highlightAll(root, hljs = window.hljs) {
-  root?.querySelectorAll("pre code").forEach((code) => highlightDeclared(code, hljs));
-}

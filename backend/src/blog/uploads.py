@@ -120,10 +120,3 @@ def validate_image_upload(file_storage, *, max_bytes: int, max_pixels: int) -> b
         raise ValueError(f"图片尺寸过大，请控制在 {max_pixels:,} 像素以内。")
     return raw_bytes
 
-
-def upload_limits() -> tuple[int, int, int]:
-    """读取环境变量中的上传上限（文件/图片字节数/图片像素数）。"""
-    max_file_bytes = env_int("BLOG_MAX_UPLOAD_BYTES", 10 * 1024 * 1024, minimum=1)
-    max_image_bytes = env_int("BLOG_MAX_IMAGE_BYTES", DEFAULT_MAX_IMAGE_BYTES, minimum=1)
-    max_image_pixels = env_int("BLOG_MAX_IMAGE_PIXELS", DEFAULT_MAX_IMAGE_PIXELS, minimum=1)
-    return max_file_bytes, max_image_bytes, max_image_pixels

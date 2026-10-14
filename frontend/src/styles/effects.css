@@ -1,9 +1,7 @@
-/* 装饰与性能层：纸纹性能优化、光标墨迹、浮动猫及其降级 */
-/* ==========================================================================
-   PERFORMANCE PASS — fewer layers, no perpetual background canvas
-   ========================================================================== */
+/* 装饰与性能层：纸纹、光标墨迹、浮动猫及其降级。 */
 
-/* Replace full-viewport turbulence SVG layers with a cheap static paper grain. */
+/* 静态纸纹取代原先整屏的 turbulence SVG 滤镜层：观感接近，但不再需要
+   持续合成的全屏图层。 */
 body::before {
   background-image:
     radial-gradient(circle, rgba(42, 36, 28, 0.16) 0.45px, transparent 0.55px),
@@ -13,13 +11,7 @@ body::before {
   mix-blend-mode: multiply;
 }
 
-body::after {
-  display: none;
-}
-
-/* The old network particle canvas is no longer mounted; keep stale builds harmless. */
-
-/* Blur filters and persistent will-change layers were costly during scroll. */
+/* 滚动期间常驻的 blur 与 will-change 图层开销明显，这里统一关掉。 */
 .page-fade-enter-active,
 .page-fade-leave-active,
 .rv,

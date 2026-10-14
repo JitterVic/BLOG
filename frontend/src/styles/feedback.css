@@ -256,8 +256,6 @@
   letter-spacing: 0.08em;
 }
 
-/* Post card polish (legacy / related uses) */
-
 /* Mobile nav open state */
 .print-nav.menu-open {
   background: rgba(244, 239, 230, 0.98);
@@ -826,18 +824,8 @@ html.motion-off .rv.vis {
   transform: translate3d(-28px, 0, 0);
 }
 
-.rv--right {
-  transform: translate3d(28px, 0, 0);
-}
-
-.rv--scale {
-  transform: translate3d(0, 12px, 0) scale(0.94);
-}
-
 .rv.vis,
-.rv--left.vis,
-.rv--right.vis,
-.rv--scale.vis {
+.rv--left.vis {
   transform: translate3d(0, 0, 0) scale(1);
 }
 

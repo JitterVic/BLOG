@@ -1,9 +1,10 @@
 /* 文章目录：单一编年索引（筛选工具条 + 年份分组 ledger） */
-/* Posts directory — a single year-grouped index */
+/* Posts directory — the only owner of the directory page's own components. */
 
+/* 工具条：视觉外观在这里定义一次；子页面的内距/下边距由 footer.css 那条
+   `!important` 的视口流式规则接管（它优先级更高，此处不再重复声明同一属性）。 */
 .article-toolbox {
   margin: 0 2.5rem clamp(0.5rem, 1.4svh, 1.6rem);
-  padding-bottom: clamp(0.5rem, 1.4svh, 1.1rem);
   display: flex;
   justify-content: space-between;
   align-items: center;

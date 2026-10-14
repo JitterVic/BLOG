@@ -2,14 +2,12 @@
 :root {
         color-scheme: light;
         --paper: #f4efe6;
-        --paper-mid: #ebe5d8;
         --paper-dark: #ddd6c5;
         --ink: #1c1710;
         --ink-mid: #3b3328;
         --ink-light: #5e5548;
         --ink-faded: #8a7f6f;
         --accent: #8b2500;
-        --accent-light: #b84a2a;
         --rule: #2a241c;
         --rule-light: rgba(42, 36, 28, 0.2);
         --rule-mid: rgba(42, 36, 28, 0.42);

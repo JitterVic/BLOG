@@ -1,4 +1,4 @@
-﻿const mediaSearch = document.getElementById("media-search");
+const mediaSearch = document.getElementById("media-search");
 const mediaReferenceFilter = document.getElementById("media-reference-filter");
 const mediaCards = Array.from(document.querySelectorAll("[data-media-card]"));
 const mediaCount = document.getElementById("media-count");

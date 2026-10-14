@@ -1,9 +1,7 @@
-/* 页脚与页面主题：colophon 版式、页面色调、章节编号与角标 */
-/* ==========================================================================
-   FOOTER + PAGE TONES + SECTION NUMBERING — user feedback pass
-   ========================================================================== */
+/* 页脚与页面主题：colophon 版式、页面色调、章节编号与角标。 */
 
-/* Footer: override legacy flex rules that broke the print colophon */
+/* 页脚版式收口：layout.css 里的 flex 基线会把 colophon 拆坏，这里用更高的
+   权重重新定义它的盒模型。 */
 .print-shell > .print-colophon.site-footer,
 .page-shell > .print-colophon.site-footer {
   position: relative;
@@ -137,21 +135,6 @@
   text-transform: uppercase;
 }
 
-.colophon-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.colophon-list li {
-  margin: 0;
-  color: var(--ink-faded);
-  font-size: 0.58rem;
-  line-height: 1.75;
-}
-
 .colophon__legal {
   width: min(1180px, 100%);
   margin: 1.6rem auto 0 !important;
@@ -240,7 +223,6 @@
   background: rgba(255, 253, 247, 0.35);
   border: 1px solid var(--rule-light);
   padding: 0.85rem;
-  margin-bottom: 1.4rem;
 }
 
 /* 视口高度流式压缩：矮屏让文章工具条占用更少纵向空间，为页脚让出首屏。

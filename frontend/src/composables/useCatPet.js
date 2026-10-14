@@ -186,7 +186,6 @@ export function useCatPet({ shouldIgnoreKey } = {}) {
 
       const dx = e.clientX - centerX;
       const dy = e.clientY - centerY;
-      const dist = Math.hypot(dx, dy) || 1;
 
       // 归一化限制在 -1 ~ 1
       gazeX.value = Math.max(-1, Math.min(1, dx / Math.max(window.innerWidth * 0.4, 200)));
