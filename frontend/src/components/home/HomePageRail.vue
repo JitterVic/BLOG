@@ -138,10 +138,10 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:not(.motion-on) .rail-button,
-  html:not(.motion-on) .rail-button__tick,
-  html:not(.motion-on) .rail-fade-enter-active,
-  html:not(.motion-on) .rail-fade-leave-active {
+  html:not(.app-ready) .rail-button,
+  html:not(.app-ready) .rail-button__tick,
+  html:not(.app-ready) .rail-fade-enter-active,
+  html:not(.app-ready) .rail-fade-leave-active {
     transition: none;
   }
 }

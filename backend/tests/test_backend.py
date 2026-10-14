@@ -628,22 +628,57 @@ def test_stagger_delay_is_capped():
     assert "Math.min(staggerIndex, MAX_STAGGER_STEPS)" in reveal
 
 
-def test_motion_override_toggles_both_root_classes():
-    """动效开关必须成对切换 `motion-off` 与 `motion-on`。
+def test_motion_is_on_by_default_regardless_of_system_preference():
+    """入场动效默认开启，不因系统 `prefers-reduced-motion` 而整站停用。
 
-    CSS 里用 `html:not(.motion-on)` 作为 reduced-motion 兜底的选择器。
-    若只加 `motion-off`、从不加 `motion-on`，那个 `:not()` 会恒为真，
-    用户在系统 reduce 下手动开启动效将完全无效（实测位移始终为 0）。
+    本站以视觉呈现为主，动效属于版式的一部分：页面切换就应当播放。因此
+    `motionDisabled()` 只认手动开关，媒体查询只在应用接管前（`html:not(.app-ready)`）
+    作为无 JS 兜底存在。
     """
     reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert 'classList.toggle("motion-off", disabled)' in reveal
-    assert 'classList.toggle("motion-on", !disabled)' in reveal
+    motion_fn = reveal.split("export function motionDisabled()", 1)
+    assert len(motion_fn) == 2, "找不到 motionDisabled()"
+    body = motion_fn[1].split("\n}", 1)[0]
+    assert "MOTION_STORAGE_KEY" in body
+    assert "prefers-reduced-motion" not in body, (
+        "motionDisabled() 不应再读取系统偏好——动效默认开启"
+    )
 
-    # 兜底选择器必须带 :not(.motion-on)，否则手动覆盖无从生效
+    # CSS 兜底必须限定在应用接管之前，否则系统开关会整站抹掉动效
     for name in ("feedback.css", "layout.css", "home.css"):
         css = Path("frontend/src/styles", name).read_text(encoding="utf-8")
         if "prefers-reduced-motion" in css:
-            assert ":not(.motion-on)" in css, f"{name} 的 reduced-motion 兜底缺少 :not(.motion-on)"
+            assert "html:not(.app-ready)" in css, f"{name} 的 reduced-motion 兜底缺少 html:not(.app-ready)"
+
+    # main.js 必须在挂载前打上 app-ready
+    main = Path("frontend/src/main.js").read_text(encoding="utf-8")
+    assert 'classList.add("app-ready")' in main
+
+
+def test_no_motion_toggle_button_in_header():
+    """站头不再提供动效开关（动效默认开启，无需 UI 入口）。"""
+    header = Path("frontend/src/components/SiteHeader.vue").read_text(encoding="utf-8")
+    assert "toggleMotion" not in header
+    assert "print-nav__motion" not in header
+    css = Path("frontend/src/styles/header.css").read_text(encoding="utf-8")
+    assert "print-nav__motion" not in css
+
+
+def test_route_change_replays_entry_animation():
+    """每次页面切换都要重播入场动效，不能只在首次加载时出现。
+
+    路由视图虽然用 `:key` 强制重建，但重建后的元素初始就在视口内时，观察器回调
+    与 Vue 补丁存在竞态，会出现「切回来是静止的」。需要在过渡结束后显式重播。
+    """
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    assert "replayPageReveal" in app, "App.vue 需要在页面切换后重播入场动效"
+    assert '@after-enter="replayPageReveal"' in app, "重播应挂在过渡结束时机上"
+    assert "replayReveal" in app, "需要从 useReveal 取用重播能力"
+
+    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
+    assert "function replayReveal(" in reveal
+    # 必须强制一次样式计算，否则同一任务内的摘类/加类不会触发过渡
+    assert "void root.offsetWidth;" in reveal
 
 
 def test_home_flip_replays_reveal_for_target_page():
@@ -665,7 +700,9 @@ def test_home_flip_replays_reveal_for_target_page():
     # 必须强制一次样式计算，否则同一任务内的摘类/加类不会触发过渡
     assert "void root.offsetWidth;" in reveal
 
-    """reduced-motion 下逐字浮现必须保留淡入，只去掉位移。
+
+def test_motion_off_keeps_the_split_text_fade():
+    """手动关闭动效时，逐字浮现必须保留淡入，只去掉位移。
 
     曾经的降级写法是 `transition: none; opacity: 1; transform: none`，等于把品牌
     动效连同时长一起取消——实测加载页标题全程 op=1.00 且无位移，开场节奏完全消失
@@ -674,16 +711,8 @@ def test_home_flip_replays_reveal_for_target_page():
     """
     css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
 
-    # 取包含 .split-text__char 的那个 reduced-motion 块（文件里有多个降级块），
-    # 再从中取出 .split-text__char 这一条规则单独断言。
-    blocks = re.findall(
-        r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\n\}", css, re.S
-    )
-    target = [b for b in blocks if ".split-text__char" in b]
-    assert target, "找不到针对逐字浮现的 reduced-motion 降级块"
-
-    rules = re.findall(r"\.split-text__char\s*\{([^}]*)\}", target[0], re.S)
-    assert rules, "降级块里找不到 .split-text__char 规则"
+    rules = re.findall(r"html\.motion-off \.split-text__char\s*\{([^}]*)\}", css, re.S)
+    assert rules, "找不到手动关闭动效时的 .split-text__char 规则"
     rule = "\n".join(rules)
 
     # 只把位移归零
@@ -691,10 +720,10 @@ def test_home_flip_replays_reveal_for_target_page():
 
     # 不得「连同淡入一起取消」：这会丢掉加载页唯一的开场动效
     assert "transition: none" not in rule, (
-        "reduced-motion 不得用 `transition: none` 取消逐字浮现（会丢掉开场动效）"
+        "不得用 `transition: none` 取消逐字浮现（会丢掉开场动效）"
     )
     assert "opacity: 1" not in rule, (
-        "reduced-motion 不得直接把 opacity 设为 1（会跳过逐字淡入）"
+        "不得直接把 opacity 设为 1（会跳过逐字淡入）"
     )
 
     # 基准态仍需保留位移与透明度过渡，作为「保留时长」的前提

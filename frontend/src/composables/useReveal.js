@@ -14,13 +14,6 @@ const MAX_STAGGER_STEPS = 8;
 // 手动关闭动效的存储键（值为 "off" 时停用入场动效并立即显示全部内容）。
 export const MOTION_STORAGE_KEY = "zhizhi-motion";
 
-function prefersReducedMotion() {
-  if (typeof window === "undefined" || !window.matchMedia) {
-    return false;
-  }
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 function revealAll(root, selector) {
   if (!root) return;
   const query = selector.includes(":not(.vis)")
@@ -36,41 +29,20 @@ function revealAll(root, selector) {
 }
 
 /**
- * 用户是否显式要求关闭动效。
- * 判定两个来源：
- * 1. 系统/浏览器的 `prefers-reduced-motion`（Windows「显示动画」关闭时 Chrome/Edge 会上报 reduce）；
- * 2. `localStorage.zhizhi-motion`，用于在本机偏好与系统设置不一致时手动覆盖：
- *    "off" 强制关闭，"on" 强制开启（可覆盖系统 reduce），未设置则跟随系统。
+ * 是否停用入场动效。
+ *
+ * 默认**不停用**：本站以视觉呈现为主，动效是版式的一部分，页面切换就应当播放，
+ * 不能因为操作系统层面关了「显示动画」就整站变成静态（那样首页会失去开场的层次）。
+ * 只保留一个手动开关（`localStorage.zhizhi-motion = "off"`）供需要时使用。
  */
 export function motionDisabled() {
+  if (typeof window === "undefined") return false;
   try {
-  const stored = window.localStorage.getItem(MOTION_STORAGE_KEY);
-  if (stored === "off") return true;
-  if (stored === "on") return false;
+  return window.localStorage.getItem(MOTION_STORAGE_KEY) === "off";
   } catch {
-  // 隐私模式下 localStorage 不可用，跟随系统偏好。
+  // 隐私模式：视为默认开启。
+  return false;
   }
-  return prefersReducedMotion();
-}
-
-/** 系统/浏览器层面的动效偏好（不含手动覆盖），供开关显示初始状态。 */
-export function systemMotionDisabled() {
-  return prefersReducedMotion();
-}
-
-/**
- * 把「关闭动效」状态同步到根元素。
- *
- * 必须成对切换两个类，二者缺一不可：
- * - `motion-off`：关闭时启用降级样式；
- * - `motion-on`：**开启时**也要打标，因为 CSS 里用 `html:not(.motion-on)` 作为
- *   reduced-motion 兜底的选择器——若只加 `motion-off` 而从不加 `motion-on`，
- *   那个 `:not()` 会恒为真，用户手动开启动效在系统 reduce 下完全失效。
- */
-export function applyMotionClass(disabled) {
-  if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle("motion-off", disabled);
-  document.documentElement.classList.toggle("motion-on", !disabled);
 }
 
 /**
@@ -130,27 +102,19 @@ export function useReveal(options = {}) {
     });
   }
 
-  /** 摘掉根元素上的 motion-off 标记（手动开启动效后需要让 CSS 回到动画态）。 */
+  /** 手动关闭动效时给根元素打标记（`zhizhi-motion = "off"`，无 UI 入口）。 */
   function syncMotionClass() {
-    applyMotionClass(motionDisabled());
-  }
-
-  // 首次观察前先对齐一次根元素标记：main.js 只在挂载前读过一次 localStorage，
-  // 之后若用户改了设置（或系统偏好变化），这里要跟上。
-
-  /** 供外部（如站头开关）在切换动效偏好后立即重算揭示状态。 */
-  function refreshMotion() {
-    syncMotionClass();
-    disconnect();
-    refresh();
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("motion-off", motionDisabled());
   }
 
   /**
-   * 让 `root` 内的 `.rv` 重新入场（用于首页整屏翻页：翻页时正文不滚动，
-   * IntersectionObserver 不会重新触发，被切走的版面也因此不会重播）。
+   * 让 `root` 内的 `.rv` 重新入场（用于首页整屏翻页与路由切换：这两种情况下正文
+   * 并不滚动，IntersectionObserver 不会重新触发，被切走的版面也因此不会重播）。
    *
-   * 分两帧做完：先摘掉 `.vis` 回到基准态，下一帧再标回——否则同一帧内增删
-   * 类名不会触发过渡。逐元素延迟沿用 `data-reveal-delay`，与观察器路径一致。
+   * 必须先摘掉 `.vis` 回到基准态，并**强制一次样式计算**（读 offsetWidth）——
+   * 只靠 rAF 不足以保证浏览器在「摘掉 .vis」和「加回 .vis」之间真的产出一帧中间
+   * 样式，实测那样不会触发过渡（vis 在 2 帧内 4→0→4，但 opacity 始终是 4）。
    */
   function replayReveal(root) {
     if (!root || typeof window === "undefined") return;
@@ -161,9 +125,6 @@ export function useReveal(options = {}) {
       return;
     }
 
-    // 先回到基准态，并**强制一次样式计算**（读 offsetWidth）——只靠 rAF 不足以保证
-    // 浏览器在「摘掉 .vis」和「加回 .vis」之间真的产出一帧中间样式，
-    // 实测那样不会触发过渡（vis 在 2 帧内 4→0→4，但 opacity 始终是 4）。
     targets.forEach((el) => el.classList.remove("vis"));
     void root.offsetWidth;
 
@@ -264,7 +225,6 @@ export function useReveal(options = {}) {
 
   return {
     refresh,
-    refreshMotion,
     replayReveal,
     resetReveal,
     disconnect,

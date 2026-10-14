@@ -354,11 +354,12 @@
   }
 }
 
-/* 关闭动效：两套触发方式共用同一组声明——
-   ① `html.motion-off`（由 main.js / SiteHeader 依据「系统偏好 + 手动覆盖」打标）；
-   ② `@media (prefers-reduced-motion: reduce)` 作为无 JS 时的兜底，
-      但要排除用户手动开启（`html.motion-on`），否则手动开关形同虚设。
-   判定集中在 useReveal 的 motionDisabled()：localStorage 的 "on"/"off" 覆盖系统偏好。 */
+/* 关闭动效的两条路径，必须与 useReveal.motionDisabled() 的判定一致：
+   ① `html.motion-off`（手动开关，应用层唯一会主动关闭动效的入口）；
+   ② `@media (prefers-reduced-motion: reduce)` **仅在系统偏好为「减弱」且页面尚未
+      由应用接管时**生效（`html:not(.app-ready)`）——用于首帧无 JS 时的兜底。
+      页面一旦挂载（main.js 打上 `app-ready`），动效即按站点设计正常播放：
+      本站以视觉呈现为主，动效属于版式的一部分，不应被系统开关整站抹平。 */
 html.motion-off .page-fade-enter-active,
 html.motion-off .page-fade-leave-active,
 html.motion-off .rv,
@@ -387,28 +388,28 @@ html.motion-off .rv.vis {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:not(.motion-on) .page-fade-enter-active,
-  html:not(.motion-on) .page-fade-leave-active,
-  html:not(.motion-on) .rv,
-  html:not(.motion-on) .rv.vis,
-  html:not(.motion-on) .print-feature-image,
-  html:not(.motion-on) .print-feature-image .print-feature-art,
-  html:not(.motion-on) .print-list-item,
-  html:not(.motion-on) .print-article-strip,
-  html:not(.motion-on) .quiet-about-card,
-  html:not(.motion-on) .home-index-row,
-  html:not(.motion-on) .home-hot-row,
-  html:not(.motion-on) .home-hot-row__rank,
-  html:not(.motion-on) .print-nav__progress span,
-  html:not(.motion-on) .print-menu-button span {
+  html:not(.app-ready) .page-fade-enter-active,
+  html:not(.app-ready) .page-fade-leave-active,
+  html:not(.app-ready) .rv,
+  html:not(.app-ready) .rv.vis,
+  html:not(.app-ready) .print-feature-image,
+  html:not(.app-ready) .print-feature-image .print-feature-art,
+  html:not(.app-ready) .print-list-item,
+  html:not(.app-ready) .print-article-strip,
+  html:not(.app-ready) .quiet-about-card,
+  html:not(.app-ready) .home-index-row,
+  html:not(.app-ready) .home-hot-row,
+  html:not(.app-ready) .home-hot-row__rank,
+  html:not(.app-ready) .print-nav__progress span,
+  html:not(.app-ready) .print-menu-button span {
     animation: none !important;
     transition: none !important;
   }
 
-  html:not(.motion-on) .page-fade-enter-from,
-  html:not(.motion-on) .page-fade-leave-to,
-  html:not(.motion-on) .rv,
-  html:not(.motion-on) .rv.vis {
+  html:not(.app-ready) .page-fade-enter-from,
+  html:not(.app-ready) .page-fade-leave-to,
+  html:not(.app-ready) .rv,
+  html:not(.app-ready) .rv.vis {
     opacity: 1 !important;
     filter: none !important;
     transform: none !important;
@@ -1012,24 +1013,8 @@ html.motion-off .rv.vis {
    这里改成「保留时长、去掉位移」——transition 仍在，但位移量取 0，
    于是只做逐字淡入：没有运动感，但不丢开场层次。
    加载页（InitialLoader）里这段逐字浮现是唯一的开场动效，取消后画面近乎静止。 */
-/* 手动关闭动效（html.motion-off）与 reduced-motion 采用完全相同的处理：
-   保留逐字淡入与时长，只把基准位移归零。 */
-@media (prefers-reduced-motion: reduce) {
-  html:not(.motion-on) .split-text__char {
-    transform: none;
-  }
-
-  html:not(.motion-on) .spin-seal__ring {
-    animation: none;
-  }
-
-  html:not(.motion-on) .route-progress__fill {
-    transition: none;
-  }
-}
-
-/* 手动关闭动效（html.motion-off）与 reduced-motion 采用完全相同的处理：
-   保留逐字淡入与时长，只把基准位移归零。 */
+/* 逐字浮现：手动关闭动效时保留淡入时长、只把位移归零（去掉运动感但不丢节奏）。
+   系统 `prefers-reduced-motion` 不再影响此处——动效默认开启，见文件顶部说明。 */
 html.motion-off .split-text__char {
   transform: none;
 }

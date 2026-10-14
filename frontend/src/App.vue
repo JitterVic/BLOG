@@ -15,7 +15,20 @@ import { useSite } from "./composables/useSite";
 
 const route = useRoute();
 const { site, ensureSite } = useSite();
-const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: true });
+const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: true });
+
+/**
+ * 页面切换后重播入场动效。
+ *
+ * 路由视图用 `:key="viewRoute.fullPath"` 强制重建，DOM 是新的，理论上观察器会
+ * 重新处理；但重建后的元素初始就落在视口内时，观察器回调与 Vue 补丁存在竞态，
+ * 会出现「切回来是静止的」。这里在过渡结束（页面已就位）后显式重播一次，
+ * 保证每次切页都能看到入场层次。
+ */
+function replayPageReveal() {
+  const view = document.querySelector(".print-main > .print-page, .print-main > .home-view, .print-main > .print-subpage, .print-main > .print-post-view");
+  replayReveal(view || document.querySelector(".print-main"));
+}
 
 const pageTheme = computed(() => {
   const name = route.name;
@@ -71,7 +84,7 @@ onBeforeUnmount(() => {
 
     <main class="app-main print-main">
       <router-view v-slot="{ Component, route: viewRoute }">
-        <Transition name="page-fade" mode="out-in" @after-enter="refreshReveal">
+        <Transition name="page-fade" mode="out-in" @after-enter="replayPageReveal">
           <component :is="Component" :key="viewRoute.fullPath" />
         </Transition>
       </router-view>
