@@ -183,15 +183,15 @@ class PostService:
         if not excerpt:
             add(warnings, "missing_excerpt", "excerpt", '未填写摘要，发布时将自动生成。')
         if not category:
-            add(warnings, "missing_category", "category", '建议填写文章分类，方便前台组织内容。')
+            add(warnings, "missing_category", "category", '建议填写栏目，方便前台组织内容。')
         elif not is_preset_category(category):
-            # 前台只按栏目筛选；栏目录入得越随意，筛选条越会退化成第二个标签云。
+            # 栏目是固定词表：前台只按它筛选，放开自由录入就会退化成第二个标签云。
             add(
-                warnings,
-                "off_preset_category",
+                errors,
+                "invalid_category",
                 "category",
-                f'「{category}」不在预设栏目内（{" / ".join(CATEGORY_PRESETS)}）。'
-                '栏目越少前台越整洁，建议复用已有栏目；细分类请写进标签或关键词。',
+                f'栏目必须是以下之一：{" / ".join(CATEGORY_PRESETS)}。'
+                '细分类请写进标签或关键词。',
             )
         if not tags:
             add(warnings, "missing_tags", "tags", '建议至少填写一个标签。')

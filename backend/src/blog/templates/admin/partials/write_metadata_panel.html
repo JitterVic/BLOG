@@ -2,7 +2,7 @@
   <div class="author-drawer__head"><div><span>Article settings</span><h2 id="metadata-panel-title">文章设置</h2></div><button type="button" data-close-panel="metadata-panel" aria-label="关闭文章设置">×</button></div>
   <div class="author-drawer__body">
     <div class="form-grid">
-      <label class="field"><span>栏目</span><input type="text" name="category" value="{{ edit_post.category }}" placeholder="例如：算法 / 工程 / 教学" maxlength="120" list="category-suggestions" /><small class="field-hint">前台只按「栏目」筛选，因此栏目要少而稳定；细粒度的分类留给标签与关键词。</small></label>
+      <label class="field"><span>栏目</span><select name="category" id="category"><option value="">未分类</option>{% for item in category_presets %}<option value="{{ item }}"{% if edit_post.category == item %} selected{% endif %}>{{ item }}</option>{% endfor %}{% if edit_post.category and edit_post.category not in category_presets %}<option value="{{ edit_post.category }}" selected>{{ edit_post.category }}（不在预设内，请改选）</option>{% endif %}</select><small class="field-hint">前台只按「栏目」筛选，因此固定为这六个预设；细分类请写进标签或关键词。</small></label>
       <label class="field"><span>标签</span><input type="text" id="tags" name="tags" value="{{ edit_post.tags_text }}" placeholder="Flask, Vue, Blog" maxlength="1200" /><small class="field-hint">可从已有标签中选择，或继续输入新标签。</small><div class="tag-suggestions" id="tag-suggestions">{% for item in taxonomy.tags %}<button type="button" data-suggest-tag="{{ item }}">#{{ item }}</button>{% endfor %}</div></label>
       <label class="field-wide"><span>关键词</span><input type="text" id="keywords" name="keywords" value="{{ edit_post.keywords_text }}" placeholder="闭包, 快慢指针, 复杂度分析" maxlength="1200" /><small class="field-hint">只用于站内搜索，不会显示在任何页面上。别名、同义词、英文写法放这里最合适。</small></label>
       <label class="field-wide"><span>Slug</span><div class="field-inline"><input type="text" id="slug" name="slug" value="{{ edit_post.slug }}" data-slug-input placeholder="留空自动生成" maxlength="240" /><button type="button" id="generate-slug-button">生成短链</button></div><small id="slug-hint" class="field-hint" hidden>中文链接会被编码，建议使用英文短链。</small></label>
@@ -12,7 +12,6 @@
       <label class="field-wide"><span>题记</span><input type="text" name="hero_quote" value="{{ edit_post.hero_quote }}" placeholder="显示在标题下方的短句" maxlength="1000" /></label>
       <label class="field-wide"><span>文章封面图</span><input type="text" id="cover_image" name="cover_image" value="{{ edit_post.cover_image }}" placeholder="/uploads/media/xxx.png 或 https://example.com/cover.jpg" maxlength="2048" /></label>
     </div>
-    <datalist id="category-suggestions">{% for item in taxonomy.categories %}<option value="{{ item }}"></option>{% endfor %}</datalist>
     <section class="front-preview" aria-label="前台文章展示核对">
       <p class="front-preview__label">Frontend card</p>
       <div class="front-preview__shell">

@@ -75,7 +75,16 @@ export async function importMarkdownFile(file) {
       slugInput.value = data.slug || "";
       updateSlugHint();
     }
-    if (categoryInput) categoryInput.value = data.category || "";
+    if (categoryInput) {
+      // 栏目是固定词表（<select>），赋一个不存在的值会被浏览器静默丢成空串，
+      // 所以在导入时就明确提示，而不是让人以为导入成功了却悄悄丢了栏目。
+      const importedCategory = data.category || "";
+      const knownCategories = [...categoryInput.options].map((option) => option.value);
+      categoryInput.value = knownCategories.includes(importedCategory) ? importedCategory : "";
+      if (importedCategory && categoryInput.value !== importedCategory) {
+        showImportStatus(`原 frontmatter 的栏目「${importedCategory}」不在预设内，已置为未分类；请手动选择。`, true);
+      }
+    }
     if (publishedAtInput) publishedAtInput.value = normalizeDateInput(data.published_at || "");
     if (tagsInput) {
       tagsInput.value = data.tags_text || (Array.isArray(data.tags) ? data.tags.join(", ") : "");

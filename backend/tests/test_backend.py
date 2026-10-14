@@ -282,7 +282,7 @@ def test_writing_editor_phase_three_contract_is_present():
 
 def test_related_posts_uses_compact_query(app_bundle, client):
     _application, store = app_bundle
-    unique_category = "PhaseFiveRelCat"
+    unique_category = CATEGORY_PRESETS[1]
     unique_tag = "phase-five-unique-tag"
     base = {
         "title": "Primary related article",
@@ -297,7 +297,7 @@ def test_related_posts_uses_compact_query(app_bundle, client):
         {
             "title": "Same tags article",
             "slug": "same-tags-related",
-            "category": "OtherCat",
+            "category": CATEGORY_PRESETS[2],
             "tags": unique_tag,
             "markdown_content": "# Same tags\n\nBody",
             "published_at": "2099-01-09",
@@ -1009,35 +1009,61 @@ def test_public_api_filters_by_category_and_searches_keywords(client, app_bundle
     assert paged["has_more"] is True
 
 
-def test_off_preset_category_warns_but_does_not_block(app_bundle):
-    """栏目录入得越随意，前台筛选条越会退化成第二个标签云，所以给提示但不拦发布。"""
-    _application, store = app_bundle
-    result = store.validate_post_for_publish(
-        {
-            "title": "标题",
-            "markdown_content": "## 小节\n\n" + "内容" * 120,
-            "excerpt": "摘要",
-            "category": "随手一写",
-            "tags": "标签",
-            "cover_image": "/uploads/media/x.png",
-        }
-    )
-    codes = {item["code"] for item in result["warnings"]}
-    assert "off_preset_category" in codes
-    assert result["ok"] is True, "预设外的栏目只是提示，不应阻止发布"
+def test_category_is_locked_to_the_preset_vocabulary(app_bundle):
+    """栏目是固定词表：只允许预设里的几个值。
 
-    # 预设内不提示
-    fine = store.validate_post_for_publish(
-        {
-            "title": "标题",
-            "markdown_content": "## 小节\n\n" + "内容" * 120,
-            "excerpt": "摘要",
-            "category": CATEGORY_PRESETS[0],
-            "tags": "标签",
-            "cover_image": "/uploads/media/x.png",
-        }
+    前台唯一的粗粒度筛选维度就是栏目。放开自由录入，筛选条迟早会长成第二个标签云，
+    所以这里是硬校验（发布前拦截 + 写入时拒绝），而不是「提示但不拦」。
+    """
+    _application, store = app_bundle
+    base = {
+        "title": "标题",
+        "markdown_content": "## 小节\n\n" + "内容" * 120,
+        "excerpt": "摘要",
+        "tags": "标签",
+        "cover_image": "/uploads/media/x.png",
+    }
+
+    # 预设内通过
+    for preset in CATEGORY_PRESETS:
+        result = store.validate_post_for_publish({**base, "category": preset})
+        assert result["ok"] is True, f"{preset} 应当可以发布"
+        assert "invalid_category" not in {item["code"] for item in result["errors"]}
+
+    # 发布预检（后台发布按钮就读它）必须拦住预设外的栏目
+    bad = store.validate_post_for_publish({**base, "category": "随手一写"})
+    errors = {item["code"]: item["message"] for item in bad["errors"]}
+    assert "invalid_category" in errors
+    assert bad["ok"] is False
+    assert CATEGORY_PRESETS[0] in errors["invalid_category"]
+
+    # 留空仍是「建议填写」，不算错误
+    empty = store.validate_post_for_publish({**base, "category": ""})
+    assert "invalid_category" not in {item["code"] for item in empty["errors"]}
+    assert "missing_category" in {item["code"] for item in empty["warnings"]}
+
+    # 写入路径（导入的 frontmatter、历史存量）不硬拦：约束落在「发布」这道门上，
+    # 由后台的固定下拉框 + 发布预检共同保证对外可见的栏目只来自词表。
+    draft_id = store.save_post(
+        {**base, "slug": "draft-cat", "category": "随手一写"}, action="draft"
     )
-    assert "off_preset_category" not in {item["code"] for item in fine["warnings"]}
+    assert store.get_post_by_id(draft_id)["category"] == "随手一写"
+
+
+def test_admin_category_field_is_a_fixed_select(client, app_bundle):
+    """后台的栏目控件是下拉选择，不是自由输入；标签仍然自由录入。"""
+    login(client)
+    page = client.get("/admin/write").get_data(as_text=True)
+    assert '<select name="category"' in page
+    assert 'name="category"' in page and 'type="text" name="category"' not in page
+    for preset in CATEGORY_PRESETS:
+        assert f'<option value="{preset}"' in page, f"下拉框应包含预设栏目 {preset}"
+    # 旧的自定义 datalist 已由固定下拉框取代
+    assert 'id="category-suggestions"' not in page
+    # 标签仍是自由输入
+    assert 'type="text" id="tags"' in page
+    # 关键词输入也在
+    assert 'name="keywords"' in page
 
 
 def test_stylesheets_have_no_orphaned_selector_fragments():
@@ -1334,7 +1360,7 @@ def post_fields(title="Revision article", slug="revision-article", markdown="# R
         "title": title,
         "slug": slug,
         "markdown_content": markdown,
-        "category": "Testing",
+        "category": CATEGORY_PRESETS[0],
         "tags": "one, two",
         "excerpt": "A test excerpt",
     }
