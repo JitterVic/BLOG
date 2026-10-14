@@ -67,41 +67,6 @@
   border: 1px solid var(--rule-light);
 }
 
-.article-item--has-cover {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px;
-  column-gap: 1.1rem;
-  align-items: start;
-}
-
-.article-item--has-cover > :not(.article-item__thumb) {
-  grid-column: 1;
-}
-
-.article-item__thumb {
-  grid-column: 2;
-  grid-row: 1 / span 4;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  border: 1px solid var(--rule-light);
-}
-
-.article-item__thumb.is-broken {
-  display: none;
-}
-
-/* A broken thumbnail collapses the card back to the plain layout. */
-.article-item--has-cover:has(.article-item__thumb.is-broken) {
-  display: block;
-}
-
-@media (max-width: 640px) {
-  .article-item--has-cover {
-    grid-template-columns: minmax(0, 1fr) 96px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .article-reading-progress {
     transition: none;

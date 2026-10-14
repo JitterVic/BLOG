@@ -148,7 +148,7 @@
   color: var(--accent-light, #b84a2a);
 }
 
-.home-hot-row, .print-list-item, .print-article-strip{
+.home-hot-row, .print-article-strip{
   position: relative;
 }
 
@@ -182,21 +182,9 @@
   transform: scale(1.04);
 }
 
-.print-list-item {
-  transition:
-    transform 0.28s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
-    background 0.28s ease,
-    border-color 0.28s ease,
-    box-shadow 0.28s ease;
-}
 
-.print-list-item:hover,
-.print-list-item:focus-visible {
-  transform: translateY(-3px);
-  background: rgba(244, 239, 230, 0.72);
-  box-shadow: 0 14px 34px rgba(42, 36, 28, 0.08);
-  outline: 0;
-}
+
+
 
 .print-article-strip {
   transition:
@@ -214,13 +202,9 @@
 }
 
 /* Article toolbox active glow */
-.article-view-button {
-  position: relative;
-}
 
-.article-view-button.active strong {
-  letter-spacing: -0.01em;
-}
+
+
 
 .article-search input::placeholder {
   color: var(--ink-faded, var(--soft));
@@ -325,7 +309,7 @@
 }
 
 /* Soft focus rings for keyboard users */
-.cover-button:focus-visible, .print-nav__item:focus-visible, .article-view-button:focus-visible, .tag-filter-button:focus-visible, .home-hot-row:focus-visible{
+.cover-button:focus-visible, .print-nav__item:focus-visible, .tag-filter-button:focus-visible, .home-hot-row:focus-visible{
   outline: 2px solid rgba(139, 37, 0, 0.35);
   outline-offset: 3px;
 }
@@ -337,8 +321,7 @@
   }
 
   .print-feature-image:hover,
-  .print-list-item:hover,
-  .print-article-strip:hover,
+    .print-article-strip:hover,
   .quiet-about-card:hover,
   .home-hot-row:hover {
     transform: none;
@@ -382,7 +365,6 @@ html.motion-off .rv,
 html.motion-off .rv.vis,
 html.motion-off .print-feature-image,
 html.motion-off .print-feature-image .print-feature-art,
-html.motion-off .print-list-item,
 html.motion-off .print-article-strip,
 html.motion-off .quiet-about-card,
 html.motion-off .home-hot-row,
@@ -409,8 +391,7 @@ html.motion-off .rv.vis {
   html:not(.app-ready) .rv.vis,
   html:not(.app-ready) .print-feature-image,
   html:not(.app-ready) .print-feature-image .print-feature-art,
-  html:not(.app-ready) .print-list-item,
-  html:not(.app-ready) .print-article-strip,
+    html:not(.app-ready) .print-article-strip,
   html:not(.app-ready) .quiet-about-card,
   html:not(.app-ready) .home-hot-row,
   html:not(.app-ready) .home-hot-row__rank,

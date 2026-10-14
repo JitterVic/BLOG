@@ -1,28 +1,33 @@
 <script setup>
+/**
+ * 目录页的筛选工具条：左侧标签筛选、右侧搜索。
+ *
+ * 原先这里是「最新 / 归档 / 标签」三视图切换器。三套视图装的是同一批文章、
+ * 只是排布不同，读者要先做一次与内容无关的选择；现在目录只剩编年索引一种形态，
+ * 切换器随之取消，标签从「一个视图」降格为「一个筛选条件」。
+ */
 defineProps({
-  viewOptions: { type: Array, required: true },
-  activeView: { type: String, required: true },
+  tags: { type: Array, required: true },
+  selectedTag: { type: String, default: "全部" },
   searchQuery: { type: String, default: "" },
 });
 
-defineEmits(["set-view", "update:searchQuery", "clear-search"]);
+defineEmits(["set-tag", "update:searchQuery", "clear-search"]);
 </script>
 
 <template>
   <div class="article-toolbox rv">
-    <div class="article-view-switch" role="tablist" aria-label="文章目录视图">
+    <div class="article-tag-filter" role="group" aria-label="按标签筛选">
       <button
-        v-for="item in viewOptions"
-        :key="item.id"
+        v-for="tag in tags"
+        :key="tag"
         type="button"
-        class="article-view-button"
-        :class="{ active: activeView === item.id }"
-        role="tab"
-        :aria-selected="activeView === item.id"
-        @click="$emit('set-view', item.id)"
+        class="tag-filter-button tag"
+        :class="{ active: selectedTag === tag, 'tag--hot': selectedTag === tag }"
+        :aria-pressed="selectedTag === tag"
+        @click="$emit('set-tag', tag)"
       >
-        <strong>{{ item.label }}</strong>
-        <span>{{ item.english }}</span>
+        {{ tag }}
       </button>
     </div>
 

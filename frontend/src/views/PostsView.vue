@@ -4,18 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
 import ArchiveLedger from "../components/posts/ArchiveLedger.vue";
-import PostLatestList from "../components/posts/PostLatestList.vue";
 import PostsToolbox from "../components/posts/PostsToolbox.vue";
-import TagResultsGrid from "../components/posts/TagResultsGrid.vue";
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
-
-const VIEW_OPTIONS = [
-  { id: "latest", label: "最新文章", english: "Latest" },
-  { id: "archive", label: "归档查找", english: "Archive" },
-  { id: "tags", label: "标签筛选", english: "Tags" },
-];
 
 const PAGE_SIZE = 10;
 
@@ -36,7 +28,6 @@ const route = useRoute();
 const router = useRouter();
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
-const activeView = ref("latest");
 const searchQuery = ref("");
 const selectedTag = ref("全部");
 let applyingRouteState = false;
@@ -54,13 +45,9 @@ const tags = computed(() => {
   return ["全部", ...siteTags];
 });
 
-const visiblePosts = computed(() => {
-  if (activeView.value !== "tags" || selectedTag.value === "全部") {
-    return posts.value;
-  }
-
-  return posts.value.filter((post) => post.tags?.includes(selectedTag.value));
-});
+// 标签筛选在服务端完成（`tag` 查询参数），因此翻页与筛选可以并存，
+// 而不必像以前那样为了客户端过滤一次性取回全部文章。
+const visiblePosts = computed(() => posts.value);
 
 const groupedPosts = computed(() => {
   const groups = new Map();
@@ -72,24 +59,20 @@ const groupedPosts = computed(() => {
   return Array.from(groups.entries());
 });
 
+const latestSlug = computed(() => posts.value[0]?.slug || "");
+
 const resultLabel = computed(() => {
-  if (activeView.value === "tags" && selectedTag.value !== "全部") {
-    return `${selectedTag.value} · ${visiblePosts.value.length} 篇`;
-  }
-  const count = activeView.value === "latest" ? total.value : visiblePosts.value.length;
+  const count = total.value;
   if (normalizedQuery.value) {
     return `搜索结果 · ${count} 篇`;
+  }
+  if (selectedTag.value !== "全部") {
+    return `${selectedTag.value} · ${count} 篇`;
   }
   return `共 ${count} 篇文章`;
 });
 
-function setView(view) {
-  activeView.value = view;
-  if (view !== "tags") selectedTag.value = "全部";
-}
-
 function selectTag(tag) {
-  activeView.value = "tags";
   selectedTag.value = tag;
 }
 
@@ -104,7 +87,6 @@ function clearAllFilters() {
 
 function routeQueryKey(query = route.query) {
   return JSON.stringify({
-    view: typeof query.view === "string" ? query.view : "",
     q: typeof query.q === "string" ? query.q : "",
     tag: typeof query.tag === "string" ? query.tag : "",
     page: typeof query.page === "string" ? query.page : "",
@@ -113,10 +95,9 @@ function routeQueryKey(query = route.query) {
 
 function buildRouteQuery({ includePage = true } = {}) {
   const query = {};
-  if (activeView.value !== "latest") query.view = activeView.value;
   if (searchQuery.value.trim()) query.q = searchQuery.value.trim();
-  if (activeView.value === "tags" && selectedTag.value !== "全部") query.tag = selectedTag.value;
-  if (includePage && activeView.value === "latest" && page.value > 1) {
+  if (selectedTag.value !== "全部") query.tag = selectedTag.value;
+  if (includePage && page.value > 1) {
     query.page = String(page.value);
   }
   return query;
@@ -141,26 +122,23 @@ function requestedRoutePage() {
 }
 
 function listParams(requestedPage = 1) {
-  const params = { sort: "latest" };
+  const params = { sort: "latest", page: requestedPage, limit: PAGE_SIZE };
   const q = searchQuery.value.trim();
   if (q) params.q = q;
-  if (activeView.value === "latest") {
-    params.page = requestedPage;
-    params.limit = PAGE_SIZE;
-  }
+  if (selectedTag.value !== "全部") params.tag = selectedTag.value;
   return params;
 }
 
 async function fetchList({ force = false, targetPage = 1 } = {}) {
   const params = listParams(1);
   const key = JSON.stringify(params);
-  if (!force && targetPage === 1 && key === lastFetchedKey) return posts.value;
+  if (!force && key === lastFetchedKey) return posts.value;
   lastFetchedKey = key;
   const restoreId = ++restoreSequence;
   restoringPage = true;
   try {
     await loadPosts(params);
-    if (restoreId !== restoreSequence || targetPage <= 1 || activeView.value !== "latest") {
+    if (restoreId !== restoreSequence || targetPage <= 1) {
       return posts.value;
     }
 
@@ -191,23 +169,18 @@ function scheduleReload() {
 
 async function applyRouteState() {
   applyingRouteState = true;
-  const requestedView = typeof route.query.view === "string" ? route.query.view : "";
   const tag = typeof route.query.tag === "string" ? route.query.tag.trim() : "";
   const query = typeof route.query.q === "string" ? route.query.q : "";
-  const validView = VIEW_OPTIONS.some((item) => item.id === requestedView)
-    ? requestedView
-    : tag
-      ? "tags"
-      : "latest";
+  // 旧的 `?view=tags&tag=x` 链接继续可用：视图维度已取消，tag 直接当作筛选条件。
+  const isValidTag = tag && tags.value.includes(tag);
 
-  activeView.value = validView;
   searchQuery.value = query;
-  selectedTag.value = validView === "tags" && tag ? tag : "全部";
+  selectedTag.value = isValidTag ? tag : "全部";
   await nextTick();
   applyingRouteState = false;
 }
 
-watch([visiblePosts, activeView, loading], () => {
+watch([visiblePosts, loading], () => {
   refreshReveal();
 });
 
@@ -224,20 +197,20 @@ watch(
   { deep: true },
 );
 
-watch([activeView, selectedTag, searchQuery], () => {
+watch([selectedTag, searchQuery], () => {
   scheduleRouteSync({ includePage: false });
 });
 
 watch(page, () => {
-  if (activeView.value === "latest" && !restoringPage) scheduleRouteSync();
+  if (!restoringPage) scheduleRouteSync();
 });
 
-// Typing is debounced; a discrete view switch reloads immediately.
+// Typing is debounced; a discrete tag switch reloads immediately.
 watch(normalizedQuery, () => {
   scheduleReload();
 });
 
-watch(activeView, () => {
+watch(selectedTag, () => {
   if (applyingRouteState) return;
   if (reloadTimer) {
     window.clearTimeout(reloadTimer);
@@ -269,10 +242,10 @@ onBeforeUnmount(() => {
       </div>
 
       <PostsToolbox
-        :view-options="VIEW_OPTIONS"
-        :active-view="activeView"
+        :tags="tags"
+        :selected-tag="selectedTag"
         v-model:search-query="searchQuery"
-        @set-view="setView"
+        @set-tag="selectTag"
         @clear-search="clearSearch"
       />
 
@@ -306,20 +279,10 @@ onBeforeUnmount(() => {
         empty-message="请调整关键词或筛选条件后再试。"
       />
 
-      <PostLatestList v-else-if="activeView === 'latest'" :posts="visiblePosts" />
-
-      <ArchiveLedger v-else-if="activeView === 'archive'" :groups="groupedPosts" />
-
-      <TagResultsGrid
-        v-else
-        :tags="tags"
-        :selected-tag="selectedTag"
-        :posts="visiblePosts"
-        @select-tag="selectTag"
-      />
+      <ArchiveLedger v-else :groups="groupedPosts" :latest-slug="latestSlug" />
 
       <div
-        v-if="activeView === 'latest' && !loading && !error && hasMore"
+        v-if="!loading && !error && hasMore"
         class="home-section-footer"
       >
         <button

@@ -9,7 +9,7 @@ const INTERACTIVE_SELECTOR = [
   "button",
   ".print-feature-image",
   ".home-hot-row",
-  ".print-list-item",
+  ".archive__li",
   ".print-article-strip",
   ".floating-cat",
   ".article-toc button",

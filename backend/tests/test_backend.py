@@ -851,6 +851,68 @@ def test_home_rail_labels_use_names_instead_of_issue_numbers():
     assert "width: 26px" in rail
 
 
+def test_posts_page_is_a_single_year_grouped_index():
+    """文章目录只有一种形态：按年份分组的编年索引。
+
+    原先「最新 / 归档 / 标签」三套视图装的是同一批文章，读者要先做一次与内容
+    无关的选择；标签其实是筛选条件而不是视图。合并后：视图切换器消失，标签降为
+    筛选条，年份由 68px 展示级大字降为分节横杆。
+    """
+    view = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
+    assert "article-view-switch" not in view and "VIEW_OPTIONS" not in view
+    assert "activeView" not in view, "视图维度应已取消"
+    # 只剩索引一个分支
+    assert view.count("<ArchiveLedger") == 1
+    assert "v-else" in view
+    # 标签筛选走服务端（tag 查询参数），因此筛选与翻页可以并存
+    assert 'params.tag = selectedTag.value' in view
+    # 筛选与翻页状态仍需同步到 URL；旧的 ?view= 链接要能继续解析出 tag
+    assert "query.tag = selectedTag.value" in view
+    assert "route.query.tag" in view
+
+    # 已退休的两个视图组件不应残留
+    for gone in ("PostLatestList", "TagResultsGrid"):
+        assert not Path(f"frontend/src/components/posts/{gone}.vue").exists(), f"{gone} 应已下线"
+        assert gone not in view
+
+    # 索引行必须带摘要与阅读时长，否则读者无法从标题判断值不值得点开
+    ledger = Path("frontend/src/components/posts/ArchiveLedger.vue").read_text(encoding="utf-8")
+    assert "archive__excerpt" in ledger and "archive__read" in ledger
+    assert "archive__year-rule" in ledger and "archive__badge" in ledger
+
+    css = Path("frontend/src/styles/posts.css").read_text(encoding="utf-8")
+    # 年份不再是展示级大字
+    year_fs = re.search(r"\.archive__year span \{\s*font-size:\s*clamp\(([^)]+)\)", css)
+    assert year_fs and float(year_fs.group(1).split(",")[0].strip().rstrip("rem")) <= 1.6
+    # 限宽用 em 而非 ch：等宽字体下 1ch 只有约 0.6em，中文占满一个 em
+    assert "max-width: min(100%, 26em)" in css
+    assert "max-width: min(100%, 52em)" in css
+
+    # 退休选择器不能再出现在任何样式文件里（含诸如同权重覆盖用的前缀写法）
+    dead = ("article-view-switch", "article-view-button", "unified-archive-view",
+            "unified-tags-view", "unified-latest-list", "print-list-item",
+            "print-article-list", "print-tag-results", "article-item__thumb")
+    for path in Path("frontend/src/styles").glob("*.css"):
+        text = path.read_text(encoding="utf-8")
+        for token in dead:
+            assert token not in text, f"{path.name} 仍残留已下线选择器 {token}"
+
+
+def test_stylesheets_have_no_orphaned_selector_fragments():
+    """删除规则块时不能留下悬空的选择器行。
+
+    形如 `.a:hover,` 后面直接跟空行再接 `.b { ... }`，浏览器会把 `.b` 并进同一条
+    规则，静默改变另一处的样式——这类错误构建不报、测试不报，只能靠静态校验兜住。
+    """
+    for path in sorted(Path("frontend/src/styles").glob("*.css")):
+        text = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
+        for match in re.finditer(r"([^{}]*)\{", text):
+            selector = match.group(1).strip("\n")
+            if not selector.strip():
+                continue
+            assert "\n\n" not in selector, f"{path.name} 存在悬空选择器：{selector.strip()[:80]}"
+
+
 def test_home_flip_replays_reveal_for_target_page():
     """首页整屏翻页必须显式重播入场动效。
 
