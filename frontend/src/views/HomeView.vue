@@ -6,14 +6,15 @@ import AsyncState from "../components/AsyncState.vue";
 import HomeCover from "../components/home/HomeCover.vue";
 import HomeFeature from "../components/home/HomeFeature.vue";
 import HomeHotLedger from "../components/home/HomeHotLedger.vue";
+import HomeLatestRow from "../components/home/HomeLatestRow.vue";
 import HomePageRail from "../components/home/HomePageRail.vue";
 import { usePageFlip } from "../composables/usePageFlip";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
 
-// 第 2 版只需要最新一篇，取 1 条即可；第 3 版按阅读量取一屏能容纳的条数。
-const LATEST_FETCH_LIMIT = 1;
+// 第 2 版：头条 1 篇 + 次要 2 篇，同一套版式、依次缩小一档。
+const LATEST_FETCH_LIMIT = 3;
 const HOT_FETCH_LIMIT = 5;
 
 const { ensureSite } = useSite();
@@ -28,6 +29,7 @@ let postsController = null;
 let postsRequestSequence = 0;
 
 const leadPost = computed(() => latestPosts.value[0] || null);
+const secondaryPosts = computed(() => latestPosts.value.slice(1));
 
 watch([latestPosts, hotPosts, postsLoading], () => {
   refreshReveal();
@@ -139,9 +141,10 @@ onBeforeUnmount(() => postsController?.abort());
       />
 
       <template v-else>
-        <!-- 第 2 版只呈现「最近」这一篇：这里是最新一篇的完整版面，
-             其余文章交给第 3 版（按阅读量）与文章目录，避免同一批内容在多处重复列举。 -->
+        <!-- 第 2 版：头条用大版式铺满主区，其余 2 篇以同一套版式缩小一档排在下方，
+             形成「头版头条 + 次要稿件」的主从关系；更多文章交给第 3 版与文章目录。 -->
         <HomeFeature v-if="leadPost" :post="leadPost" :site-name="site?.name || '至知'" />
+        <HomeLatestRow v-if="secondaryPosts.length" :posts="secondaryPosts" />
       </template>
 
       <div class="home-section-footer rv">

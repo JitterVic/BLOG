@@ -88,7 +88,6 @@ onUnmounted(() => {
             class="print-nav__item"
             :class="{ active: isActive(item) }"
           >
-            <span class="print-nav__num">{{ String(index + 1).padStart(2, "0") }}</span>
             <span class="print-nav__label">
               <span class="print-nav__label-text">{{ item.label }}</span>
               <svg
@@ -137,13 +136,12 @@ onUnmounted(() => {
       aria-label="移动端导航"
     >
       <RouterLink
-        v-for="(item, index) in navLinks"
+        v-for="item in navLinks"
         :key="item.name"
         :to="item.to"
         :class="{ active: isActive(item) }"
         @click="closeMobileMenu"
       >
-        <span>{{ String(index + 1).padStart(2, "0") }}</span>
         <strong>{{ item.label }}</strong>
         <small>{{ item.english }}</small>
       </RouterLink>

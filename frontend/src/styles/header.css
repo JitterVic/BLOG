@@ -193,18 +193,6 @@
   border: 0 !important;
 }
 
-.print-nav__num {
-  display: inline-block;
-  line-height: 1 !important;
-  transform: none !important;
-}
-
-.print-nav__item:hover .print-nav__num,
-.print-nav__item.active .print-nav__num {
-  transform: none !important;
-  font-size: 0.9rem !important;
-}
-
 .print-nav__label {
   display: inline-block;
   line-height: 1 !important;

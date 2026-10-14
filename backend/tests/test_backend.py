@@ -753,29 +753,33 @@ def test_route_change_replays_entry_animation():
     assert "replayCharAnimations(root)" in reveal
 
 
-def test_latest_page_shows_only_the_newest_post():
-    """第 2 版「最近更新」只呈现最新一篇。
+def test_latest_page_shows_a_lead_plus_two_secondary_posts():
+    """第 2 版是「头版头条 + 两篇次要稿」的主从版面。
 
-    这一版的重点是「最近」——完整呈现当期最新一篇的版面；
-    其余文章交给第 3 版（按阅读量排序）与文章目录，避免同一批内容在多处重复列举
-    （原先还有一条「本期其余」索引，与第 3 版功能重叠且信息密度很低）。
+    头条沿用原有的大版式（HomeFeature）；次要稿用同一套排版语言（分类行 / 标题 / 摘要 /
+    元信息，复用 `.art__t` / `.art__p` / `.art__meta`）但整体缩小一档，
+    因此标题最大字号必须明显小于头条，形成清晰的主从关系。
     """
     home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    assert "HomeLatestIndex" not in home, "第 2 版不应再渲染索引列表"
-    assert "replayReveal(sections[page])" in home
-    # 数据侧只需要最新一篇
-    assert "LATEST_FETCH_LIMIT = 1" in home
+    assert "HomeLatestRow" in home, "第 2 版需要渲染次要稿件行"
+    assert "HomeFeature" in home, "头条保留原有大版式"
+    assert "LATEST_FETCH_LIMIT = 3" in home, "取数要覆盖头条 + 2 篇次要稿"
+    assert "secondaryPosts" in home
 
-    removed = Path("frontend/src/components/home/HomeLatestIndex.vue")
-    assert not removed.exists(), "索引组件已下线，不应残留"
+    row = Path("frontend/src/components/home/HomeLatestRow.vue").read_text(encoding="utf-8")
+    # 复用头条的排版类，保证是「同一套版式」
+    for cls in ("art__t", "art__p", "art__meta"):
+        assert cls in row, f"次要稿应复用 {cls} 以保持同一套版式"
+    # 没有封面图时不渲染空图槽
+    assert 'v-if="post.cover_image"' in row
 
-    # 相关样式与光标交互选择器也要一并清理
-    for name in ("pages.css", "feedback.css", "compat.css"):
-        css = Path("frontend/src/styles", name).read_text(encoding="utf-8")
-        assert "home-index-row" not in css, f"{name} 仍有已下线组件的样式"
-        assert "home-latest-index" not in css, f"{name} 仍有已下线组件的样式"
-    cursor = Path("frontend/src/components/CursorEffects.vue").read_text(encoding="utf-8")
-    assert "home-index-row" not in cursor
+    css = Path("frontend/src/styles/pages.css").read_text(encoding="utf-8")
+    card_title = re.search(r"\.home-secondary-card \.art__t \{[^}]*font-size:\s*clamp\(([^)]+)\)", css, re.S)
+    assert card_title, "找不到次要稿标题的字号规则"
+    assert card_title.group(1).strip().startswith("1rem"), "次要稿标题应从 1rem 起，明显小于头条"
+    # 列数按实际稿件数收缩
+    assert "repeat(var(--row-cols, 2)" in css
+    assert "--row-cols" in row
 
 
 def test_home_flip_replays_reveal_for_target_page():

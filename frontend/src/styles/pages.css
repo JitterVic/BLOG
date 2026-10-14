@@ -33,6 +33,169 @@
   align-items: stretch;
 }
 
+/* --- 第 2 版次要稿件行（Also In This Issue） ---
+   与头条同一套版式（分类行 / 标题 / 摘要 / 元信息），只整体缩小一档：
+   标题 1.05→1.5rem、摘要一行、去掉标签行，靠一条双线与其上的头条分隔。
+   两篇并排，中间用竖线分开，读起来是「头版头条 + 两条次要稿」的主从关系。 */
+.home-latest-row {
+  margin: clamp(0.9rem, 2.2vh, 1.6rem) 2.5rem 0;
+  border-top: 3px double var(--rule);
+}
+
+.home-latest-row__caption {
+  margin: 0;
+  padding: 0.6rem 0.45rem 0;
+  color: var(--ink-faded);
+  font-family: var(--f-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.home-latest-row__grid {
+  display: grid;
+  /* 列数按实际稿件数收缩（只有 1 篇次要稿时不留空列） */
+  grid-template-columns: repeat(var(--row-cols, 2), minmax(0, 1fr));
+}
+
+.home-secondary-card {
+  display: flex;
+  gap: clamp(0.9rem, 2vw, 1.4rem);
+  padding: clamp(0.8rem, 2vh, 1.3rem) 0.45rem;
+  border-right: 1px solid var(--rule-light);
+  transition: color 0.24s ease;
+}
+
+.home-secondary-card:last-child {
+  border-right: 0;
+}
+
+.home-secondary-card__thumb {
+  flex: 0 0 auto;
+  width: clamp(84px, 12vw, 132px);
+  margin: 0;
+  overflow: hidden;
+  background: rgba(42, 36, 28, 0.05);
+}
+
+.home-secondary-card__thumb.is-broken {
+  display: none;
+}
+
+.home-secondary-card__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.15) contrast(1.03);
+}
+
+.home-secondary-card__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+/* 标题 + 摘要作为一组，便于单卡整行时与编号、元信息横向排布 */
+.home-secondary-card__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.home-secondary-card__topline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule-light);
+  color: var(--ink-faded);
+  font-family: var(--f-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-secondary-card__num {
+  color: var(--accent);
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+/* 尺度：标题与摘要各比头条小一档，摘要限一行，保证整行高度可控 */
+.home-secondary-card .art__t {
+  max-width: 24ch;
+  font-size: clamp(1rem, 1.8vw, 1.42rem);
+  line-height: 1.24;
+}
+
+.home-secondary-card .art__p {
+  max-width: 40ch;
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+/* 只有一篇次要稿时整行归它：横向排成一条「简讯」——
+   左起缩略图 / 编号+标题 / 摘要 / 元信息四段铺满整行，
+   否则单卡被拉到 1286px 而内容只占约 620px，右侧空出一大片。 */
+.home-latest-row__grid.is-single .home-secondary-card {
+  align-items: center;
+}
+
+.home-latest-row__grid.is-single .home-secondary-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr) auto;
+  align-items: center;
+  gap: clamp(1rem, 2.4vw, 2.4rem);
+  width: 100%;
+}
+
+.home-latest-row__grid.is-single .home-secondary-card__topline {
+  justify-content: flex-start;
+  gap: 0.7rem;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.home-latest-row__grid.is-single .home-secondary-card__copy .art__t {
+  max-width: none;
+}
+
+.home-latest-row__grid.is-single .home-secondary-card__copy .art__p {
+  max-width: none;
+  -webkit-line-clamp: 2;
+}
+
+.home-latest-row__grid.is-single .art__meta {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.home-secondary-card .art__meta {
+  margin-top: auto;
+  font-size: 0.54rem;
+}
+
+.home-secondary-card:hover .art__t,
+.home-secondary-card:focus-visible .art__t {
+  color: var(--accent);
+}
+
+.home-secondary-card:focus-visible {
+  outline: 2px solid rgba(139, 37, 0, 0.35);
+  outline-offset: 3px;
+}
+
 .home-section-footer {
   padding: 0 2.5rem 4.5rem;
   display: flex;
@@ -569,6 +732,29 @@ html.home-paging .flip-track {
   html.home-paging .home-latest-feature {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  /* 次要稿件行按内容定高（不参与拉伸），让头条吃掉剩余空间：
+     这样即使只有 1 篇次要稿、或某篇标题特别长，也不会把整版顶出屏幕。 */
+  html.home-paging .home-latest-row {
+    flex: 0 0 auto;
+    margin: clamp(0.7rem, 1.8vh, 1.3rem) 2.5rem 0;
+  }
+
+  html.home-paging .home-latest-row__caption {
+    padding-top: clamp(0.35rem, 1vh, 0.6rem);
+  }
+
+  html.home-paging .home-secondary-card {
+    padding: clamp(0.55rem, 1.4vh, 1rem) 0.45rem;
+  }
+
+  html.home-paging .home-secondary-card .art__t {
+    font-size: clamp(0.92rem, 1.7vw, 1.3rem);
+  }
+
+  html.home-paging .home-secondary-card__thumb {
+    width: clamp(72px, 10vw, 112px);
   }
 
   html.home-paging .home-latest-feature .print-feature-image {
