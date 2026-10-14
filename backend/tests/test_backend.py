@@ -574,6 +574,33 @@ def test_toc_scroll_offset_variables_are_in_scope():
         )
 
 
+def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():
+    """矮视口档位的页脚内距必须排在同特异性的基准之后。
+
+    `:has()` 的特异性按其中权重最高的参数计算，因此
+    `.print-shell:has(> .print-main > .print-subpage) > .print-colophon.site-footer`
+    与 `@media (max-height: 780px)` 里的 `.print-shell.page-theme-articles > ...`
+    特异性相同（都是 (0,2,0)），胜负完全由源码顺序决定。矮屏档位一旦排在前面就会被
+    静默吃掉——实测 1366×768 下页脚读到 1.2rem 而非本档的 0.9rem，且不报错。
+    """
+    footer_css = Path("frontend/src/styles/footer.css").read_text(encoding="utf-8")
+    layout_css = Path("frontend/src/styles/layout.css").read_text(encoding="utf-8")
+
+    base = footer_css.index("padding-top: clamp(1.2rem, 2.8svh, 3.6rem) !important")
+    knee = footer_css.index("@media (max-height: 780px)")
+    assert knee > base, "矮视口页脚档位必须排在基准之后，否则被同特异性规则吃掉"
+    assert "padding-top: 0.9rem !important" in footer_css[knee:]
+
+    # 矮屏页脚档位只能存在于 footer.css：layout.css 排在它前面，放那里会被吃掉。
+    # layout.css 里的 `.print-colophon.site-footer` 是基础版式（非 padding 覆盖），
+    # 这里只断言它没有夹带 `!important` 的页脚内距覆盖。
+    for rule in re.findall(r"\{([^}]*)\}", layout_css):
+        if "print-colophon" in rule or "site-footer" in rule:
+            assert "!important" not in rule, (
+                f"layout.css 不应出现页脚内距的 !important 覆盖（会被 footer.css 的基准吃掉）：{rule[:80]}"
+            )
+
+
 def test_import_normalizes_nbsp(app_bundle):
     _application, store = app_bundle
 

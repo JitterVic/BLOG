@@ -53,6 +53,18 @@
   padding-bottom: clamp(0.9rem, 2svh, 2.6rem) !important;
 }
 
+/* 矮视口（≤780px，如 1366×768 笔记本）再压一档页脚内距，为正文让出首屏空间。
+   必须放在上面那条 `!important` 之后：两者特异性相同（`:has()` 按其中最高特异性的
+   参数计算权重，即 .print-colophon.site-footer 的 (0,2,0)），胜负只由源码顺序决定。
+   实测这条曾经被排在前面而被静默吃掉——1366×768 下读到 1.2rem 而非本档的 0.9rem。 */
+@media (max-height: 780px) {
+  .print-shell:has(> .print-main > .print-subpage) > .print-colophon.site-footer,
+  .print-shell:has(> .print-main > .print-post-view) > .print-colophon.site-footer {
+    padding-top: 0.9rem !important;
+    padding-bottom: 0.65rem !important;
+  }
+}
+
 .print-colophon.site-footer::before {
   content: "";
   position: absolute;

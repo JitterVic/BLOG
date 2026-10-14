@@ -49,8 +49,8 @@
 .print-subpage .quiet-about-card{padding:clamp(1rem,2.8svh,3rem) clamp(1.1rem,2.4vw,3rem)}
 .print-subpage .about-chapter-label{margin-bottom:clamp(.15rem,.6svh,.35rem)}
 /* 矮视口（≤780px，如 1366×768 笔记本）再降一档：压缩视口切换与页脚内距。
-   调参提示：Vite dev 下这一档的声明可能被基线覆盖（实测 dev 读到的仍是基线值，
-   生产构建才生效），请用 npm run build 产物复核。 */
+   页脚内距的矮屏档位在 footer.css —— 它必须排在 footer.css 里那条同特异性的
+   `!important` 基准之后才生效，放在本文件里会被那条规则吃掉（实测过）。 */
 @media (max-height: 780px) {
   .print-subpage .article-view-button{min-height:44px;padding:.4rem .8rem}
   .print-subpage .sec-hd,.print-post-view .sec-hd{padding-top:.45rem;padding-bottom:.45rem;margin-bottom:.45rem}
@@ -63,8 +63,6 @@
   .print-subpage .quiet-about-card{padding:.85rem clamp(1.1rem,2.4vw,3rem)}
   .print-subpage .quiet-about-card h2{margin:.4rem 0 .7rem}
   .print-subpage .quiet-contact-list{margin-top:1rem}
-  .print-shell.page-theme-articles > .print-colophon.site-footer,
-  .print-shell.page-theme-about > .print-colophon.site-footer{padding-top:.9rem !important;padding-bottom:.65rem !important}
 }
 .print-subpage__meta{margin:-1rem 2.5rem 2rem;padding-bottom:.7rem;display:flex;justify-content:space-between;gap:1rem;color:var(--ink-faded);border-bottom:1px solid var(--rule-light);font-size:.58rem;letter-spacing:.15em;text-transform:uppercase}.print-feedback{margin:0 2.5rem 2rem;padding:1rem 1.2rem;color:var(--ink-light);background:rgba(244,239,230,.72);border:1px solid var(--rule-light);border-radius:0;font-size:.7rem}.print-list-feature .mimg{min-height:430px}
 .print-article-list{padding:0 2.5rem 3rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}.print-list-item.article-item{min-height:280px;padding:2rem;background:transparent;border:0;border-right:1px solid var(--rule-light);border-bottom:1px solid var(--rule-light);border-radius:0;box-shadow:none}.print-list-item:nth-child(2n){border-right:0}.print-list-item h2{margin:0 0 .8rem;color:var(--ink);font-family:var(--f-display);font-size:clamp(1.55rem,2.6vw,2.35rem);line-height:1.2}.print-list-item p{color:var(--ink-light);font-size:.72rem;line-height:1.8}.print-list-item .post-card-tags{margin-top:1rem}.print-list-item .post-card-tags span{min-height:auto;padding:.2rem .58rem;color:var(--code-fg);background:var(--code-bg);border:0;border-radius:0;font-size:.54rem}.article-meta{color:var(--ink-faded);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase}
