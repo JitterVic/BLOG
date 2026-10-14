@@ -40,7 +40,6 @@ onMounted(async () => {
   <div class="content-view print-subpage quiet-about-page">
     <section class="print-page print-section quiet-about-issue">
       <div class="sec-hd rv">
-        <span class="sec-hd__n">03</span>
         <h1 class="sec-hd__t">关于 About</h1>
         <div class="sec-hd__line"></div>
       </div>

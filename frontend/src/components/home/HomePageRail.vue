@@ -1,14 +1,14 @@
 <script setup>
 /**
- * 首页版次轨道：固定在右缘，标示 001/002/003 三版并支持直接跳转。
+ * 首页版次轨道：固定在右缘，标示 首页 / 最近 / 热点 三版并支持直接跳转。
  * 仅在整屏翻页模式（首页）下出现；矮屏/窄屏隐藏，避免与桌宠、报头挤压。
  */
 import { usePageFlip } from "../../composables/usePageFlip";
 
 const PAGES = [
-  { index: 0, label: "001", name: "封面" },
-  { index: 1, label: "002", name: "最近更新" },
-  { index: 2, label: "003", name: "热点文章" },
+  { index: 0, label: "首页", name: "封面" },
+  { index: 1, label: "最近", name: "最近更新" },
+  { index: 2, label: "热点", name: "热点文章" },
 ];
 
 const { currentPage, isFlipActive, goToPage } = usePageFlip();
@@ -25,7 +25,7 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
             :class="{ 'is-current': currentPage === page.index }"
             :aria-current="currentPage === page.index ? 'true' : undefined"
             :aria-label="`第 ${page.index + 1} 版 · ${page.name}`"
-            :title="`${page.label} · ${page.name}`"
+            :title="page.name"
             @click="goToPage(page.index)"
           >
             <span class="rail-button__tick" aria-hidden="true"></span>
@@ -80,7 +80,7 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
 }
 
 /* 刻度线的布局盒固定 26px，只让线本身在盒内右对齐伸缩——
-   这样三个按钮的编号始终对齐，轨道总宽也不随悬停变化（恒定约 84px）。 */
+   这样三个按钮的标签始终对齐，轨道总宽也不随悬停变化（恒定约 84px）。 */
 .rail-button__tick {
   width: 26px;
   height: 1px;
@@ -89,6 +89,13 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
   background-position: right center;
   background-size: 11px 1px;
   transition: background-size 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+/* 标签由 001/002/003 改为「首页/最近/热点」：中文在 0.56rem 下笔画会糊，
+   放宽一档并收掉给数字排字设计的字距。 */
+.rail-button__label {
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
 }
 
 /* 版名不做可见展开：展开会在悬停时把轨道向左撑进正文，压住榜单行尾的阅读量。

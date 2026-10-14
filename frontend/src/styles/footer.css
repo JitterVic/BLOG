@@ -286,11 +286,9 @@
   border-left: 3px solid rgba(139, 37, 0, 0.28);
 }
 
-.page-theme-about .sec-hd__n {
-  color: rgba(78, 98, 82, 0.35);
-}
-
-/* ---- Section numbering hierarchy 01 / 02 / 03 ---- */
+/* ---- Section numbering 01 / 02 / 03 ----
+   首页三版与关于页已不再使用版次编号，`.sec-hd__n` 现只服务于文章目录
+   （02）与「下一篇」/404 这类标注。 */
 .sec-hd {
   position: relative;
 }
@@ -323,14 +321,6 @@
 .home-hot-section .sec-hd {
   border-top-color: var(--accent);
   background: linear-gradient(180deg, rgba(139, 37, 0, 0.06), transparent 75%);
-}
-
-.home-hot-section .sec-hd__n {
-  color: rgba(139, 37, 0, 0.28);
-}
-
-.home-latest-section .sec-hd__n {
-  color: rgba(42, 36, 28, 0.18);
 }
 
 .unified-posts-page .sec-hd {

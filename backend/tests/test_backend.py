@@ -799,6 +799,54 @@ def test_latest_page_shows_a_lead_plus_two_secondary_posts():
     assert ":not(.is-single) .home-secondary-card + .home-secondary-card::before" in css
 
 
+def test_home_sections_and_about_drop_the_section_number():
+    """首页第 2/3 版与关于页不再使用版次编号（`.sec-hd__n`）。
+
+    这三处的小节序号（02 / 03 / 03）属于冗余装饰：版次已由右侧轨道表达，
+    关于页更是单页无序号可言。文章目录（02）与「下一篇」/404 仍需要它，
+    所以只删这三处，基础的 `.sec-hd__n` 样式必须保留。
+    """
+    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
+    about = Path("frontend/src/views/AboutView.vue").read_text(encoding="utf-8")
+    assert 'class="sec-hd__n"' not in home, "首页两版的版次编号应已移除"
+    assert 'class="sec-hd__n"' not in about, "关于页的版次编号应已移除"
+    # 标题与分隔线保留，页头结构不变
+    assert "最近更新 Latest" in home and "热点文章 Most Read" in home
+    assert "关于 About" in about and "sec-hd__line" in about
+
+    # 仍然需要编号的地方不能一起删掉
+    posts = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
+    assert 'class="sec-hd__n"' in posts, "文章目录的 02 仍在使用"
+    footer = Path("frontend/src/styles/footer.css").read_text(encoding="utf-8")
+    assert ".sec-hd__n {" in footer and ".sec-hd__n::after" in footer
+
+    # 这三处专属的着色规则已成死代码，应一并清理
+    for dead in (
+        ".home-latest-section .sec-hd__n",
+        ".home-hot-section .sec-hd__n",
+        ".page-theme-about .sec-hd__n",
+    ):
+        assert dead not in footer, f"{dead} 已无对应元素"
+
+
+def test_home_rail_labels_use_names_instead_of_issue_numbers():
+    """右侧版次轨道的可见标签用「首页 / 最近 / 热点」，不用 001/002/003。
+
+    数字对读者没有意义；标签换成栏目名后，轨道也能自解释。
+    无障碍名仍保留「第 N 版 · 栏目」以便与版面结构对应。
+    """
+    rail = Path("frontend/src/components/home/HomePageRail.vue").read_text(encoding="utf-8")
+    for label in ("首页", "最近", "热点"):
+        assert f'label: "{label}"' in rail, f"轨道应有「{label}」标签"
+    for gone in ("001", "002", "003"):
+        assert f'label: "{gone}"' not in rail, f"轨道不应再出现编号 {gone}"
+    # 无障碍名与悬停提示仍指向版次与栏目
+    assert "第 ${page.index + 1} 版 · ${page.name}" in rail
+    assert '":title="' not in rail and ":title=" in rail
+    # 刻度盒宽度固定，悬停只伸缩线本身，轨道总宽不随悬停变化
+    assert "width: 26px" in rail
+
+
 def test_home_flip_replays_reveal_for_target_page():
     """首页整屏翻页必须显式重播入场动效。
 

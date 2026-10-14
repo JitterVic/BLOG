@@ -104,7 +104,6 @@ onBeforeUnmount(() => postsController?.abort());
 
     <section id="latest" class="print-page print-section home-latest-section" aria-label="最近更新">
       <div class="sec-hd rv rv--left">
-        <span class="sec-hd__n">02</span>
         <h2 class="sec-hd__t">最近更新 Latest</h2>
         <div class="sec-hd__line"></div>
       </div>
@@ -155,7 +154,6 @@ onBeforeUnmount(() => postsController?.abort());
 
     <section id="hot" class="print-page print-section home-hot-section" aria-label="热点文章">
       <div class="sec-hd rv rv--left">
-        <span class="sec-hd__n">03</span>
         <h2 class="sec-hd__t">热点文章 Most Read</h2>
         <div class="sec-hd__line"></div>
       </div>
