@@ -148,11 +148,10 @@
   color: var(--accent-light, #b84a2a);
 }
 
-.home-index-row, .home-hot-row, .print-list-item, .print-article-strip{
+.home-hot-row, .print-list-item, .print-article-strip{
   position: relative;
 }
 
-.home-index-row::after,
 .home-hot-row::after {
   content: "";
   position: absolute;
@@ -164,8 +163,6 @@
   transition: width 0.35s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
 }
 
-.home-index-row:hover::after,
-.home-index-row:focus-visible::after,
 .home-hot-row:hover::after,
 .home-hot-row:focus-visible::after {
   width: 100%;
@@ -328,7 +325,7 @@
 }
 
 /* Soft focus rings for keyboard users */
-.cover-button:focus-visible, .print-nav__item:focus-visible, .article-view-button:focus-visible, .tag-filter-button:focus-visible, .home-index-row:focus-visible, .home-hot-row:focus-visible{
+.cover-button:focus-visible, .print-nav__item:focus-visible, .article-view-button:focus-visible, .tag-filter-button:focus-visible, .home-hot-row:focus-visible{
   outline: 2px solid rgba(139, 37, 0, 0.35);
   outline-offset: 3px;
 }
@@ -343,7 +340,6 @@
   .print-list-item:hover,
   .print-article-strip:hover,
   .quiet-about-card:hover,
-  .home-index-row:hover,
   .home-hot-row:hover {
     transform: none;
   }
@@ -389,7 +385,6 @@ html.motion-off .print-feature-image .print-feature-art,
 html.motion-off .print-list-item,
 html.motion-off .print-article-strip,
 html.motion-off .quiet-about-card,
-html.motion-off .home-index-row,
 html.motion-off .home-hot-row,
 html.motion-off .home-hot-row__rank,
 html.motion-off .print-nav__progress span,
@@ -417,7 +412,6 @@ html.motion-off .rv.vis {
   html:not(.app-ready) .print-list-item,
   html:not(.app-ready) .print-article-strip,
   html:not(.app-ready) .quiet-about-card,
-  html:not(.app-ready) .home-index-row,
   html:not(.app-ready) .home-hot-row,
   html:not(.app-ready) .home-hot-row__rank,
   html:not(.app-ready) .print-nav__progress span,

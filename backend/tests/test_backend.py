@@ -753,6 +753,31 @@ def test_route_change_replays_entry_animation():
     assert "replayCharAnimations(root)" in reveal
 
 
+def test_latest_page_shows_only_the_newest_post():
+    """第 2 版「最近更新」只呈现最新一篇。
+
+    这一版的重点是「最近」——完整呈现当期最新一篇的版面；
+    其余文章交给第 3 版（按阅读量排序）与文章目录，避免同一批内容在多处重复列举
+    （原先还有一条「本期其余」索引，与第 3 版功能重叠且信息密度很低）。
+    """
+    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
+    assert "HomeLatestIndex" not in home, "第 2 版不应再渲染索引列表"
+    assert "replayReveal(sections[page])" in home
+    # 数据侧只需要最新一篇
+    assert "LATEST_FETCH_LIMIT = 1" in home
+
+    removed = Path("frontend/src/components/home/HomeLatestIndex.vue")
+    assert not removed.exists(), "索引组件已下线，不应残留"
+
+    # 相关样式与光标交互选择器也要一并清理
+    for name in ("pages.css", "feedback.css", "compat.css"):
+        css = Path("frontend/src/styles", name).read_text(encoding="utf-8")
+        assert "home-index-row" not in css, f"{name} 仍有已下线组件的样式"
+        assert "home-latest-index" not in css, f"{name} 仍有已下线组件的样式"
+    cursor = Path("frontend/src/components/CursorEffects.vue").read_text(encoding="utf-8")
+    assert "home-index-row" not in cursor
+
+
 def test_home_flip_replays_reveal_for_target_page():
     """首页整屏翻页必须显式重播入场动效。
 

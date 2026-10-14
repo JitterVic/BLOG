@@ -6,14 +6,15 @@ import AsyncState from "../components/AsyncState.vue";
 import HomeCover from "../components/home/HomeCover.vue";
 import HomeFeature from "../components/home/HomeFeature.vue";
 import HomeHotLedger from "../components/home/HomeHotLedger.vue";
-import HomeLatestIndex from "../components/home/HomeLatestIndex.vue";
 import HomePageRail from "../components/home/HomePageRail.vue";
 import { usePageFlip } from "../composables/usePageFlip";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 import { getPosts } from "../services/api";
 
-const HOME_POST_LIMIT = 5;
+// 第 2 版只需要最新一篇，取 1 条即可；第 3 版按阅读量取一屏能容纳的条数。
+const LATEST_FETCH_LIMIT = 1;
+const HOT_FETCH_LIMIT = 5;
 
 const { ensureSite } = useSite();
 const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: false });
@@ -27,7 +28,6 @@ let postsController = null;
 let postsRequestSequence = 0;
 
 const leadPost = computed(() => latestPosts.value[0] || null);
-const secondaryPosts = computed(() => latestPosts.value.slice(1));
 
 watch([latestPosts, hotPosts, postsLoading], () => {
   refreshReveal();
@@ -62,8 +62,8 @@ async function loadHomePosts() {
 
   try {
     const [latestList, hotList] = await Promise.all([
-      getPosts({ sort: "latest", limit: HOME_POST_LIMIT, signal: postsController.signal }),
-      getPosts({ sort: "hot", limit: HOME_POST_LIMIT, signal: postsController.signal }),
+      getPosts({ sort: "latest", limit: LATEST_FETCH_LIMIT, signal: postsController.signal }),
+      getPosts({ sort: "hot", limit: HOT_FETCH_LIMIT, signal: postsController.signal }),
     ]);
     if (requestId !== postsRequestSequence) return;
     latestPosts.value = Array.isArray(latestList) ? latestList : (latestList?.items || []);
@@ -139,8 +139,9 @@ onBeforeUnmount(() => postsController?.abort());
       />
 
       <template v-else>
+        <!-- 第 2 版只呈现「最近」这一篇：这里是最新一篇的完整版面，
+             其余文章交给第 3 版（按阅读量）与文章目录，避免同一批内容在多处重复列举。 -->
         <HomeFeature v-if="leadPost" :post="leadPost" :site-name="site?.name || '至知'" />
-        <HomeLatestIndex v-if="secondaryPosts.length" :posts="secondaryPosts" />
       </template>
 
       <div class="home-section-footer rv">

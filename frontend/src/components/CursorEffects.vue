@@ -8,7 +8,6 @@ const INTERACTIVE_SELECTOR = [
   "a",
   "button",
   ".print-feature-image",
-  ".home-index-row",
   ".home-hot-row",
   ".print-list-item",
   ".print-article-strip",

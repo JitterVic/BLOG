@@ -33,85 +33,6 @@
   align-items: stretch;
 }
 
-.home-latest-index {
-  margin: 0 2.5rem 2rem;
-  border-top: 1px solid var(--rule-light);
-  border-bottom: 1px solid var(--rule-light);
-}
-
-.home-index-row {
-  padding: clamp(0.7rem, 1.6vh, 1rem) 0.45rem;
-  display: grid;
-  grid-template-columns: 52px 116px minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 1rem;
-  border-top: 1px solid var(--rule-light);
-  transition: color 0.24s ease, background 0.24s ease, transform 0.24s var(--ease-quart);
-}
-
-.home-index-row:first-of-type {
-  border-top: 0;
-}
-
-.home-index-row:hover,
-.home-index-row:focus-visible {
-  color: var(--accent);
-  background: rgba(42, 36, 28, 0.028);
-  outline: 0;
-  transform: translateX(4px);
-}
-
-.home-index-row__number {
-  color: var(--rule-light);
-  font-family: var(--f-display);
-  font-size: 1.5rem;
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-index-row:first-of-type .home-index-row__number {
-  color: var(--accent);
-}
-
-.home-index-row__date,
-.home-index-row small {
-  color: var(--ink-faded);
-  font-family: var(--f-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.home-index-row__body {
-  min-width: 0;
-}
-
-.home-index-row strong {
-  display: block;
-  color: var(--ink);
-  font-family: var(--f-display);
-  font-size: clamp(1.05rem, 2vw, 1.55rem);
-  line-height: 1.25;
-  max-width: 34ch;
-}
-
-.home-index-row__excerpt {
-  max-width: 48ch;
-  margin: 0.28rem 0 0;
-  color: var(--ink-light);
-  font-size: 0.7rem;
-  line-height: 1.7;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.home-index-row:hover strong {
-  color: var(--accent);
-}
-
 .home-section-footer {
   padding: 0 2.5rem 4.5rem;
   display: flex;
@@ -123,8 +44,7 @@
   border-top: 3px double var(--rule);
 }
 
-.home-hot-ledger__caption,
-.home-latest-index__caption {
+.home-hot-ledger__caption {
   margin: 0;
   padding: 0.7rem 0.45rem;
   color: var(--ink-faded);
@@ -454,15 +374,6 @@
 }
 
 @media (max-width: 920px) {
-  .home-index-row {
-    grid-template-columns: 46px minmax(0, 1fr);
-  }
-
-  .home-index-row__date,
-  .home-index-row small {
-    grid-column: 2;
-  }
-
   .home-hot-row,
   .article-toolbox,
   .quiet-about-layout {
@@ -487,7 +398,6 @@
     flex: 1 1 150px;
   }
 
-  .home-latest-index,
   .home-hot-ledger,
   .article-toolbox,
   .article-directory-meta {
@@ -672,27 +582,6 @@ html.home-paging .flip-track {
   }
 
 
-  /* 索引行：压缩为单行摘编，标题溢出省略 */
-  html.home-paging .home-latest-index {
-    flex: 0 0 auto;
-    margin: clamp(0.9rem, 2.4vh, 1.6rem) 2.5rem 0;
-  }
-
-  html.home-paging .home-index-row {
-    padding: clamp(0.5rem, 1.5vh, 0.9rem) 0.45rem;
-    /* 去掉日期列，给标题与摘要让出宽度 */
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-  }
-
-  html.home-paging .home-index-row__date {
-    display: none;
-  }
-
-  /* 翻页模式下版面按屏高定容：摘要收到一行，避免整页被顶出去 */
-  html.home-paging .home-index-row__excerpt {
-    -webkit-line-clamp: 1;
-  }
-
   /* 纯文字头条（无封面图）在翻页模式下按屏高定容：
      标题字号、间距、摘要行数全部受 vh 约束，确保 meta 与「阅读全文」不被裁掉。
      基线的 vw 驱动字号在 768 屏高下会撑成 3 行 250px，把下方内容顶出容器。 */
@@ -723,13 +612,6 @@ html.home-paging .flip-track {
 
   html.home-paging .home-latest-feature--text .print-read-more {
     margin-top: clamp(0.2rem, 0.8vh, 0.7rem);
-  }
-
-  html.home-paging .home-index-row strong {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
 
   /* 热点榜：五行账页均分剩余版面，恰好铺满一页 */
@@ -808,9 +690,7 @@ html.home-paging .print-nav__progress {
    `html.home-paging .home-hot-ledger` 的同属性规则优先级更高。 */
 @media (min-width: 901px) {
   .home-hot-ledger,
-  .home-latest-index,
-  html.home-paging .home-hot-ledger,
-  html.home-paging .home-latest-index {
+  html.home-paging .home-hot-ledger {
     margin-right: calc(clamp(0.75rem, 1.8vw, 1.5rem) + 6.4rem);
   }
 }
