@@ -56,30 +56,53 @@
   display: grid;
   /* 列数按实际稿件数收缩（只有 1 篇次要稿时不留空列） */
   grid-template-columns: repeat(var(--row-cols, 2), minmax(0, 1fr));
+  /* 两篇并排时留出中缝，卡片自身不再单独画竖线（会与缩略图贴边） */
+  column-gap: clamp(1.2rem, 2.6vw, 2.4rem);
 }
 
 .home-secondary-card {
   display: flex;
   gap: clamp(0.9rem, 2vw, 1.4rem);
-  padding: clamp(0.8rem, 2vh, 1.3rem) 0.45rem;
-  border-right: 1px solid var(--rule-light);
+  padding: clamp(0.8rem, 2vh, 1.3rem) 0;
   transition: color 0.24s ease;
 }
 
-.home-secondary-card:last-child {
-  border-right: 0;
+/* 两条简讯之间原本靠 border-right 分隔，会把竖线贴在缩略图上；
+   改为用一条居中的分隔条，并让它随行高居中。 */
+.home-latest-row__grid:not(.is-single) .home-secondary-card + .home-secondary-card {
+  position: relative;
+  padding-left: clamp(1.2rem, 2.6vw, 2.4rem);
 }
 
+.home-latest-row__grid:not(.is-single) .home-secondary-card + .home-secondary-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(clamp(1.2rem, 2.6vw, 2.4rem) / -2);
+  width: 1px;
+  background: var(--rule-light);
+}
+
+/* 缩略图按 4:3 出图：只定高、由宽高比反推宽度。
+   若写成「固定 112px 宽 + 撑满行高」，矮屏下会得到 112×52 的信箱式裁切，
+   封面被截成一条横带，认不出画面。 */
 .home-secondary-card__thumb {
   flex: 0 0 auto;
-  width: clamp(84px, 12vw, 132px);
+  width: auto;
+  height: clamp(58px, 8.2svh, 96px);
+  aspect-ratio: 4 / 3;
   margin: 0;
   overflow: hidden;
+  /* 封面常为浅色图，压一道极细的框线，避免整块融进纸色 */
+  outline: 1px solid var(--rule-light);
+  outline-offset: -1px;
   background: rgba(42, 36, 28, 0.05);
 }
 
 .home-secondary-card__thumb.is-broken {
   display: none;
+  outline: 0;
 }
 
 .home-secondary-card__thumb img {
@@ -146,17 +169,18 @@
 }
 
 /* 只有一篇次要稿时整行归它：横向排成一条「简讯」——
-   左起缩略图 / 编号+标题 / 摘要 / 元信息四段铺满整行，
-   否则单卡被拉到 1286px 而内容只占约 620px，右侧空出一大片。 */
+   左起缩略图 / 编号+日期 / 标题+摘要 / 元信息四段铺满整行。
+   编号列用 auto 贴合内容：若按 fr 比例分栏，365px 的栏里只放得下 60px 的字，
+   标题要到 44% 处才开始，中间出现一大片空白。 */
 .home-latest-row__grid.is-single .home-secondary-card {
   align-items: center;
 }
 
 .home-latest-row__grid.is-single .home-secondary-card__body {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(1rem, 2.4vw, 2.4rem);
+  column-gap: clamp(1.4rem, 3.2vw, 3.2rem);
   width: 100%;
 }
 
@@ -171,9 +195,10 @@
   max-width: none;
 }
 
+/* 单卡整行时摘要按列宽收一行，避免 1000px 宽的单行长句读起来发散 */
 .home-latest-row__grid.is-single .home-secondary-card__copy .art__p {
-  max-width: none;
-  -webkit-line-clamp: 2;
+  max-width: 68ch;
+  -webkit-line-clamp: 1;
 }
 
 .home-latest-row__grid.is-single .art__meta {
@@ -754,7 +779,7 @@ html.home-paging .flip-track {
   }
 
   html.home-paging .home-secondary-card__thumb {
-    width: clamp(72px, 10vw, 112px);
+    height: clamp(54px, 7.6svh, 88px);
   }
 
   html.home-paging .home-latest-feature .print-feature-image {

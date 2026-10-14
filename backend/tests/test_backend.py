@@ -780,6 +780,23 @@ def test_latest_page_shows_a_lead_plus_two_secondary_posts():
     # 列数按实际稿件数收缩
     assert "repeat(var(--row-cols, 2)" in css
     assert "--row-cols" in row
+    # 「仅一篇」分支走 .is-single 类，不用内联样式属性选择器（后者依赖声明文本，很脆）
+    assert "is-single" in row and "is-single" in css
+    assert "[style*=" not in css, "不要用内联样式属性选择器分支布局"
+
+    # 缩略图按 4:3 出图。若只定宽并撑满行高，矮屏下会得到 112×52 的信箱式裁切，
+    # 封面被截成一条横带；aspect-ratio + height 才能稳定拿到 4:3。
+    thumb = re.search(r"\.home-secondary-card__thumb \{([^}]*)\}", css, re.S)
+    assert thumb, "找不到缩略图规则"
+    assert "aspect-ratio: 4 / 3" in thumb.group(1)
+    assert "height: clamp(" in thumb.group(1)
+    assert "width: clamp(" not in thumb.group(1)
+
+    # 两篇并排时竖线由中缝分隔条承担，不能贴到缩略图上
+    card_rule = re.search(r"\n\.home-secondary-card \{([^}]*)\}", css, re.S)
+    assert card_rule, "找不到次要稿卡片规则"
+    assert "border-right" not in card_rule.group(1)
+    assert ":not(.is-single) .home-secondary-card + .home-secondary-card::before" in css
 
 
 def test_home_flip_replays_reveal_for_target_page():
