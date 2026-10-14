@@ -98,7 +98,30 @@
   font-weight: 600;
 }
 
+/* 一屏放得下时目录不该出现滚动条；文章多起来自然溢出，无需额外处理 */
+@media (min-width: 761px) {
+  .unified-posts-page .article-toolbox {
+    align-items: center;
+  }
+}
+
 /* --- 编年索引 ------------------------------------------------------------ */
+
+/* 目录是「一屏目录」：一页之内要能把页脚一起收进首屏（与封面页、关于页一致）。
+   尾部原先叠了三层留白——.posts-index 4rem + .print-year-block 3rem 级的
+   .archive__list 2.5rem，实测 152px 纯空白。列表长到需要滚动时那是呼吸，
+   一屏放得下时就只是把页脚顶出折叠线。 */
+.unified-posts-page .posts-index {
+  padding-bottom: clamp(0.4rem, 1.6svh, 1.4rem);
+}
+
+.unified-posts-page .print-year-block {
+  padding-bottom: 0;
+}
+
+.unified-posts-page .archive__list {
+  margin-bottom: clamp(0.4rem, 1.6svh, 1.4rem);
+}
 
 .posts-index .print-year-block {
   padding-top: 0;
@@ -109,10 +132,12 @@
 .archive__year {
   align-items: center;
   gap: 1rem;
+  margin-bottom: clamp(0.35rem, 1.2svh, 1.1rem);
+  padding-bottom: clamp(0.2rem, 0.7svh, 0.6rem);
 }
 
 .archive__year span {
-  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-size: clamp(1.35rem, 3.4svh, 2.1rem);
 }
 
 .archive__year-rule {
@@ -127,7 +152,7 @@
   align-items: baseline;
   column-gap: clamp(1rem, 2.2vw, 2rem);
   min-height: 0;
-  padding: 0.95rem 0.6rem 0.95rem 0.75rem;
+  padding: clamp(0.42rem, 1.2svh, 0.95rem) 0.6rem clamp(0.42rem, 1.2svh, 0.95rem) 0.75rem;
   border-bottom: 1px solid var(--rule-light);
   transition: background 0.2s ease, padding-left 0.2s ease;
 }
@@ -198,6 +223,92 @@
   font-family: var(--f-mono);
   font-size: 0.54rem;
   letter-spacing: 0.08em;
+}
+
+/* 矮视口（≤700px 高）再压一档版面骨架，把页脚拉回首屏内——与页脚自身在
+   ≤780px 处收内距是同一个思路。目录页比关于页多出一整块列表，所以要单独一档。
+
+   这一档必须排在索引规则之后：`.unified-posts-page .archive__li` 与上面
+   `.posts-index .archive__li` 同权重，胜负只由源码顺序决定（放在前面会被
+   整体 padding 简写吃掉，而且不会报错）。padding-top 也不能压到顶栏高度
+   （68px）以下，否则「Catalog of Issues」会滑到报头底下。 */
+@media (max-height: 700px) {
+  .unified-posts-page.content-view {
+    padding-top: clamp(4.5rem, 11svh, 5.5rem);
+  }
+
+  .unified-posts-page .sec-hd {
+    padding-top: 0.32rem;
+    padding-bottom: 0.32rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .unified-posts-page .article-toolbox {
+    margin-bottom: 0.35rem;
+  }
+
+  .unified-posts-page .article-directory-meta {
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .unified-posts-page .archive__year {
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .unified-posts-page .archive__li,
+  .posts-index .archive__li {
+    padding-top: 0.42rem;
+    padding-bottom: 0.42rem;
+  }
+}
+
+/* 极矮视口（≤620px 高，多为带工具栏的窄窗口）：报头下方留白与搜索框再收一档，
+   把余量让给列表。此刻页脚自身已占去视口近三成（173/600），继续压正文只会
+   把行挤成两层贴在一起，因此这一档到此为止——再矮就让它正常滚动。 */
+@media (max-height: 620px) {
+  .unified-posts-page.content-view {
+    padding-top: clamp(3.6rem, 10svh, 5.5rem);
+  }
+
+  .unified-posts-page .article-search {
+    min-height: 0;
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+  }
+
+  .unified-posts-page .article-search__field input {
+    padding-top: 0.34rem;
+    padding-bottom: 0.34rem;
+  }
+
+  .unified-posts-page .article-toolbox {
+    margin-bottom: 0.25rem;
+  }
+
+  .unified-posts-page .article-directory-meta {
+    margin-bottom: 0.2rem;
+    padding-bottom: 0.3rem;
+  }
+
+  .unified-posts-page .sec-hd {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .unified-posts-page .archive__year {
+    margin-bottom: 0.2rem;
+    padding-bottom: 0.1rem;
+  }
+
+  .unified-posts-page .archive__list {
+    margin-bottom: 0.2rem;
+  }
+
+  .unified-posts-page .posts-index {
+    padding-bottom: 0.25rem;
+  }
 }
 
 @media (max-width: 760px) {

@@ -913,6 +913,52 @@ def test_stylesheets_have_no_orphaned_selector_fragments():
             assert "\n\n" not in selector, f"{path.name} 存在悬空选择器：{selector.strip()[:80]}"
 
 
+def test_posts_index_fits_one_screen_and_still_scrolls_when_long():
+    """目录一页之内要把页脚一起收进首屏（与封面页、关于页一致）。
+
+    原先尾部叠了三层留白（.posts-index 4rem + .print-year-block 3rem 级的
+    .archive__list 2.5rem，实测 152px 纯空白），把页脚顶出折叠线。
+    列表长到需要滚动时留白是呼吸，一屏放得下时它就只是碍事，所以改为按视口高度流式收紧。
+    """
+    css = Path("frontend/src/styles/posts.css").read_text(encoding="utf-8")
+
+    # 尾部留白收敛
+    assert re.search(r"\.unified-posts-page \.print-year-block \{\s*padding-bottom: 0;\s*\}", css)
+    list_rule = re.search(r"\.unified-posts-page \.archive__list \{\s*margin-bottom: ([^;]+);", css)
+    assert list_rule and "svh" in list_rule.group(1), "列表尾部内距应按视口高度流式收紧"
+
+    # 矮视口分档存在
+    assert "@media (max-height: 700px)" in css
+    assert "@media (max-height: 620px)" in css
+
+    # 关键顺序陷阱：`.unified-posts-page .archive__li` 与 `.posts-index .archive__li`
+    # 同权重，分档里若只写 padding-top/bottom，会被后面那条整体 padding 简写吃掉，
+    # 而且完全不报错（实测分档曾因此失效）。所以分档必须排在索引规则之后。
+    tier = css.index("@media (max-height: 700px)")
+    base_li = css.index(".posts-index .archive__li {")
+    assert tier > base_li, "矮视口分档必须排在索引基础规则之后，否则会被同权重的 padding 简写静默覆盖"
+
+    # 顶栏高度 68px 是 padding-top 的下限，否则章节标签会滑到报头底下
+    top = re.search(r"@media \(max-height: 700px\) \{.*?\.unified-posts-page\.content-view \{\s*padding-top: clamp\(([^)]+)\)",
+                    css, re.S)
+    assert top, "矮视口分档应压低 .content-view 的顶部内距"
+    assert float(top.group(1).split(",")[0].strip().rstrip("rem")) >= 4.5, "顶部内距不得低于顶栏高度"
+
+    # 流式收紧只改内距，不得给容器引入裁切或限高（列表变长必须仍能正常滚动）。
+    # 摘要的单行截断是文本级 -webkit-line-clamp，属于预期用法，这里只看容器。
+    containers = (
+        ".posts-index", ".print-year-ledger", ".print-year-block", ".archive__list",
+        ".unified-posts-page", ".unified-posts-page.content-view",
+    )
+    for path in sorted(Path("frontend/src/styles").glob("*.css")):
+        for rule in re.finditer(r"([^{}]+)\{([^}]*)\}", path.read_text(encoding="utf-8")):
+            selector, body = rule.group(1).strip(), rule.group(2)
+            if not any(selector == c or selector.startswith(c + " ") for c in containers):
+                continue
+            assert "overflow: hidden" not in body, f"{path.name} 不应给目录容器 {selector} 加裁切"
+            assert "max-height" not in body, f"{path.name} 不应给目录容器 {selector} 限高（应让页面自然滚动）"
+
+
 def test_home_flip_replays_reveal_for_target_page():
     """首页整屏翻页必须显式重播入场动效。
 

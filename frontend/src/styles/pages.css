@@ -372,11 +372,11 @@
 
 
 .article-search {
-  min-height: 76px;
-  padding: 0.75rem 0.9rem;
+  min-height: clamp(46px, 6.4svh, 76px);
+  padding: clamp(0.4rem, 1.1svh, 0.75rem) 0.9rem;
   display: grid;
   align-content: center;
-  gap: 0.45rem;
+  gap: clamp(0.25rem, 0.7svh, 0.45rem);
   border: 1px solid var(--rule-light);
   background: rgba(244, 239, 230, 0.5);
 }
@@ -425,8 +425,8 @@
 }
 
 .article-directory-meta {
-  margin: 0 2.5rem 2rem;
-  padding-bottom: 0.8rem;
+  margin: 0 2.5rem clamp(0.4rem, 1.4svh, 1.6rem);
+  padding-bottom: clamp(0.35rem, 1svh, 0.8rem);
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -438,7 +438,7 @@
 }
 
 .posts-index {
-  padding-bottom: 4rem;
+  padding-bottom: clamp(0.4rem, 1.6svh, 1.4rem);
 }
 
 .quiet-about-layout {
