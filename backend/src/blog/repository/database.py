@@ -33,16 +33,34 @@ class Database:
         raw_db_path = Path(db_path or os.getenv("BLOG_DATABASE_PATH") or uploads.DEFAULT_DB_PATH)
         self.db_path = raw_db_path if raw_db_path.is_absolute() else ROOT_DIR / raw_db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._wal_ready = False
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, timeout=5)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
-        connection.execute("PRAGMA journal_mode = WAL")
+        self._ensure_journal_mode(connection)
         return connection
 
+    def _ensure_journal_mode(self, connection: sqlite3.Connection) -> None:
+        """确保日志模式为 WAL —— 但每个 Database 实例只做一次。
+
+        journal_mode 是写进数据库文件的持久属性，不需要（也不应该）每条连接重设。
+        实测差别很大：带这条 PRAGMA 的连接 0.93ms，不带 0.13ms；连「只读回 journal_mode」
+        都要 0.91ms（它同样要碰 WAL 与文件锁）。而一次请求会开 2~4 条连接，
+        重复设置等于白扔 1.5~3ms。init() 会重置这个标记，所以「恢复数据库后重新 init」
+        仍然会重新确认日志模式。
+        """
+        if self._wal_ready:
+            return
+        connection.execute("PRAGMA journal_mode = WAL")
+        self._wal_ready = True
+
     def init(self) -> None:
+        # 建表/迁移是一次明确的引导动作，此时重新确认日志模式：数据库文件可能刚被
+        # 备份还原替换过，而那条路径不会重启进程。
+        self._wal_ready = False
         with self.connect() as connection:
             self._create_schema(connection)
             self._migrate_schema(connection)
@@ -112,6 +130,17 @@ class Database:
 
             CREATE INDEX IF NOT EXISTS idx_posts_status_pub_order
             ON posts (status, published_at DESC, updated_at DESC, id DESC);
+
+            -- 前台首页「热点文章」按 click_count 排序。没有这条索引时，计划里会出现
+            -- USE TEMP B-TREE FOR ORDER BY：每次都要把全部已发布稿件读出来排一遍
+            -- （400 篇实测 2.40ms）。加上后计划变成 COVERING INDEX，降到 0.34ms。
+            CREATE INDEX IF NOT EXISTS idx_posts_hot
+            ON posts (status, click_count DESC, published_at DESC, updated_at DESC, id DESC);
+
+            -- 标签词表（/api/site 与后台写作页）只用到 status 与 tags 两列。缺这条覆盖索引时
+            -- 聚合得回表把每篇整行（含正文）读出来，400 篇实测 3.47ms；加上后 0.56ms。
+            CREATE INDEX IF NOT EXISTS idx_posts_status_tags
+            ON posts (status, tags);
 
             CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
             ON post_revisions (post_id, created_at DESC, id DESC);

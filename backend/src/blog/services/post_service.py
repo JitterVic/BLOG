@@ -143,7 +143,15 @@ class PostService:
         form_data: dict[str, Any],
         *,
         post_id: int | None = None,
+        include_normalized: bool = True,
     ) -> dict[str, Any]:
+        """发布前检查。
+
+        ``include_normalized`` 默认 True，因为发布/保存路径要用 ``normalized`` 里的
+        slug / 摘要 / 阅读时长。但后台总览只为拿 errors 与 warnings 而逐篇调用它，
+        而算这三项要在正文上跑 8 次正则（slugify 2 次、build_excerpt 5 次、
+        estimate_read_time 3 次）——200 篇就是 1600 次白跑。该路径传 False 直接跳过。
+        """
         errors: list[dict[str, str]] = []
         warnings: list[dict[str, str]] = []
 
@@ -226,11 +234,15 @@ class PostService:
             "ok": not errors,
             "errors": errors,
             "warnings": warnings,
-            "normalized": {
-                "slug": normalized_slug,
-                "excerpt": excerpt or build_excerpt(markdown_content),
-                "read_time": estimate_read_time(markdown_content),
-            },
+            "normalized": (
+                {
+                    "slug": normalized_slug,
+                    "excerpt": excerpt or build_excerpt(markdown_content),
+                    "read_time": estimate_read_time(markdown_content),
+                }
+                if include_normalized
+                else {}
+            ),
         }
 
     # ------------------------------------------------------------------

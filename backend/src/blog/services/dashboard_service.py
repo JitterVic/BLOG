@@ -52,10 +52,14 @@ class DashboardService:
         limit: int = 8,
         active: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
+        wanted = max(1, int(limit))
         items: list[dict[str, Any]] = []
         for post in active if active is not None else self.active_posts():
             fields = self.post_service.snapshot_as_form(post)
-            validation = self.post_service.validate_post_for_publish(fields, post_id=int(post["id"]))
+            # 只要 errors / warnings，不要 normalized：省掉每篇正文上的 8 次正则。
+            validation = self.post_service.validate_post_for_publish(
+                fields, post_id=int(post["id"]), include_normalized=False
+            )
             reasons: list[str] = []
             if not str(post.get("title") or "").strip():
                 reasons.append("无标题草稿")
@@ -72,7 +76,10 @@ class DashboardService:
                 "updated_at": post.get("updated_at"),
                 "reasons": reasons,
             })
-        return items[:max(1, int(limit))]
+            # 只要前 wanted 篇：列表本来就会被截断，继续验证剩下的稿件纯属白跑。
+            if len(items) >= wanted:
+                break
+        return items
 
     def content_health(self, *, active: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         active = active if active is not None else self.active_posts()

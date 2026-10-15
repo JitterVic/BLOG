@@ -195,8 +195,16 @@ class BlogStore:
     # 文章生命周期
     # ------------------------------------------------------------------
 
-    def validate_post_for_publish(self, form_data: dict[str, Any], *, post_id: int | None = None) -> dict[str, Any]:
-        return self.post_service.validate_post_for_publish(form_data, post_id=post_id)
+    def validate_post_for_publish(
+        self,
+        form_data: dict[str, Any],
+        *,
+        post_id: int | None = None,
+        include_normalized: bool = True,
+    ) -> dict[str, Any]:
+        return self.post_service.validate_post_for_publish(
+            form_data, post_id=post_id, include_normalized=include_normalized
+        )
 
     def save_post(self, form_data: dict[str, Any], **kwargs) -> int:
         return self.post_service.save_post(form_data, **kwargs)

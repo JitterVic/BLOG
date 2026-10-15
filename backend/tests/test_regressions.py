@@ -590,3 +590,112 @@ def test_login_throttle_survives_store_failure(tmp_path, monkeypatch):
     # 过期的时间戳不应再计入。
     store.record_failure("5.6.7.8", now=now - 10_000)
     assert store.attempts("5.6.7.8") == []
+
+
+# ---------------------------------------------------------------------------
+# 6. 标签列的脏数据：旧实现会 500 或编出假标签
+# ---------------------------------------------------------------------------
+
+
+def _insert_raw_post(store, *, slug: str, tags: str, status: str = "published") -> None:
+    """绕过服务层直接写库——这类值只可能来自历史数据或手工改库。"""
+    with store.db.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO posts (slug, title, tags, keywords, sections, category,
+                               created_at, updated_at, status, markdown_content)
+            VALUES (?, '脏数据', ?, '[]', '[]', '工程',
+                    '2026-01-01T00:00:00', '2026-01-01T00:00:00', ?, '正文')
+            """,
+            (slug, tags, status),
+        )
+        connection.commit()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["null", '{"a": 1}', "[broken", "", "   ", '["a", null, 3, true]', "123"],
+)
+def test_tag_vocabulary_survives_malformed_rows(app_bundle, raw):
+    """历史脏数据不能让 /api/site 与后台写作页 500。
+
+    旧实现逐行 json.loads 后再迭代：``tags="null"`` 会得到 ``None``，紧接着
+    ``for item in None`` 抛 TypeError（后台写作页整页 500）；而把同样的值直接交给
+    SQLite 的 json_each 会抛 "malformed JSON"。两条路都必须挡住。
+    """
+    _application, store = app_bundle
+    _insert_raw_post(store, slug="dirty", tags=raw)
+
+    tags = store.posts.published_tags()
+    taxonomy = store.list_taxonomy()
+
+    assert all(isinstance(item, str) and item.strip() for item in tags)
+    assert all(isinstance(item, str) and item.strip() for item in taxonomy["tags"])
+    assert store.posts.count_by_status()["published_count"] == 1
+
+
+def test_tag_vocabulary_keeps_only_string_entries(app_bundle):
+    """只认数组里的字符串：数字 / 布尔 / 嵌套对象都不是标签。"""
+    _application, store = app_bundle
+    _insert_raw_post(store, slug="mixed", tags='["real", null, 3, true, {"a": 1}, ["nested"]]')
+
+    assert store.posts.published_tags() == {"real"}
+    assert store.list_taxonomy()["tags"] == ["real"]
+
+
+# ---------------------------------------------------------------------------
+# 7. 后台总览的发布检查：只要 errors / warnings，不要 normalized
+# ---------------------------------------------------------------------------
+
+
+def test_publish_validation_can_skip_normalized_payload(app_bundle):
+    """后台总览逐篇调用发布检查，只为拿 errors / warnings。
+
+    normalized 里的 slug / 摘要 / 阅读时长要在正文上再跑 8 次正则（slugify 2 次、
+    build_excerpt 5 次、estimate_read_time 3 次），200 篇就是 1600 次白跑。
+    """
+    _application, store = app_bundle
+    fields = {
+        "title": "标题",
+        "slug": "skip-normalized",
+        "category": "工程",
+        "tags": "python",
+        "excerpt": "",
+        "cover_image": "",
+        "markdown_content": "## 小节\n\n" + "正文内容 " * 60,
+    }
+
+    full = store.validate_post_for_publish(dict(fields))
+    lean = store.validate_post_for_publish(dict(fields), include_normalized=False)
+
+    assert lean["normalized"] == {}
+    assert (lean["ok"], lean["errors"], lean["warnings"]) == (full["ok"], full["errors"], full["warnings"])
+    # 默认路径必须继续给出这三项——保存与发布都依赖它们。
+    assert full["normalized"]["excerpt"]
+    assert full["normalized"]["read_time"]
+    assert full["normalized"]["slug"]
+
+
+def test_attention_items_stop_validating_after_limit(app_bundle, monkeypatch):
+    """待处理清单本来就会被截断到 limit，第 limit 条之后不该继续验证。"""
+    _application, store = app_bundle
+    for index in range(6):
+        store.save_post(
+            {"title": "", "slug": f"blank-{index}", "markdown_content": "正文"},
+            action="draft",
+            allow_untitled=True,
+        )
+
+    calls = {"count": 0}
+    original = store.post_service.validate_post_for_publish
+
+    def counting(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(store.post_service, "validate_post_for_publish", counting)
+
+    items = store.dashboard_service.author_attention_items(limit=2)
+
+    assert len(items) == 2
+    assert calls["count"] == 2

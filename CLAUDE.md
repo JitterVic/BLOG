@@ -57,6 +57,12 @@ Standard Python src-layout package (`pyproject.toml` managed by uv/hatchling):
   - `profile_service.py` & `dashboard_service.py`: Site metadata and dashboard statistics.
   - `import_service.py`: Frontmatter and document import parser.
 - **`repository/`**: SQLite persistence layer (`database.py`, `posts.py`, `revisions.py`, `profile.py`, `media.py`).
+- **Performance invariants** (each was measured; re-check before "simplifying" them):
+  - `Database.connect()` sets `PRAGMA journal_mode = WAL` **once per instance** (plus in `init()`), not per connection. It is a persistent file-level property: a connection carrying that pragma costs 0.93ms vs 0.13ms, even a read-back costs 0.91ms, and one request opens 2–4 connections.
+  - Keep `idx_posts_hot` (home-page hot ordering: temp B-tree → covering index) and `idx_posts_status_tags` (tag vocabulary: avoids reading every full row just for `tags`). At 400 posts: `/api/posts?sort=hot` 2.42 → 1.49ms, `/api/site` 6.08 → 3.64ms.
+  - Tag vocabulary is aggregated in SQL and accepts **only strings inside an array**. Use `json_each`'s `type` column — never `json_type(value)`, whose argument is already a decoded native value (`json_type('python')` raises "malformed JSON") — and guard dirty rows with a nested `json_valid(...)` + `json_type(...)='array'` CASE, since handing `"null"`/`[broken` straight to `json_each` also raises.
+  - `validate_post_for_publish(include_normalized=False)` for the dashboard: it only needs errors/warnings, while `normalized` costs 8 extra regex passes per body. Combined with stopping once `limit` attention items are collected: admin dashboard 39.0 → 22.0ms at 400 posts.
+  - Measure first: `output/perf/bench_backend.py`, `bench_admin.py`, and the interleaved A/B harnesses `ab_dashboard.py` / `ab_endpoints.py`. Sequential timings on this machine differ from interleaved ones by up to 2x.
 - **`markdown_tools/`**: `renderer.py` (Markdown parsing + `SafeHTMLCleaner` XSS filter), `analysis.py` (reading time & word count), `frontmatter.py` (front-matter incl. `keywords`).
 - **`seo.py`**: Atom feed / sitemap / robots.txt builders and SPA `<head>` injection (title, OG, canonical).
 - **`security.py`** + **`login_throttle.py`**: Session auth, CSRF validation, audit logging, rate limiting (`BLOG_TRUSTED_PROXY_COUNT`). Failure counters live in SQLite because gunicorn runs multiple workers.

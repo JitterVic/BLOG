@@ -38,6 +38,16 @@
    - `serializers.py` / `validation.py` / `env_loader.py` / `config.py`：载荷裁剪、字段长度校验、环境变量解析、启动配置与生产就绪校验。
    - `store.py`：门面层（`BlogStore`）与依赖装配入口，为历史代码提供向下兼容的统一委托。
 
+### 后端性能约定（改动前请先量，别凭直觉）
+
+以下几条都是实测出来的，乱改会让接口明显变慢：
+
+- **`journal_mode` 不做逐连接设置**：`Database.connect()` 只在每个实例的首次连接（以及 `init()`）设置 `PRAGMA journal_mode = WAL`。它是写进数据库文件的持久属性，实测带这条 PRAGMA 的连接 0.93ms、不带 0.13ms，连「只读回 journal_mode」都要 0.91ms；而一次请求要开 2~4 条连接。
+- **两条索引别删**：`idx_posts_hot`（前台首页热点排序，计划从临时 B 树排序变为覆盖索引）与 `idx_posts_status_tags`（标签词表的覆盖索引，避免为取一列 tags 把每篇整行连正文一起读出来）。400 篇实测：`/api/posts?sort=hot` 2.42 → 1.49ms，`/api/site` 6.08 → 3.64ms。
+- **标签词表在 SQL 侧聚合，且只认「数组里的字符串」**：用 `json_each` 的 `type` 列判断类型，不要用 `json_type(value)` —— json_each 的 `value` 已是解码后的原生值，字符串元素本身不是合法 JSON 文档，`json_type('python')` 会抛 `malformed JSON`；未校验的脏 `tags`（`"null"`、`[broken`）直接喂给 `json_each` 同样会抛，必须用 `json_valid` + `json_type(...)='array'` 的嵌套 CASE 兜住。旧实现里 `list_taxonomy` 遇到 `tags="null"` 会 `for item in None` 直接 500。
+- **`validate_post_for_publish(include_normalized=False)`**：后台总览逐篇调用它只为拿 errors / warnings，而 `normalized` 里的 slug / 摘要 / 阅读时长要在每篇正文上再跑 8 次正则。改动前 400 篇干净库的后台总览是 39.5ms，跳过之后 32.3ms；再叠上「收满 `limit` 就停止验证」，默认库从 39.0ms 降到 22.0ms。
+- **先建基线再优化**：`output/perf/bench_backend.py`（合成库 + 接口计时）、`bench_admin.py`（后台页面计时）、`ab_dashboard.py` / `ab_endpoints.py`（交替取样 A/B，抵消这台机器上的漂移）。这台机器上顺序测量与交替测量能差出一倍，别用单次计时下结论。
+
 ### 内容分类的三层约定
 
 - **栏目（`category`）**：前台唯一允许的筛选维度，取值限定为 `taxonomy.CATEGORY_PRESETS`（算法 / 工程 / 教学 / 项目 / 随想 / 读书）。后台是下拉选择，发布预检会拒绝词表以外的值——放开自由录入，筛选条迟早会退化成第二个标签云。
