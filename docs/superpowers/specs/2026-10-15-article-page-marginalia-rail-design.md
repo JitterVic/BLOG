@@ -660,3 +660,45 @@ always hit-testable.
 pinned state, that `--panel-shift` exists nowhere, that `--panel-pin` is script-fed, that the rule is
 scoped to ≥1281px while the narrow strip keeps `position: sticky`, and that `--panel-avail` is only
 written when it changes.
+
+## Follow-up fix while starting the dev servers (2026-10-15, fifth round)
+
+While bringing the environment up, one `P0` item from the triage list was fixed because it was a
+straight defect: the tag chips in the article hero linked to `/posts?tag=…`, a parameter the
+directory page never reads.
+
+Reproduced: clicking `链表` on the article page produced URL `/posts`, all 2 posts listed and the
+`全部` chip highlighted — the filter was silently dropped and `scheduleRouteSync` then normalised the
+URL, so the click did nothing at all.
+
+Options considered:
+
+- Add `tag` as a fourth facet to `PostsView` (`routeQueryKey` / `buildRouteQuery` / `listParams` /
+  `applyRouteState`) plus a chip in the toolbox. Implemented, verified working, then **reverted**:
+  `test_posts_page_is_a_single_year_grouped_index` explicitly asserts `"selectedTag" not in view` and
+  the contract tests ban `tag-filter-button` / `article-tag-filter` selectors. The project's rule
+  (`AGENTS.md`) is that tags are display-and-search only and that 栏目 is the front end's *only*
+  filter facet, precisely so the filter bar cannot regress into a second tag cloud.
+- **Chosen:** send tag clicks into the search dimension — `{ path: "/posts", query: { q: tag } }`.
+  The tag text is almost always present in the post's own tag (and often in its title/body), so the
+  result set is right, no new facet is introduced, and the existing search box shows the active term
+  with its own clear button.
+
+Measured after the fix: article hero chip → `/posts?q=链表`, exactly **one** request
+(`/api/posts?q=链表&sort=latest&limit=10&page=1`), the search box filled with `链表`, meta line
+`搜索结果 · 2 篇`, and the 清除筛选 button visible. A search that matches nothing
+(`?q=不存在的标签`) shows `搜索结果 · 0 篇` with the empty state, and `?cat=教学&q=链表` keeps both
+dimensions (1 post, 教学 chip active).
+
+A latent duplicate request surfaced on the way: `watch(normalizedQuery)` calls `scheduleReload()`,
+which forces a fetch and therefore bypasses the `lastFetchedKey` de-duplication, so landing on
+`/posts?q=…` fetched the same page twice (verified: two identical requests). The watcher now skips the
+row while `applyingRouteState` is true, mirroring the category watcher. Verified: one request on entry,
+and typing in the box still triggers the debounced reload (`?q=第一题` → 1 post).
+
+`backend/tests/test_backend.py` holds 196 passing tests;
+`test_article_tag_chips_lead_to_a_search_that_actually_works` locks both halves of this fix.
+
+Still open (unchanged, awaiting a product decision): first-screen visibility of the panels, the
+`最新` fallback scope, the short-article near-invisibility of the rail, the 1281–1884px frame trade-off,
+the bare-array branch of `/api/posts?limit=N`, and the chip row only listing non-empty categories.

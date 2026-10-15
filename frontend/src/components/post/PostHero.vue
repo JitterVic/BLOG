@@ -42,7 +42,7 @@ defineProps({
       <RouterLink
         v-for="tag in post.tags"
         :key="tag"
-        :to="`/posts?tag=${encodeURIComponent(tag)}`"
+        :to="{ path: '/posts', query: { q: tag } }"
         class="tag tag--code"
       >
         {{ tag }}

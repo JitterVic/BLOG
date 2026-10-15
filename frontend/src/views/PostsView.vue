@@ -201,8 +201,11 @@ watch(page, () => {
   if (!restoringPage) scheduleRouteSync();
 });
 
-// Typing is debounced; a discrete tag switch reloads immediately.
+// 输入搜索词走防抖；从文章页点标签跳进来属于「初次进入」，已由 route state 取数。
 watch(normalizedQuery, () => {
+  // 初次进入（例如从文章页点标签跳到 /posts?q=…）时，route state 已经触发过一次取数；
+  // 这里再跳一次只会重复请求同一个 key——scheduleReload 是强制取数，绕过了去重。
+  if (applyingRouteState) return;
   scheduleReload();
 });
 

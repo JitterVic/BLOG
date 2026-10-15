@@ -1187,6 +1187,29 @@ def test_posts_page_is_a_single_year_grouped_index():
             assert token not in text, f"{path.name} 仍残留已下线选择器 {token}"
 
 
+
+def test_article_tag_chips_lead_to_a_search_that_actually_works():
+    """文章页的标签要成为能生效的入口，而不是点了没反应的链接。
+
+    标签不参与目录筛选（前台只有「栏目」一个筛选维度，见上一个测试），所以标签链接
+    走检索维度 `q`——服务端会匹配标题/摘要/标签/关键词。此前它指向 `?tag=…`，而目录页
+    只读 q/cat/page，参数被静默丢掉、URL 随后被规范化回 /posts，点了等于没点
+    （实测：点「链表」→ URL 变 /posts，全部胶囊高亮，2 篇全列）。
+    """
+    hero = Path("frontend/src/components/post/PostHero.vue").read_text(encoding="utf-8")
+    assert "posts?tag=" not in hero, "标签链接不能再用目录页不解析的 tag 参数"
+    assert "query: { q: tag }" in hero, "标签链接应走检索维度 q"
+
+    # 顺带锁住重复取数：初次进入 ?q=… 时 route state 已经取过一次，
+    # normalizedQuery 的防抖 watcher 必须跳过 application 阶段，否则同一 key 请求两遍
+    # ——scheduleReload 是强制取数，绕过了 fetchList 的去重。
+    view = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
+    watcher = re.search(r"watch\(normalizedQuery, \(\) => \{(.*?)\n\}\)", view, re.S)
+    assert watcher is not None, "找不到 normalizedQuery 的防抖 watcher"
+    assert "applyingRouteState" in watcher.group(1), (
+        "初次应用 route state 时不应再触发一次搜索取数"
+    )
+
 def test_keywords_are_searchable_but_never_rendered(app_bundle):
     """关键词只用于检索，不出现在任何对外载荷里。
 
