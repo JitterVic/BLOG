@@ -8,6 +8,7 @@ import PostsToolbox from "../components/posts/PostsToolbox.vue";
 import { usePosts } from "../composables/usePosts";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
+import { groupByYear } from "../lib/postGroups";
 
 const PAGE_SIZE = 10;
 
@@ -53,15 +54,7 @@ const categories = computed(() => {
 // 而不必像以前那样为了客户端过滤一次性取回全部文章。
 const visiblePosts = computed(() => posts.value);
 
-const groupedPosts = computed(() => {
-  const groups = new Map();
-  for (const post of visiblePosts.value) {
-    const year = (post.published_at || "未归档").slice(0, 4);
-    if (!groups.has(year)) groups.set(year, []);
-    groups.get(year).push(post);
-  }
-  return Array.from(groups.entries());
-});
+const groupedPosts = computed(() => groupByYear(visiblePosts.value));
 
 const latestSlug = computed(() => posts.value[0]?.slug || "");
 

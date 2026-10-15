@@ -576,6 +576,103 @@ def test_toc_scroll_offset_variables_are_in_scope():
         )
 
 
+def test_article_rail_width_tokens_are_in_scope():
+    """左侧清单的宽度与间隙变量必须声明在 `.post-reading-layout` 上。
+
+    与目录的吸附变量同理：面板是这份网格的并列子元素，自定义属性既不向上查找、也不
+    横向传递。若把 `--post-rail-width` 声明在 `.article-rail` 上，`min()` 会在计算值
+    阶段被整条判为无效并退化成 auto 宽度，清单就会压到正文轨道上，而且不报错。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
+    assert layout_blocks, "找不到 .post-reading-layout 规则块"
+    declared = "\n".join(layout_blocks)
+    assert "--post-rail-width" in declared
+    assert "--post-rail-gap" in declared
+
+    rail_blocks = re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
+    assert rail_blocks, "找不到 .article-rail 规则块"
+    for body in rail_blocks:
+        assert "--post-rail-width:" not in body, (
+            "清单宽度变量必须声明在 .post-reading-layout 上，否则 min() 夹不住宽度"
+        )
+        assert "--post-rail-gap:" not in body, (
+            "清单间隙变量必须声明在 .post-reading-layout 上，否则 min() 夹不住宽度"
+        )
+
+
+def test_side_panels_cannot_reach_the_reading_column():
+    """左右面板都不能挤动正文轨道。
+
+    正文能恒定居中、宽度不变，靠的是「三条轨道宽度固定 + 面板只决定轨道里放什么」：
+    面板宽度用 min() 夹在自己的轨道内，并各自贴向本侧边缘（start / end）。一旦有
+    轨道改成 auto，或让面板参与居中，折叠面板就会推动正文重排——实测正是这条不变量
+    在挡着「折叠侧栏时文字在读者眼皮底下跳位」。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
+    columns = "\n".join(
+        declaration
+        for body in layout_blocks
+        for declaration in re.findall(r"grid-template-columns\s*:([^;]*);", body)
+    )
+    assert columns, "找不到 .post-reading-layout 的轨道定义"
+    assert "auto" not in columns, "轨道不能由内容撑开，否则面板会挤动正文"
+    assert "var(--post-article-width)" in columns
+
+    rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
+    assert "min(var(--post-rail-width), calc(100% - var(--post-rail-gap)))" in rail
+    assert "justify-self: start" in rail
+
+    toc_blocks = re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S)
+    assert any("justify-self: end" in body for body in toc_blocks), (
+        "右侧目录必须贴右边缘，面板贴边是「折叠不移动正文」的前提"
+    )
+
+
+def test_article_rail_is_not_laid_out_below_its_breakpoint():
+    """清单在轨道不够宽时必须彻底不布局，而不是靠 JS 挡住。
+
+    ≤1280px 的区域模板是单列 `"toc"` / `"article"`，里面没有 rail 那一格；一个仍然
+    可见的面板会被自动放进隐式行，直接冒在正文上方。因此基准规则必须是
+    `display: none`，由 min-width 档位打开——JS 的 matchMedia 只管发不发请求。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    base = re.search(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
+    assert base is not None, "找不到 .article-rail 基准规则"
+    assert "display: none" in base.group(1), "基准档必须不布局，否则窄屏会出现隐式行"
+
+    widen = re.search(r"@media\s*\(min-width:\s*1360px\)\s*\{([^}]*)\}", css, re.S)
+    assert widen is not None, "找不到清单的 min-width 档位"
+    assert "display: flex" in widen.group(1)
+
+    assert base.start() < widen.start(), "基准档必须先于放宽档位"
+    assert base.start() < css.index("@media (max-width: 1280px)"), (
+        "基准的 display:none 必须排在窄屏单列档位之前"
+    )
+
+
+def test_article_rail_height_cap_is_derived_from_the_article_body():
+    """左侧清单的高度上限必须由正文高度推导，不能只按视口封顶。
+
+    清单是阅读版式的网格项，盒高会参与那一行的高度计算。一篇只有一段的短文配 30 条
+    清单时，只按视口封顶会在正文之后空出几百像素的留白（实测 327px），并且折叠清单
+    时整页高度骤降、浏览器把滚动位置夹了回去（实测 scrollY 1400 → 1201）。
+    因此上限取「正文高度 / 可用视口 / 绝对封顶」的最小值，并在正文高度变化后重算。
+    """
+    source = Path("frontend/src/composables/useRailHeight.js").read_text(encoding="utf-8")
+    assert "offsetHeight" in source, "上限必须读正文的实际高度"
+    assert "ResizeObserver" in source, "正文高度变化后必须重算"
+    assert "Math.min(bodyHeight, available, CAP_PX)" in source
+
+    # 正文元素来自模板 ref；`<script setup>` 会在模板里把它解包成元素本身，
+    # 所以消费侧必须同时接住「元素」与「ref 包着的元素」两种形态。
+    assert "instanceof Element" in source, "要兼容模板传进来的已解包元素"
+
+    view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
+    assert ':body-ref="articleBodyRef"' in view, "清单必须拿到正文元素才能推导上限"
+
+
 def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():
     """矮视口档位的页脚内距必须排在同特异性的基准之后。
 

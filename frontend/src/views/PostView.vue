@@ -1,15 +1,18 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
 import ImageLightbox from "../components/post/ImageLightbox.vue";
 import PostHero from "../components/post/PostHero.vue";
+import PostRail from "../components/post/PostRail.vue";
 import PostSequenceNav from "../components/post/PostSequenceNav.vue";
 import PostToc from "../components/post/PostToc.vue";
 import RelatedPostsGrid from "../components/post/RelatedPostsGrid.vue";
+import { useMediaQuery } from "../composables/useMediaQuery";
 import { setPageMeta } from "../composables/usePageMeta";
 import { usePost } from "../composables/usePost";
+import { usePostRail } from "../composables/usePostRail";
 import { useReadingProgress } from "../composables/useReadingProgress";
 import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
@@ -20,6 +23,21 @@ import { enhanceArticleBody } from "../lib/articleEnhancer";
 const route = useRoute();
 const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
+
+// 左侧清单只在阅读版式真有那条空轨道时才存在。断点同时管住渲染与请求：
+// 窄屏既不该多拿一份列表，也不该把它塞进单列版式里。
+const railEnabled = useMediaQuery("(min-width: 1360px)");
+const {
+  railPosts,
+  railTotal,
+  railHasMore,
+  railLoadingMore,
+  railMode,
+  railCategory,
+  ensureRail,
+  loadMoreRail,
+} = usePostRail();
+const showRail = computed(() => railEnabled.value && railPosts.value.length > 0);
 
 const articleBodyRef = ref(null);
 const { readingProgress, update: updateReadingProgress } = useReadingProgress(articleBodyRef);
@@ -60,6 +78,16 @@ async function buildArticleNavigation() {
   await buildNavigation(enhanceBody);
 }
 
+/**
+ * 拉取左侧清单。不 await：清单是旁路内容，不能拖住正文渲染与滚动位置恢复。
+ * 数据到了之后再补一次入场观察 —— 清单是在 refreshReveal 之后才挂上去的，
+ * 观察器没见过它就永远不会给它加 .vis，整栏会一直停在不透明 0 的初始态。
+ */
+function syncRail() {
+  if (!railEnabled.value) return;
+  void ensureRail(post.value?.category || "");
+}
+
 function getSavedScrollPosition() {
   const savedPosition = window.history.state?.scroll;
   const top = Number(savedPosition?.top);
@@ -81,6 +109,7 @@ async function restoreSavedScrollPosition(savedPosition) {
 async function retryPost() {
   await loadPost(route.params.slug);
   await buildArticleNavigation();
+  syncRail();
   refreshReveal();
 }
 
@@ -90,6 +119,14 @@ watch([post, loading, relatedPosts], () => {
 
 watch([post, site], () => {
   updatePostMeta();
+});
+
+watch(() => railPosts.value.length, () => {
+  refreshReveal();
+});
+
+watch(railEnabled, (enabled) => {
+  if (enabled) syncRail();
 });
 
 onMounted(async () => {
@@ -102,6 +139,7 @@ onMounted(async () => {
 
   await loadPost(route.params.slug);
   await buildArticleNavigation();
+  syncRail();
   await restoreSavedScrollPosition(savedScrollPosition);
   refreshReveal();
 });
@@ -115,6 +153,7 @@ watch(
       readingProgress.value = 0;
       await loadPost(slug);
       await buildArticleNavigation();
+      syncRail();
       await restoreSavedScrollPosition(savedScrollPosition);
       refreshReveal();
     }
@@ -169,7 +208,28 @@ onBeforeUnmount(() => {
 
       <PostHero :post="post" :site-name="site?.name || 'Personal Blog'" />
 
-      <div class="post-reading-layout" :class="{ 'post-reading-layout--no-toc': !tableOfContents.length }">
+      <div
+        class="post-reading-layout"
+        :class="{
+          'post-reading-layout--no-toc': !tableOfContents.length,
+          'post-reading-layout--no-rail': !showRail,
+        }"
+      >
+        <PostRail
+          v-if="showRail"
+          :posts="railPosts"
+          :total="railTotal"
+          :has-more="railHasMore"
+          :loading-more="railLoadingMore"
+          :mode="railMode"
+          :category="railCategory"
+          :current-slug="route.params.slug"
+          :current-title="post.title"
+          :body-ref="articleBodyRef"
+          :enabled="railEnabled"
+          @more="loadMoreRail"
+        />
+
         <PostToc
           v-if="tableOfContents.length"
           :items="tableOfContents"

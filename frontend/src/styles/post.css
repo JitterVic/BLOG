@@ -23,18 +23,33 @@
   --post-article-width: 760px;
   --post-toc-width: 220px;
   --post-toc-gap: clamp(2rem, 3vw, 3rem);
+  /* 左侧清单的宽度与它同正文之间保留下来的间隙。与 --toc-* 同理必须声明在这里：
+     面板是这份网格的并列子元素，自定义属性不向上查找、也不横向传递。 */
+  --post-rail-width: 17rem;
+  --post-rail-gap: clamp(1.5rem, 2.4vw, 3rem);
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
   padding: 0 0 4rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--post-article-width)) minmax(0, 1fr);
-  grid-template-areas: ". article toc";
+  grid-template-areas: "rail article toc";
   align-items: start;
 }
 
-/* Keep the reading column centered whether or not the article has a TOC. */
+/* Keep the reading column centered whether or not the article has a TOC.
+   四条区域组合穷举「左右面板在不在」：三条轨道的宽度与顺序从不改变，面板只决定
+   轨道里放什么。因此正文的中心与宽度与折叠状态无关——这也正是「折叠侧栏不该让
+   文字在读者眼皮底下重排」这条要求能靠纯 CSS 满足的原因。 */
 .post-reading-layout--no-toc {
+  grid-template-areas: "rail article .";
+}
+
+.post-reading-layout--no-rail {
+  grid-template-areas: ". article toc";
+}
+
+.post-reading-layout--no-toc.post-reading-layout--no-rail {
   grid-template-areas: ". article .";
 }
 
@@ -154,6 +169,278 @@
   color: var(--ink-faded, #958b7b);
   font-size: 0.55rem;
   line-height: 1.7;
+}
+
+/* --- 左侧文章清单 ---
+   与右侧目录完全对称：都贴自己那一侧边缘（justify-self 分列 start / end）、都只占
+   一条 1fr 轨道、都 sticky。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一
+   不会压到正文的保证；只要轨道不够宽，面板就自己变窄，而不是去挤正文。 */
+.article-rail {
+  grid-area: rail;
+  position: sticky;
+  top: 6.8rem;
+  /* 压过 .print-page::after 那道左侧纸纹（z-index 10），否则纸纹会盖在清单文字上 */
+  z-index: 20;
+  /* 与右侧目录不同：清单天然可以很长，而它的盒高会参与阅读版式那一行的高度计算。
+     所以上限由正文实际高度推导（见 composables/useRailHeight.js），由内联样式给出；
+     换成 34rem 只是没有测量值时的兜底。超出部分由 nav 自己滚动，
+     而当前篇的定位逻辑会把它滚进可视区。 */
+  max-height: 34rem;
+  width: min(var(--post-rail-width), calc(100% - var(--post-rail-gap)));
+  min-height: 0;
+  margin-left: clamp(0.5rem, 1vw, 1.5rem);
+  /* 轨道不够宽的档位一律不布局。必须是 display 而不是「移出视口」之类的手法：
+     ≤1280px 的单列区域模板里没有 rail 这一格，一个仍可见的面板会被自动放进
+     隐式行，直接冒在正文上方。display:none 的元素不是网格项，因此那条分支不必改。 */
+  display: none;
+  flex-direction: column;
+  justify-self: start;
+  overflow: hidden;
+  padding: 0.9rem 0 0.5rem;
+  border-top: 2px solid var(--ink, #2a241c);
+}
+
+@media (min-width: 1360px) {
+  .article-rail {
+    display: flex;
+  }
+}
+
+.article-rail__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-rail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+  color: var(--ink-faded, #958b7b);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+}
+
+.article-rail__head strong {
+  color: var(--accent, #8b2500);
+  font-family: var(--f-display, serif);
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+
+.article-rail__head strong i {
+  color: var(--ink-faded, #958b7b);
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.article-rail__toggle,
+.article-toc__toggle {
+  padding: 0;
+  color: var(--ink-faded, #958b7b);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  transition: color 0.24s ease;
+}
+
+.article-rail__toggle:hover,
+.article-rail__toggle:focus-visible,
+.article-toc__toggle:hover,
+.article-toc__toggle:focus-visible {
+  color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+.article-rail nav {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.article-rail__year {
+  margin: 0.9rem 0 0.3rem;
+  padding-left: 0.6rem;
+  color: var(--ink-faded, #958b7b);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.54rem;
+  letter-spacing: 0.22em;
+}
+
+.article-rail nav > .article-rail__year:first-child {
+  margin-top: 0;
+}
+
+.article-rail__row,
+.article-rail__current {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  gap: 0.45rem;
+  padding: 0.42rem 0.35rem 0.42rem 0.6rem;
+  color: var(--ink-light, #6b6152);
+  border-left: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  font-size: 0.62rem;
+  line-height: 1.5;
+  transition: color 0.24s ease, border-color 0.24s ease;
+}
+
+.article-rail__row {
+  text-decoration: none;
+}
+
+.article-rail__date {
+  color: var(--rule-light, rgba(42, 36, 28, 0.35));
+  font-family: var(--f-mono, monospace);
+  font-size: 0.5rem;
+}
+
+.article-rail__row em,
+.article-rail__current em {
+  /* 两行封顶：清单是「找得到」，不是「读完」，但一行截断会把长标题的同名前缀全削平 */
+  display: -webkit-box;
+  overflow: hidden;
+  font-style: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.article-rail__row:hover,
+.article-rail__row:focus-visible,
+.article-rail__row.is-current {
+  color: var(--accent, #8b2500);
+  border-left-color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+.article-rail__row.is-current em {
+  font-weight: 600;
+}
+
+.article-rail__current {
+  margin: 0 0 0.4rem;
+  color: var(--accent, #8b2500);
+  border-left: 2px solid var(--accent, #8b2500);
+}
+
+.article-rail__current span {
+  font-family: var(--f-mono, monospace);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+}
+
+.article-rail__more {
+  width: 100%;
+  margin: 0.8rem 0 0;
+  padding: 0.5rem;
+  color: var(--ink-faded, #958b7b);
+  background: transparent;
+  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  cursor: pointer;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  transition: color 0.24s ease, border-color 0.24s ease;
+}
+
+.article-rail__more:hover:not(:disabled),
+.article-rail__more:focus-visible:not(:disabled) {
+  color: var(--accent, #8b2500);
+  border-color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+.article-rail__more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.article-rail__all {
+  display: block;
+  margin-top: 0.9rem;
+  padding-left: 0.6rem;
+  color: var(--ink-faded, #958b7b);
+  font-family: var(--f-mono, monospace);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  transition: color 0.24s ease;
+}
+
+.article-rail__all:hover,
+.article-rail__all:focus-visible {
+  color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+/* --- 折叠态：竖排书脊 ---
+   两条书脊共用一套写法，各自贴在正文那一侧的边上（左栏贴右边线、右栏贴左边线）。
+   展开态的面板与正文之间本来就没有背景与分隔，所以折叠后留下的必须是一条有分量的
+   竖线，否则「这里还有一栏」这件事就消失了。 */
+.article-rail.is-collapsed {
+  width: 2.25rem;
+  border-top: 0;
+  border-right: 2px solid var(--ink, #2a241c);
+}
+
+.article-rail__spine,
+.article-toc__spine {
+  /* writing-mode 会把 flex 主轴一起转过去：vertical-rl 下 flex-direction:row
+     是「自上而下」，所以这里不能写 column（那会变成横排）。 */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.7rem;
+  min-height: 9rem;
+  padding: 0.9rem 0 0.6rem;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  color: var(--ink-faded, #958b7b);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.54rem;
+  letter-spacing: 0.18em;
+  transition: color 0.24s ease;
+}
+
+.article-rail__spine {
+  width: 100%;
+}
+
+.article-toc__spine {
+  width: 100%;
+}
+
+.article-rail__spine:hover,
+.article-rail__spine:focus-visible,
+.article-toc__spine:hover,
+.article-toc__spine:focus-visible {
+  color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+.article-rail__spine strong,
+.article-toc__spine strong {
+  color: var(--accent, #8b2500);
+  font-family: var(--f-display, serif);
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+}
+
+.article-toc.is-collapsed {
+  width: 2.25rem;
+  border-top: 0;
+  border-left: 2px solid var(--ink, #2a241c);
 }
 
 .post-reading-layout .print-markdown h2,
