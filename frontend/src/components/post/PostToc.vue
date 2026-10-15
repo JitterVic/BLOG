@@ -29,13 +29,6 @@ const isDesktop = useMediaQuery("(min-width: 1281px)");
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-toc-collapsed");
 const isCollapsed = computed(() => isDesktop.value && collapsed.value);
 
-// 书脊上留当前章节号：目录可以收起来，「我读到第几节」不该跟着消失。
-const activeIndex = computed(() => props.items.findIndex((item) => item.id === props.activeId));
-
-function pad(value) {
-  return String(value).padStart(2, "0");
-}
-
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
 }
@@ -136,7 +129,7 @@ onBeforeUnmount(() => {
     class="article-toc"
     :class="{ 'is-collapsed': isCollapsed, 'is-parked': parked, 'is-pinned': pinned }"
   >
-    <!-- 折叠态：贴右边缘的竖排书脊，保留当前章节号 -->
+    <!-- 折叠态：贴右边缘的竖排书脊 -->
     <button
       v-if="isCollapsed"
       class="article-toc__spine"
@@ -148,7 +141,6 @@ onBeforeUnmount(() => {
     >
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       <span class="article-toc__spine-label">目录</span>
-      <strong>{{ pad(activeIndex >= 0 ? activeIndex + 1 : items.length) }}</strong>
     </button>
 
     <template v-else>

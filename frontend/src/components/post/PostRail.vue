@@ -1,7 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-
 import { shortDate } from "../../composables/useFormat";
 import { usePanelPin } from "../../composables/usePanelPin";
 import { usePersistedCollapse } from "../../composables/usePersistedCollapse";
@@ -29,28 +28,117 @@ const props = defineProps({
   loadingMore: { type: Boolean, default: false },
   mode: { type: String, default: "category" },
   category: { type: String, default: "" },
+  // 当前文章所属栏目（「本栏目」这一项的落点）。它和 category 不是一回事：
+  // 本栏目太薄而清单退化为「最新」时 category 是空的，但读者仍然应该能选回本栏目。
+  followCategory: { type: String, default: "" },
+  categories: { type: Array, default: () => [] },
   currentSlug: { type: String, default: "" },
 });
 
-defineEmits(["more"]);
+const emit = defineEmits(["more", "select-scope"]);
 
 // 展开态是默认：折起来虽然干净，但先折起来等于让人永远发现不了这一栏。
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-rail-collapsed");
 
 const navigationRef = ref(null);
 const hostRef = ref(null);
+const menuOpen = ref(false);
 let alignmentFrame = 0;
 let resizeAlignmentTimer = 0;
 const { pinned, parked } = usePanelPin(hostRef);
 
 const groups = computed(() => groupByYear(props.posts));
-const scopeLabel = computed(() => (props.mode === "latest" ? "最新" : props.category || "全部"));
 const currentIndex = computed(() => props.posts.findIndex((post) => post.slug === props.currentSlug));
 const allHref = computed(() => (
   props.mode === "category" && props.category
     ? `/posts?cat=${encodeURIComponent(props.category)}`
     : "/posts"
 ));
+
+// 表头与勾选都读「当前装载的范围」，而不是读读者的选择状态：本栏目太薄时清单会
+// 退化为全站最新，此时标签必须写实（最新），菜单里再说明本栏目为什么只剩自己。
+const scopeLabel = computed(() => (
+  props.mode === "latest" ? "最新" : props.category || "全部"
+));
+
+/**
+ * 清单范围的可选项：本栏目 / 全站最新 / 其余栏目。
+ *
+ * 为什么做成菜单而不是一排胶囊：栏目会随写作增加，铺开就把这一栏变成第二个筛选条，
+ * 而左栏只有 280px 上下。菜单默认收起，只占表头那一个词的位置——读者需要时才展开。
+ *
+ * 「本栏目」这一项发出的 key 是栏目名而不是「跟随」：读者明确点了它，就不该再被
+ * 「本栏目太薄→退化为最新」这条默认策略顶掉；默认策略只作用于初次进入。
+ */
+const scopeOptions = computed(() => {
+  const options = [];
+  const follow = props.followCategory;
+  const list = (props.categories || []).map((item) => (
+    typeof item === "string" ? { name: item, count: 0 } : item
+  ));
+  const categories = list.filter((item) => item?.name);
+
+  if (follow) {
+    const count = Number(categories.find((item) => item.name === follow)?.count) || 0;
+    options.push({
+      key: follow,
+      label: `本栏目 · ${follow}`,
+      // 读者要能看出「本栏目」与「最新」的差别：本栏目只有当前这一篇时清单里就只剩
+      // 自己，这里提前说明，免得点开才发现。
+      hint: count > 1 ? String(count) : "仅此一篇",
+      active: props.mode === "category" && props.category === follow,
+    });
+  }
+  options.push({
+    key: "latest",
+    label: "最新",
+    hint: "全站",
+    active: props.mode === "latest",
+  });
+  for (const item of categories) {
+    if (item.name === follow) continue;
+    options.push({
+      key: item.name,
+      label: item.name,
+      hint: item.count ? String(item.count) : "",
+      active: props.mode === "category" && props.category === item.name,
+    });
+  }
+  return options;
+});
+
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value;
+}
+
+function closeMenu() {
+  menuOpen.value = false;
+}
+
+function chooseScope(option) {
+  menuOpen.value = false;
+  if (!option.active) emit("select-scope", option.key);
+}
+
+function handleKeydown(event) {
+  if (event.key === "Escape") closeMenu();
+}
+
+function handleOutside(event) {
+  if (!event.target.closest?.(".article-rail__head")) closeMenu();
+}
+
+watch(menuOpen, (open) => {
+  if (open) {
+    document.addEventListener("pointerdown", handleOutside);
+    document.addEventListener("keydown", handleKeydown);
+  } else {
+    document.removeEventListener("pointerdown", handleOutside);
+    document.removeEventListener("keydown", handleKeydown);
+  }
+});
+
+watch(() => props.currentSlug, closeMenu);
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -135,12 +223,23 @@ onBeforeUnmount(() => {
     >
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       <span class="article-rail__spine-label">文章清单</span>
-      <strong>{{ pad(total) }}</strong>
     </button>
 
     <div v-else class="article-rail__body">
       <div class="article-rail__head">
-        <span>{{ scopeLabel }}</span>
+        <button
+          class="article-rail__scope"
+          type="button"
+          aria-haspopup="menu"
+          :aria-expanded="menuOpen ? 'true' : 'false'"
+          :title="`切换清单范围（当前：${scopeLabel}）`"
+          @click="toggleMenu"
+        >
+          <span>{{ scopeLabel }}</span>
+          <svg class="article-rail__scope-caret" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
         <strong v-if="currentIndex >= 0">{{ currentIndex + 1 }}<i>/{{ total }}</i></strong>
         <strong v-else>{{ pad(total) }}</strong>
         <button
@@ -152,6 +251,22 @@ onBeforeUnmount(() => {
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
         </button>
+
+        <div v-if="menuOpen" class="article-rail__scopes" role="menu" aria-label="清单范围">
+          <button
+            v-for="option in scopeOptions"
+            :key="option.key || 'follow'"
+            type="button"
+            role="menuitemradio"
+            class="article-rail__scope-option"
+            :class="{ 'is-active': option.active }"
+            :aria-checked="option.active ? 'true' : 'false'"
+            @click="chooseScope(option)"
+          >
+            <span>{{ option.label }}</span>
+            <em v-if="option.hint">{{ option.hint }}</em>
+          </button>
+        </div>
       </div>
 
       <nav ref="navigationRef" aria-label="文章清单导航">

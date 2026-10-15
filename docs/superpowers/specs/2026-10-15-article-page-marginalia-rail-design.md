@@ -702,3 +702,70 @@ and typing in the box still triggers the debounced reload (`?q=第一题` → 1 
 Still open (unchanged, awaiting a product decision): first-screen visibility of the panels, the
 `最新` fallback scope, the short-article near-invisibility of the rail, the 1281–1884px frame trade-off,
 the bare-array branch of `/api/posts?limit=N`, and the chip row only listing non-empty categories.
+
+## Triage follow-ups (2026-10-15, sixth round)
+
+Decisions from the triage list, plus two new items from the user's annotations.
+
+**Kept as is — first-screen visibility (P1).** The panels only appear once the reading area's top
+rises above the fold (measured: first visible at `scrollY = 250` on a 21734px article in a 1080px
+viewport; both are `visibility: hidden` at rest). The user chose 保持现状: the hero is the cover and
+the panels belong to the act of reading, not to the cover.
+
+**Left rail is now a switchable scope (P1, approved).** Two changes, one design:
+
+- `MIN_SCOPE_POSTS` went 3 → 2: a 本栏目 with even one other article is listed, and only a 本栏目
+  that holds nothing but the current article degrades to 最新.
+- The header word became a menu button (`role="menu"` + `menuitemradio`, caret rotates on open,
+  Escape / outside click / article change close it) listing 本栏目 · X, 最新 (全站) and every other
+  栏目 with its count. The selected option is derived from the *loaded* scope, so the tick always
+  agrees with the header; a thin 本栏目 is marked 仅此一篇 so the default fallback is not a surprise.
+  The menu's 本栏目 entry emits the category *name*, not the empty "follow" scope: an explicit
+  choice must not be overridden by the thin-category policy. `railScope` is reader state kept in the
+  module singleton, so picking a category survives navigation between articles.
+- Why a menu and not chips: 栏目 grows with the writing, and a chip row here would turn a 280px rail
+  into a second filter bar. The menu collapses to a single word and overlays the list; its max-height
+  tracks `--panel-avail` so it can never be taller than the panel it lives in.
+
+Measured on `project-mentor-完整修订版`: header `最新`, menu = 本栏目 · 教学 (仅此一篇) / 最新 [active] /
+算法 1; picking 算法 → header `算法`, one request (`/api/posts?category=算法&limit=30&page=1`), list
+becomes that one article, 完整目录 → `/posts?cat=算法`; reopening shows 算法 ticked; picking
+本栏目 · 教学 → header `教学`, one more request, 完整目录 → `/posts?cat=教学`. Menu box 16–302 × 152–250
+inside a panel of 16–302 × 109–316 at 1600px wide.
+
+**Short articles no longer flash (P2, approved).** `usePanelPin` now hides a panel when the remaining
+room is under `MIN_USEFUL_PX = 260` *and* the panel's content does not fit — the fit test reads
+`nav.scrollHeight - nav.clientHeight` on top of the rendered height, so a genuinely short panel (a
+two-item TOC, a two-row rail) still shows in a short area. Verified by shrinking the reading area with
+injected CSS: at a 184px area with a 700px panel the rail is visible in **0 of 19** sampled frames
+(previously it appeared as a ~100px fragment and vanished); with a 304px area and a 190px panel it
+stays visible while it fits and hides only when it cannot. `panelNeedsMoreRoom()` is the named helper.
+
+**Spine numbers removed.** Both collapsed spines' `<strong>` (TOC = current section, rail = total) are
+gone, along with `.article-rail__spine strong` / `.article-toc__spine strong`; the two numbers meant
+unrelated things and read as noise side by side. The right spine also lost the expanded state's top
+padding, which had put it 14px lower than the left one (123 vs 109 — now both at 109).
+
+**`/api/posts` envelope (P3, approved).** A missing `page` no longer returns a bare array: the endpoint
+always answers `{items, total, page, per_page, has_more}`, with a missing `page` meaning `page=1`. Page
+size keeps each path's old default (10 when `page` was given, 50 when it was not, cap 50), so no caller
+silently gets a different window. The defensive `Array.isArray(...) ? ... : ...` branches in `usePosts`
+and `HomeView` were deleted, and the three tests that iterated the array were updated. Verified:
+`/api/posts` → `{page: 1, per_page: 50, total: 3, has_more: False, items: [3]}`,
+`?limit=1` → `has_more: True`, `?page=2` → `per_page: 10`.
+
+**Frame width in 1281–1884px (P2, reported for a decision, unchanged).** Keeping the sheet at 1180px
+while the panels stay at their design widths is geometrically impossible below 1884px: the panel budget
+is `(100vw - frame) / 2 - inset - breath`, so every 16px of frame width costs 16px of total panel
+width. Current settings (`frame = min(1180px, max(800px, 100vw - 40rem))`) give, at 1440: sheet 800 /
+rail 288 / TOC 240; at 1690: sheet 1050 / rail 285 / TOC 240; at 1920 the original 1180/312/240 is
+untouched. The alternative — raising the rail breakpoint to 1884 so the sheet stays 1180 — would leave
+a 1690px window with no left rail at all, which the user values more, so the trade-off was left in
+place and the knobs (`40rem` reservation, 800px floor) documented here instead.
+
+`backend/tests/test_backend.py` holds 199 passing tests. New: `test_posts_endpoint_always_returns_the_same_envelope`
+(integration, asserts the envelope for the no-`page`, `limit` and paged paths),
+`test_article_rail_scope_is_switchable_and_truthful` (menu markup, `MIN_SCOPE_POSTS = 2`, and that the
+explicit path contains no thin-category check), `test_collapsed_spines_carry_no_numbers`; the chevron
+test now whitelists exactly two `rotate(180deg)` selectors instead of one, and the pin test asserts
+`MIN_USEFUL_PX` + `panelNeedsMoreRoom`.

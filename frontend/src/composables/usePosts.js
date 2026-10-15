@@ -17,15 +17,8 @@ export function usePosts({ errorMessage = DEFAULT_POSTS_ERROR } = {}) {
   let activeController = null;
   let lastParams = null;
 
+  // /api/posts 只有一种形状（永远带信封），所以这里不再分裸数组那条支路。
   function applyListResult(list, { append = false } = {}) {
-    if (Array.isArray(list)) {
-      posts.value = append ? posts.value.concat(list) : list;
-      total.value = posts.value.length;
-      page.value = 1;
-      hasMore.value = false;
-      return;
-    }
-
     const items = Array.isArray(list?.items) ? list.items : [];
     posts.value = append ? posts.value.concat(items) : items;
     total.value = Number.isFinite(list?.total) ? list.total : posts.value.length;

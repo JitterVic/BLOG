@@ -36,6 +36,7 @@ const {
   railMode,
   railCategory,
   ensureRail,
+  setRailScope,
   loadMoreRail,
 } = usePostRail();
 const showRail = computed(() => railEnabled.value && railPosts.value.length > 0);
@@ -220,8 +221,11 @@ onBeforeUnmount(() => {
           :loading-more="railLoadingMore"
           :mode="railMode"
           :category="railCategory"
+          :follow-category="post.category || ''"
+          :categories="site?.categories || []"
           :current-slug="route.params.slug"
           @more="loadMoreRail"
+          @select-scope="setRailScope"
         />
 
         <PostToc

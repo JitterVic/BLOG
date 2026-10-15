@@ -195,7 +195,7 @@ def test_search_still_matches_after_length_cap(app_bundle, client):
     store.save_post(
         {"title": "独特关键词 findme", "markdown_content": "正文 " * 30}, action="published"
     )
-    results = client.get("/api/posts?q=findme").get_json()
+    results = client.get("/api/posts?q=findme").get_json()["items"]
     assert len(results) == 1
     assert "findme" in results[0]["title"]
 

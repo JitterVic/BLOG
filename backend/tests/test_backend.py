@@ -82,7 +82,7 @@ def test_public_api_excludes_drafts(app_bundle, client):
     assert store.get_post_by_id(draft_id)["status"] == "draft"
     response = client.get("/api/posts?q=Hidden Draft")
     assert response.status_code == 200
-    assert response.get_json() == []
+    assert response.get_json()["items"] == []
     assert client.get("/api/posts/hidden-draft").status_code == 404
 
 
@@ -483,7 +483,7 @@ def test_list_posts_omits_body_columns(app_bundle, client):
     assert match["title"] == "Compact list body"
 
     payload = client.get("/api/posts").get_json()
-    item = next(entry for entry in payload if entry["slug"] == "compact-list-body")
+    item = next(entry for entry in payload["items"] if entry["slug"] == "compact-list-body")
     assert set(item.keys()) >= {"slug", "title", "excerpt", "cover_image", "click_count"}
     assert "html_content" not in item
     assert "markdown_content" not in item
@@ -745,7 +745,8 @@ def test_side_panels_are_pinned_without_touching_the_scroll_path():
     assert "--panel-shift" not in pin
     assert '"--panel-pin"' in pin, "吸附线 px 值需要由脚本写入，与 pinRem 同源"
     assert "getBoundingClientRect" in pin and "scroll" in pin and "resize" in pin
-    assert "MIN_VISIBLE_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
+    assert "MIN_USEFUL_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
+    assert "panelNeedsMoreRoom" in pin, "碎片判定要看内容能否完整放下，而不是只看一个固定高度"
     # 只在数值变化时写样式，稳定态的滚动不该产生任何样式改写。
     assert "lastAvail" in pin and "if (avail !== lastAvail)" in pin
 
@@ -793,10 +794,17 @@ def test_panel_chevrons_point_outward_when_collapsing():
     css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     hits = re.findall(r"([^{}]+)\{([^{}]*rotate\(180deg\)[^{}]*)\}", css, re.S)
-    assert len(hits) == 1, f"只允许一次箭头翻转，实际命中 {len(hits)} 处"
-    selector = hits[0][0].strip()
-    assert selector == ".article-rail__spine svg", (
-        f"翻转必须只作用于左栏书脊（面板从左侧拉出，箭头指向正文），实际是 {selector}"
+    allowed = {
+        # 左栏书脊：面板从左侧拉出，展开时的箭头要指回正文
+        ".article-rail__spine svg",
+        # 范围切换器的折角：菜单展开时朝上
+        '.article-rail__scope[aria-expanded="true"] .article-rail__scope-caret',
+    }
+    found = {hit[0].strip() for hit in hits}
+    assert found <= allowed, f"出现了计划外的箭头翻转：{sorted(found - allowed)}"
+    assert ".article-rail__spine svg" in found, "左栏书脊的箭头必须翻转，否则指向反了"
+    assert ".article-toc__toggle svg" not in found and ".article-toc__spine svg" not in found, (
+        "目录的两处箭头用另一条朝右的路径，本来就对，翻转会让它指反"
     )
 
 
@@ -1187,6 +1195,96 @@ def test_posts_page_is_a_single_year_grouped_index():
             assert token not in text, f"{path.name} 仍残留已下线选择器 {token}"
 
 
+def test_posts_endpoint_always_returns_the_same_envelope(app_bundle):
+    """`/api/posts` 只有一种载荷形状，永远带信封。
+
+    早先「不带 page」会返回裸数组：同一个端点两种形状，前端每处调用都得先写
+    `Array.isArray(list) ? list : list.items`，测试也得记住哪条路径是哪种形状。
+    现在缺省即 page=1，per_page 沿用它原有的缺省（带 page 是 10、不带是 50，同为 50 上限），
+    total/has_more 一并给出。
+    """
+    _application, store = app_bundle
+    client = _application.test_client()
+    for index in range(3):
+        store.save_post(
+            {
+                "title": f"信封 {index}",
+                "slug": f"envelope-{index}",
+                "category": "工程",
+                "markdown_content": "正文一段。",
+            },
+            action="published",
+        )
+
+    envelope = {"items", "total", "page", "per_page", "has_more"}
+    bare = client.get("/api/posts").get_json()
+    assert set(bare) == envelope, "不带 page 也必须返回信封"
+    assert bare["page"] == 1 and bare["per_page"] == 50 and bare["total"] == 3
+    assert len(bare["items"]) == 3 and bare["has_more"] is False
+
+    limited = client.get("/api/posts?limit=1").get_json()
+    assert set(limited) == envelope
+    assert len(limited["items"]) == 1 and limited["total"] == 3 and limited["has_more"] is True
+
+    paged = client.get("/api/posts?page=2").get_json()
+    assert set(paged) == envelope
+    assert paged["page"] == 2 and paged["per_page"] == 10
+
+
+def test_article_rail_scope_is_switchable_and_truthful():
+    """左栏的表头是一个范围切换器，不是一块写死的标签。
+
+    需求：读者除了「最新」还应该能选别的范围，但不能臃肿。所以选项收进菜单，表头只占
+    一个词的位置；勾选与表头都读「当前装载的范围」，于是本栏目太薄退化为最新时标签写实、
+    菜单里再说明本栏目只剩自己。菜单里「本栏目」发出的 key 是栏目名而不是空串：读者
+    明确点了它，就不该再被「本栏目太薄→退化为最新」这条默认策略顶掉。
+    """
+    rail = Path("frontend/src/components/post/PostRail.vue").read_text(encoding="utf-8")
+    assert 'class="article-rail__scope"' in rail and 'aria-haspopup="menu"' in rail
+    assert 'role="menuitemradio"' in rail and ':aria-checked=' in rail
+    assert "select-scope" in rail, "切换范围要能上抛给视图层"
+    assert "key: follow," in rail, "本栏目这一项必须发栏目名，否则显式选择会被默认策略覆盖"
+    assert 'hint: count > 1 ? String(count) : "仅此一篇"' in rail
+
+    store = Path("frontend/src/composables/usePostRail.js").read_text(encoding="utf-8")
+    assert "const railScope = ref" in store and "function setRailScope" in store
+    assert "MIN_SCOPE_POSTS = 2" in store, "本栏目只要还有一篇别的文章就照列"
+    # 显式选择不做退化：只有「跟随当前文章」那条路径才允许回落到最新
+    explicit = re.search(r"function loadExplicitScope\(scope\) \{(.*?)\n\}", store, re.S)
+    assert explicit is not None
+    assert 'mode: "latest"' in explicit.group(1)
+    assert "MIN_SCOPE_POSTS" not in explicit.group(1), "显式选择不该再做厚薄判断"
+
+    view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
+    assert '@select-scope="setRailScope"' in view
+    assert ":follow-category=" in view and ":categories=" in view
+
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    assert ".article-rail__scopes" in css and ".article-rail__scope-option" in css
+    assert "var(--panel-avail" in css.split(".article-rail__scopes")[1][:400], (
+        "菜单高度要跟着面板可用高度走，否则短面板下菜单会比面板还高"
+    )
+
+
+def test_collapsed_spines_carry_no_numbers():
+    """折叠后的书脊只留箭头与竖排名称，不再挂数字。
+
+    两条书脊的数字含义互不相干（目录是当前章节号、清单是总篇数），并排放着读者无从
+    分辨，去掉后左右视觉一致。
+    """
+    rail = Path("frontend/src/components/post/PostRail.vue").read_text(encoding="utf-8")
+    toc = Path("frontend/src/components/post/PostToc.vue").read_text(encoding="utf-8")
+    for name, src in (("PostRail", rail), ("PostToc", toc)):
+        spine = re.search(r'class="article-(?:rail|toc)__spine"(.*?)</button>', src, re.S)
+        assert spine is not None, f"{name} 找不到书脊按钮"
+        assert "<strong>" not in spine.group(1), f"{name} 的书脊不应再有数字"
+
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    assert ".article-toc__spine strong" not in css, "书脊数字的样式应一并删除"
+    assert ".article-rail__spine strong" not in css
+    # 折叠态右书脊要与左书脊同高：展开态那段上内距必须归零
+    assert re.search(r"\.article-toc\.is-collapsed \{[^}]*padding-top: 0", css, re.S) is not None
+
 
 def test_article_tag_chips_lead_to_a_search_that_actually_works():
     """文章页的标签要成为能生效的入口，而不是点了没反应的链接。
@@ -1287,11 +1385,11 @@ def test_public_api_filters_by_category_and_searches_keywords(client, app_bundle
         {"name": "工程", "count": 1},
     ]
 
-    only_algo = client.get("/api/posts?category=算法").get_json()
+    only_algo = client.get("/api/posts?category=算法").get_json()["items"]
     assert sorted(item["slug"] for item in only_algo) == ["post-0", "post-1"]
     assert all("keywords" not in item for item in only_algo)
 
-    by_keyword = client.get("/api/posts?q=剪枝").get_json()
+    by_keyword = client.get("/api/posts?q=剪枝").get_json()["items"]
     assert [item["slug"] for item in by_keyword] == ["post-1"]
 
     # 分页与筛选并存（count 也要带上 category，否则 total 会算成全量）

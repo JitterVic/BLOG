@@ -18,8 +18,11 @@
 
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
-// 低于这个高度就不再显示：此时区域已到末尾，留一条碎片只会让人误点。
-const MIN_VISIBLE_PX = 96;
+// 低于这个高度就不再显示：区域快走完时留一条几十像素的碎片，读者看到的是
+// 「闪一下又没了」，而且一旦在这里点了收起，书脊会跟着一起隐去（等于打不开）。
+// 例外是内容本来就不长的面板（例如只有两条的目录）：它能完整放下就不算碎片，
+// 见 panelNeedsMoreRoom()。
+const MIN_USEFUL_PX = 260;
 const VIEWPORT_MARGIN_PX = 8;
 
 export function usePanelPin(hostRef, { pinRem = 6.8, anchor = ".post-reading-layout" } = {}) {
@@ -36,6 +39,20 @@ export function usePanelPin(hostRef, { pinRem = 6.8, anchor = ".post-reading-lay
     hostRef.value?.style.setProperty("--panel-pin", `${Math.round(pinRem * rootPx)}px`);
   }
 
+  /**
+   * 面板是否「装不下」：被 max-height 夹住的部分就是读者看不到的行。
+   * 用「已渲染高度 + 内层导航溢出量」估算自然高度——面板本体高度永远等于可用高度，
+   * 只有导航的 scrollHeight 能告诉我们里面还压着多少内容。
+   */
+  function panelNeedsMoreRoom(host, room) {
+    if (room >= MIN_USEFUL_PX) return false;
+    const panel = host.querySelector(".article-rail__body, .article-rail__spine") || host;
+    const nav = panel.querySelector("nav");
+    const overflow = nav ? Math.max(0, nav.scrollHeight - nav.clientHeight) : 0;
+    const natural = panel.getBoundingClientRect().height + overflow;
+    return natural > room;
+  }
+
   function sync() {
     const host = hostRef.value;
     const region = host?.closest(anchor);
@@ -49,7 +66,7 @@ export function usePanelPin(hostRef, { pinRem = 6.8, anchor = ".post-reading-lay
     const isPinned = rect.top <= pin;
     const top = isPinned ? pin : rect.top;
     const room = Math.min(window.innerHeight - top - VIEWPORT_MARGIN_PX, rect.bottom - top);
-    const avail = Math.round(Math.max(MIN_VISIBLE_PX, room));
+    const avail = Math.round(Math.max(MIN_USEFUL_PX, room));
 
     // 只在数值真的变了才写：无事发生的帧不产生任何样式改写。
     if (avail !== lastAvail) {
@@ -57,7 +74,7 @@ export function usePanelPin(hostRef, { pinRem = 6.8, anchor = ".post-reading-lay
       lastAvail = avail;
     }
     pinned.value = isPinned;
-    parked.value = room < MIN_VISIBLE_PX;
+    parked.value = panelNeedsMoreRoom(host, room);
   }
 
   function handleResize() {

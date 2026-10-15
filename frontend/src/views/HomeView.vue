@@ -68,8 +68,8 @@ async function loadHomePosts() {
       getPosts({ sort: "hot", limit: HOT_FETCH_LIMIT, signal: postsController.signal }),
     ]);
     if (requestId !== postsRequestSequence) return;
-    latestPosts.value = Array.isArray(latestList) ? latestList : (latestList?.items || []);
-    hotPosts.value = Array.isArray(hotList) ? hotList : (hotList?.items || []);
+    latestPosts.value = latestList?.items || [];
+    hotPosts.value = hotList?.items || [];
   } catch (err) {
     if (requestId !== postsRequestSequence || err?.code === "REQUEST_ABORTED") return;
     postsError.value = err?.code === "REQUEST_TIMEOUT"

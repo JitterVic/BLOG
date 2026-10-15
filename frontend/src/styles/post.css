@@ -392,6 +392,7 @@ html.motion-off .article-toc {
 }
 
 .article-rail__head {
+  position: relative;
   flex: 0 0 auto;
   justify-content: flex-start;
   font-family: var(--f-mono, monospace);
@@ -402,6 +403,115 @@ html.motion-off .article-toc {
 .article-rail__head > strong {
   margin-left: auto;
   font-size: 1.15rem;
+}
+
+/* 范围切换器：占的正是原来那个标签词的位置，多出来的只有一个 0.6rem 的折角。
+   栏目会随写作增加，铺成一排胶囊就把这一栏变成第二个筛选条，所以选项收进菜单。 */
+.article-rail__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--ink-light, #5e5548);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  transition: color 0.22s ease;
+}
+
+.article-rail__scope > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-rail__scope-caret {
+  flex: 0 0 auto;
+  width: 0.6rem;
+  height: 0.6rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.22s ease;
+}
+
+.article-rail__scope:hover,
+.article-rail__scope:focus-visible,
+.article-rail__scope[aria-expanded="true"] {
+  color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+.article-rail__scope[aria-expanded="true"] .article-rail__scope-caret {
+  transform: rotate(180deg);
+}
+
+/* 选项面板：贴表头下方铺满整栏宽，方角 + 一道细线，与报刊的其它浮层同一套语言。
+   高度上限跟着面板可用高度走：面板本身就只有 260px 时，菜单不能比面板还高。 */
+.article-rail__scopes {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  max-height: calc(var(--panel-avail, 24rem) - 3.4rem);
+  padding: 0.2rem 0;
+  overflow-y: auto;
+  background: var(--paper, #f6f1e8);
+  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  box-shadow: 0 14px 28px rgba(42, 36, 28, 0.14);
+}
+
+.article-rail__scope-option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  color: var(--ink-mid, #3b342a);
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-align: left;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.article-rail__scope-option > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-rail__scope-option em {
+  margin-left: auto;
+  color: var(--ink-faded, #958b7b);
+  font-size: 0.52rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.article-rail__scope-option:hover,
+.article-rail__scope-option:focus-visible {
+  color: var(--accent, #8b2500);
+  background: rgba(139, 37, 0, 0.06);
+  outline: 0;
+}
+
+.article-rail__scope-option.is-active {
+  color: var(--accent, #8b2500);
+  border-left-color: var(--accent, #8b2500);
 }
 
 .article-rail__head strong i {
@@ -550,9 +660,16 @@ html.motion-off .article-toc {
    右栏 right:0），因此收起后标签留在原地而不是跳到别处——这也是它们与正文列之间隔着
    整段外侧留白的原因：留白越窄，书脊越贴近框线（下限由宽度夹取保证）。
    展开态的面板与正文之间本来就没有背景与分隔，所以折叠后留下的必须是一条有分量的
-   竖线，否则「这里还有一栏」这件事就消失了。 */
+   竖线，否则「这里还有一栏」这件事就消失了。
+   书脊上只留箭头与竖排名称：早先还挂着一个数字（目录是当前章节号、清单是总篇数），
+   两条书脊各说各的、读者无从分辨，去掉后两边视觉一致。 */
 .article-rail.is-collapsed {
   width: 2rem;
+}
+
+/* 折叠态不需要展开态那段上内距，否则右书脊会比左边的低 14px（实测 123 vs 109）。 */
+.article-toc.is-collapsed {
+  padding-top: 0;
 }
 
 .article-rail.is-collapsed .article-rail__spine {
@@ -608,15 +725,6 @@ html.motion-off .article-toc {
   color: var(--accent, #8b2500);
   background: rgba(139, 37, 0, 0.05);
   outline: 0;
-}
-
-.article-rail__spine strong,
-.article-toc__spine strong {
-  color: var(--accent, #8b2500);
-  font-family: var(--f-display, serif);
-  font-size: 1.1rem;
-  font-weight: 400;
-  letter-spacing: 0.06em;
 }
 
 .article-toc.is-collapsed {

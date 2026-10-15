@@ -62,14 +62,12 @@ def build_blueprint(store) -> Blueprint:
             "search": q or None,
         }
 
-        if page is None:
-            if limit is not None:
-                list_kwargs["limit"] = max(1, min(limit, 50))
-            data = store.list_posts(**list_kwargs)
-            return jsonify([summarize_post(post) for post in data])
-
-        page = max(1, page)
-        per_page = max(1, min(limit or 10, 50))
+        # 一种形状，永远带信封。早先「不带 page」会返回裸数组，于是同一个端点有两种
+        # 载荷：前端每处调用都得先判断 Array.isArray，测试也得记住哪条路径是哪种形状。
+        # 现在缺省即 page=1；页大小沿用各自原有的缺省（带 page 是 10，不带是 50，同为 50 上限）。
+        raw_page = page
+        page = max(1, raw_page or 1)
+        per_page = max(1, min(limit or (10 if raw_page is not None else 50), 50))
         start = (page - 1) * per_page
         total = store.count_posts(
             tag=tag,
