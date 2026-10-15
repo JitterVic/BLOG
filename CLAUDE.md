@@ -5,7 +5,7 @@ This file provides architectural context and operational constraints for AI assi
 ## 1. Overview & Runtime Topology
 
 - **Stack**: Vue 3 SPA (Vite 6, `<script setup>`) + Flask 3 backend + SQLite (WAL mode).
-- **Admin Panel**: Server-rendered Jinja2 templates + ES Modules (`backend/src/blog/templates/` & `static/`), independent of the Vue SPA.
+- **Admin Panel**: Server-rendered Jinja2 templates + ES Modules (`backend/src/blog/templates/` & `static/`), independent of the Vue SPA — but *not* visually independent: `static/admin/css/theme.css` holds the same design tokens as `frontend/src/styles/base.css` (paper/ink/rules/fonts/focus ring) and is `@import`ed by `base.css` and `login.css`. Admin templates must load the same Google Fonts as the front-end, carry `noindex, nofollow`, and use `rgb(var(--paper-rgb) / a)` instead of hard-coded `rgba(...)` paper literals.
 - **Language**: Chinese for all UI strings, flash messages, and user-facing notifications.
 
 ### Topology Modes

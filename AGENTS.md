@@ -52,6 +52,14 @@
 - **文章目录页（`/posts`）**：单一形态——按年份分组的编年索引（`components/posts/ArchiveLedger.vue`），配 `PostsToolbox.vue` 的栏目筛选与搜索。索引行 = 日期 / 标题 + 摘要 / 时长 + 标签；筛选走服务端 `category` 参数，因此筛选与翻页可以并存。标签不参与筛选（标签是自由词表，做成筛选维度就会长成第二个标签云），因此文章页的标签链接走检索维度 `?q=`。`/api/posts` **只有一种载荷形状**：永远返回 `{items, total, page, per_page, has_more}`，缺省即 `page=1`（不带 `page` 时 `per_page` 上限 50），不再有裸数组分支。
 - **样式体系**：基于原生 CSS 变量构建 `styles/editorial.css`，聚合 12 个按层叠顺序加载的主题模块（reset, tokens, layout, typography, components, print 等）。
 
+### 后台管理面板 (`templates/` + `static/admin/`)
+
+- **与前台同源的主题**：设计令牌集中在 `static/admin/css/theme.css`（纸色 `--paper: #f6f1e8`、墨色、栏线、字体栈、缓动、`--ring-focus`），取值必须与 `frontend/src/styles/base.css` 保持一致。`base.css` 与 `login.css` 各自 `@import` 它，模板只挂各自页面的样式表。
+- **字体必须真的加载**：`admin_base.html`、`admin_login.html`、`admin_preview.html` 都要引与前台相同的 Google Fonts（Playfair Display / Noto Serif SC / IBM Plex Mono）。少了这一句，中文标题掉回系统宋体、正文掉回 Consolas，前后台并排就不像同一家刊物。
+- **半透明纸面用 RGB 令牌**：写成 `rgb(var(--paper-rgb) / 0.9)`，不要散落 `rgba(244, 239, 230, .9)` 这类字面量——否则改 `--paper` 时那几十处仍旧是旧纸色。
+- **后台页面一律 `noindex, nofollow`**：`robots.txt` 故意不列出后台路径（避免泄漏前缀），因此收录控制只能落在页面自身的 meta 上。
+- **登录页是独立页面**：`admin_login.html` 不继承 `admin_base.html`（登录前没有导航可挂），但必须共用 `theme.css` 的纸面与字体，禁止再引入第二套配色。
+
 ---
 
 ## 2. 编码规范与命名约定

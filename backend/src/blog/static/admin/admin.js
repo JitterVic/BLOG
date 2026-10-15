@@ -25,7 +25,6 @@ function updateAdminPostFilter() {
     const matchesStatus = !status || item.dataset.status === status;
     const visible = matchesQuery && matchesStatus;
     item.hidden = !visible;
-    item.classList.toggle("is-hidden", !visible);
     if (visible) visibleCount += 1;
     else { const check = item.querySelector(".post-check"); if (check) check.checked = false; }
   });

@@ -2,7 +2,7 @@
       .profile-card { width: min(1180px, 100%); margin: 0 auto; }
 /* Profile live preview */
 .profile-shell { grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); }
-.profile-live-preview { grid-column: 2; grid-row: 1; padding: .85rem; display: grid; align-content: start; gap: .7rem; border: 1px solid var(--rule-light); background: rgba(255,251,240,.48); }
+.profile-live-preview { grid-column: 2; grid-row: 1; padding: .85rem; display: grid; align-content: start; gap: .7rem; border: 1px solid var(--rule-light); background: rgb(var(--paper-tint-rgb) / .48); }
 .profile-preview-switcher { display: flex; border: 1px solid var(--rule-light); }
 .profile-preview-switcher button { flex: 1; min-height: 2.2rem; border: 0; border-right: 1px solid var(--rule-light); background: transparent; cursor: pointer; font-size: .62rem; }
 .profile-preview-switcher button:last-child { border-right: 0; }

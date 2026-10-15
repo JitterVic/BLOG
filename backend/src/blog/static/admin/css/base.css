@@ -1,75 +1,6 @@
-/* 管理后台共享层：主题令牌、顶栏、卡片、表单、按钮、消息、帮助弹窗 */
-:root {
-        color-scheme: light;
-        --paper: #f4efe6;
-        --paper-dark: #ddd6c5;
-        --ink: #1c1710;
-        --ink-mid: #3b3328;
-        --ink-light: #5e5548;
-        --ink-faded: #8a7f6f;
-        --accent: #8b2500;
-        --rule: #2a241c;
-        --rule-light: rgba(42, 36, 28, 0.2);
-        --rule-mid: rgba(42, 36, 28, 0.42);
-        --code-bg: #2a2520;
-        --code-fg: #e8dfd0;
-        --success-bg: rgba(78, 98, 82, 0.12);
-        --success-line: rgba(78, 98, 82, 0.42);
-        --success-text: #3f5f43;
-        --error-bg: rgba(139, 37, 0, 0.09);
-        --error-line: rgba(139, 37, 0, 0.36);
-        --error-text: #8b2500;
-        --f-display: "Playfair Display", "Noto Serif SC", "Songti SC", Georgia, serif;
-        --f-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Courier New", monospace;
-        --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-        --shadow: 0 24px 70px rgba(42, 36, 28, 0.1);
-      }
-
-      * { box-sizing: border-box; }
-      html { background: var(--paper); scrollbar-color: var(--ink-faded) var(--paper-dark); scrollbar-width: thin; }
-
-      body {
-        position: relative;
-        margin: 0;
-        min-width: 320px;
-        color: var(--ink);
-        background:
-          radial-gradient(circle at 8% 0%, rgba(139, 37, 0, 0.055), transparent 34rem),
-          linear-gradient(90deg, rgba(42, 36, 28, 0.04) 1px, transparent 1px),
-          linear-gradient(0deg, rgba(42, 36, 28, 0.035) 1px, transparent 1px),
-          var(--paper);
-        background-size: auto, 42px 42px, 42px 42px, auto;
-        font-family: var(--f-mono);
-        font-size: 0.84rem;
-        line-height: 1.7;
-      }
-
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        pointer-events: none;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        opacity: 0.035;
-        mix-blend-mode: multiply;
-      }
-
-      body::after {
-        content: "";
-        position: fixed;
-        inset: 0;
-        z-index: 9998;
-        pointer-events: none;
-        background:
-          repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(26, 22, 17, 0.006) 3px, rgba(26, 22, 17, 0.006) 4px),
-          repeating-linear-gradient(90deg, transparent, transparent 5px, rgba(26, 22, 17, 0.004) 5px, rgba(26, 22, 17, 0.004) 6px);
-      }
-
-      ::selection { color: var(--paper); background: var(--accent); }
-      a { color: inherit; text-decoration: none; }
-      button, input, textarea, select { font: inherit; }
-      code { font-family: var(--f-mono); }
+/* 管理后台共享层：顶栏、卡片、表单、按钮、消息、帮助弹窗。
+   设计令牌、纸面底色与全局焦点/滚动条统一由 theme.css 提供（与前台同源）。 */
+@import url("theme.css");
 
       .shell {
         position: relative;
@@ -88,7 +19,7 @@
         padding: clamp(1.3rem, 3vw, 2.3rem) clamp(1.2rem, 3vw, 2.4rem);
         border-top: 4px double var(--rule);
         border-bottom: 1px solid var(--rule-mid);
-        background: rgba(244, 239, 230, 0.88);
+        background: rgb(var(--paper-rgb) / 0.88);
         box-shadow: var(--shadow);
       }
 
@@ -164,7 +95,7 @@
         border: 1px solid var(--rule-light);
         border-radius: 0;
         color: var(--ink-mid);
-        background: rgba(244, 239, 230, 0.72);
+        background: rgb(var(--paper-rgb) / 0.72);
         cursor: pointer;
         font-size: 0.68rem;
         font-weight: 700;
@@ -180,7 +111,7 @@
       .inline-action:hover {
         color: var(--accent);
         border-color: var(--accent);
-        background: rgba(139, 37, 0, 0.055);
+        background: rgb(var(--accent-rgb) / 0.055);
         transform: translateY(-1px);
       }
 
@@ -208,7 +139,7 @@
         display: grid;
         align-content: center;
         gap: 0.18rem;
-        background: rgba(244, 239, 230, 0.84);
+        background: rgb(var(--paper-rgb) / 0.84);
       }
 
       .issue-strip span,
@@ -252,7 +183,7 @@
         padding: clamp(1rem, 2vw, 1.55rem);
         border: 1px solid var(--rule-light);
         border-top: 3px double var(--rule);
-        background: rgba(244, 239, 230, 0.9);
+        background: rgb(var(--paper-rgb) / 0.9);
         box-shadow: 0 18px 50px rgba(42, 36, 28, 0.08);
       }
 
@@ -290,8 +221,6 @@
 
       .card-head p,
       .form-section p,
-      .helper,
-      .preview-meta,
       .result-copy {
         margin: 0.45rem 0 0;
         color: var(--ink-light);
@@ -305,7 +234,7 @@
         padding: 0 0.62rem;
         border: 1px solid var(--rule-light);
         color: var(--accent);
-        background: rgba(139, 37, 0, 0.06);
+        background: rgb(var(--accent-rgb) / 0.06);
         font-size: 0.58rem;
         font-weight: 700;
         letter-spacing: 0.16em;
@@ -321,7 +250,7 @@
         gap: 0.95rem;
         padding: 1rem;
         border: 1px solid var(--rule-light);
-        background: rgba(235, 229, 216, 0.42);
+        background: rgb(var(--paper-wash-rgb) / 0.42);
       }
 
       .form-section h4 {
@@ -353,7 +282,7 @@
         border: 1px solid var(--rule-light);
         border-radius: 0;
         color: var(--ink);
-        background: rgba(255, 251, 240, 0.7);
+        background: rgb(var(--paper-tint-rgb) / 0.7);
         outline: none;
         transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
       }
@@ -362,8 +291,8 @@
       textarea:focus,
       select:focus {
         border-color: var(--accent);
-        background: rgba(255, 251, 240, 0.96);
-        box-shadow: 0 0 0 4px rgba(139, 37, 0, 0.08);
+        background: rgb(var(--paper-tint-rgb) / 0.96);
+        box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0.08);
       }
 
       textarea { min-height: 10rem; resize: vertical; line-height: 1.78; }
@@ -372,15 +301,12 @@
 
       .profile-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 230px); gap: 1rem; align-items: start; }
 
-      .split-area { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr); gap: 1rem; align-items: stretch; }
-
-      .preview,
       .result-box {
         display: grid;
         gap: 0.85rem;
         padding: 1rem;
         border: 1px solid var(--rule-light);
-        background: rgba(255, 251, 240, 0.58);
+        background: rgb(var(--paper-tint-rgb) / 0.58);
       }
 
       .front-preview {
@@ -388,7 +314,7 @@
         gap: 0.85rem;
         padding: 1rem;
         border: 1px solid var(--rule-light);
-        background: rgba(255, 251, 240, 0.58);
+        background: rgb(var(--paper-tint-rgb) / 0.58);
       }
 
       .front-preview__label {
@@ -414,7 +340,7 @@
         overflow: hidden;
         border: 1px solid var(--rule-light);
         color: var(--ink-faded);
-        background: linear-gradient(135deg, rgba(139, 37, 0, 0.08), rgba(42, 36, 28, 0.04));
+        background: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.08), rgba(42, 36, 28, 0.04));
         font-size: 0.72rem;
         text-align: center;
       }
@@ -434,7 +360,7 @@
         padding: 0 0.45rem;
         border: 1px solid var(--rule-light);
         color: var(--accent);
-        background: rgba(139, 37, 0, 0.055);
+        background: rgb(var(--accent-rgb) / 0.055);
         font-size: 0.58rem;
         font-weight: 700;
         letter-spacing: 0.08em;
@@ -509,16 +435,15 @@
       .post-link__tags { display: flex; gap: 0.35rem; flex-wrap: wrap; }
       .post-link__actions { color: var(--ink-faded) !important; font-size: 0.66rem !important; }
 
-      .empty-state { padding: 1rem; color: var(--ink-light); background: rgba(244, 239, 230, 0.9); }
+      .empty-state { padding: 1rem; color: var(--ink-light); background: rgb(var(--paper-rgb) / 0.9); }
       .copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
       .copy-row code { min-width: 0; padding: 0.55rem; overflow: auto; border: 1px solid var(--rule-light); background: rgba(42, 36, 28, 0.04); }
-      .copy-row button { min-height: 2.25rem; padding: 0 0.65rem; border: 1px solid var(--rule-light); background: rgba(255, 251, 240, 0.8); cursor: pointer; }
+      .copy-row button { min-height: 2.25rem; padding: 0 0.65rem; border: 1px solid var(--rule-light); background: rgb(var(--paper-tint-rgb) / 0.8); cursor: pointer; }
       .result-box.is-error { border-color: var(--error-line); background: var(--error-bg); }
       .result-box.is-success { border-color: var(--success-line); background: var(--success-bg); }
 
       @media (max-width: 1180px) {
         .layout,
-        .split-area,
         .front-preview__shell,
         .profile-shell { grid-template-columns: 1fr; }
         .side-column { position: static; }
@@ -536,17 +461,13 @@
         .field-wide { grid-column: auto; }
       }
 
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
-      }
-    
       .issue-strip a { transition: color 0.18s ease, background 0.18s ease; }
       .issue-strip a:hover,
       .issue-strip a:focus-visible,
       .issue-strip a.active { color: var(--paper); background: var(--ink); outline: none; }
       .issue-strip a:hover span,
       .issue-strip a:focus-visible span,
-      .issue-strip a.active span { color: rgba(244, 239, 230, 0.62); }
+      .issue-strip a.active span { color: rgb(var(--paper-rgb) / 0.62); }
 .logout-form { margin: 0; }
 .logout-form button { font: inherit; }
 .message { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
@@ -564,19 +485,23 @@
   gap: 0.4rem;
   border: 1px solid var(--rule);
   color: var(--ink-mid);
-  background: rgba(255, 251, 240, 0.72);
+  background: rgb(var(--paper-tint-rgb) / 0.72);
   font-size: 0.7rem;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
-.button:hover { color: var(--accent); border-color: var(--accent); background: rgba(255, 251, 240, 0.96); transform: translateY(-1px); }
+.button:hover { color: var(--accent); border-color: var(--accent); background: rgb(var(--paper-tint-rgb) / 0.96); transform: translateY(-1px); }
 .button--primary { color: var(--paper); border-color: var(--ink); background: var(--ink); }
 .button--primary:hover { color: var(--paper); border-color: var(--accent); background: var(--accent); }
 .button--quiet { border-color: var(--rule-light); background: transparent; }
-.button:focus-visible,
-.post-action:focus-visible,
+
+/* 焦点环：浅底按钮吃 theme.css 的全局 :focus-visible 即可；
+   深底（--ink）按钮上那圈 20% 透明度的砖红几乎看不见，单独换成 accent-light。 */
+.button--primary:focus-visible,
+.post-action--primary:focus-visible { box-shadow: 0 0 0 3px rgba(184, 74, 42, 0.45); }
+
 .dashboard-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -584,7 +509,7 @@
   padding: clamp(1.2rem, 3vw, 2rem);
   border: 1px solid var(--rule-light);
   border-top: 3px double var(--rule);
-  background: rgba(244, 239, 230, 0.9);
+  background: rgb(var(--paper-rgb) / 0.9);
   box-shadow: 0 18px 50px rgba(42, 36, 28, 0.08);
 }
 button.ghost-link { font: inherit; letter-spacing: inherit; text-transform: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -593,7 +518,7 @@ button.ghost-link { font: inherit; letter-spacing: inherit; text-transform: inhe
 .admin-help-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.3rem; border-bottom: 1px solid var(--rule-light); }
 .admin-help-dialog__head h2 { margin: 0; font-family: var(--f-display); font-size: 1.25rem; }
 .admin-help-dialog__body { padding: 1.1rem 1.3rem 1.4rem; overflow-y: auto; display: grid; gap: 1rem; }
-.help-item { display: grid; gap: 0.3rem; padding: 0.7rem 0.85rem; border: 1px solid var(--rule-light); background: rgba(255, 251, 240, 0.6); }
+.help-item { display: grid; gap: 0.3rem; padding: 0.7rem 0.85rem; border: 1px solid var(--rule-light); background: rgb(var(--paper-tint-rgb) / 0.6); }
 .help-item strong { font-family: var(--f-display); font-size: 0.95rem; }
 .help-item p { margin: 0; color: var(--ink-mid); font-size: 0.76rem; line-height: 1.7; }
 .help-item small { color: var(--ink-faded); font-size: 0.66rem; line-height: 1.6; }

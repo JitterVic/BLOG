@@ -1,0 +1,190 @@
+/* 后台登录页：报头式登录卡。
+   与后台其它页面共用 theme.css 的纸色与令牌，不再单独维护一套配色——
+   此前这里是页内硬编码的蓝灰渐变 + 16/28px 圆角，与整站的方角纸面完全是两种语言。 */
+@import url("theme.css");
+
+.login-shell {
+  min-height: 100vh;
+  padding: clamp(1.5rem, 5vw, 4rem) 1.25rem;
+  display: grid;
+  place-items: center;
+}
+
+.login-card {
+  position: relative;
+  width: min(30rem, 100%);
+  padding: clamp(1.6rem, 4vw, 2.4rem);
+  border: 1px solid var(--rule-light);
+  border-top: 4px double var(--rule);
+  background: rgb(var(--paper-rgb) / 0.92);
+  box-shadow: var(--shadow);
+}
+
+.login-card__edition {
+  position: absolute;
+  top: -0.74rem;
+  right: clamp(1rem, 3vw, 1.6rem);
+  padding: 0.18rem 0.55rem;
+  color: var(--paper);
+  background: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.login-card__kicker {
+  display: inline-flex;
+  gap: 0.65rem;
+  align-items: center;
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.login-card__kicker::before {
+  content: "";
+  width: 2rem;
+  height: 1px;
+  background: var(--accent);
+}
+
+.login-card h1 {
+  margin: 0.85rem 0 0;
+  font-family: var(--f-display);
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.login-card__lede {
+  margin: 0.85rem 0 0;
+  color: var(--ink-light);
+  line-height: 1.8;
+}
+
+.login-form {
+  margin-top: 1.6rem;
+  padding-top: 1.35rem;
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid var(--rule-light);
+}
+
+.login-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.login-field span {
+  color: var(--ink-mid);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.login-field input {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.78rem 0.85rem;
+  border: 1px solid var(--rule-light);
+  border-radius: 0;
+  color: var(--ink);
+  background: rgb(var(--paper-tint-rgb) / 0.7);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.login-field input::placeholder { color: var(--ink-faded); }
+
+.login-field input:focus {
+  border-color: var(--accent);
+  background: rgb(var(--paper-tint-rgb) / 0.96);
+  box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0.08);
+}
+
+.login-submit {
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  color: var(--paper);
+  background: var(--ink);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background 0.22s ease, border-color 0.22s ease, transform 0.2s var(--ease-spring);
+}
+
+.login-submit:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  transform: translateY(-1px);
+}
+
+.login-submit:focus-visible { box-shadow: 0 0 0 3px rgba(184, 74, 42, 0.45); }
+
+.login-messages { margin: 1.25rem 0 0; display: grid; gap: 0.6rem; }
+
+.login-message {
+  padding: 0.8rem 0.95rem;
+  color: var(--error-text);
+  border: 1px solid var(--error-line);
+  background: var(--error-bg);
+  line-height: 1.65;
+}
+
+.login-message.message--success {
+  color: var(--success-text);
+  border-color: var(--success-line);
+  background: var(--success-bg);
+}
+
+.login-card__helper {
+  margin: 1.35rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-light);
+  color: var(--ink-faded);
+  font-size: 0.66rem;
+  line-height: 1.75;
+}
+
+.login-card__helper code {
+  padding: 0.1rem 0.3rem;
+  color: var(--accent);
+  border: 1px solid var(--rule-light);
+  background: rgb(var(--accent-rgb) / 0.055);
+}
+
+.login-card__back {
+  display: inline-block;
+  margin-top: 0.9rem;
+  padding-bottom: 0.15rem;
+  color: var(--ink-light);
+  border-bottom: 1px solid var(--rule-light);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.login-card__back:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+@media (max-width: 420px) {
+  .login-card { padding: 1.4rem 1.2rem; }
+  .login-card__edition { right: 0.8rem; }
+}

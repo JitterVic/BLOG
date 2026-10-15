@@ -1,0 +1,173 @@
+/* 后台主题基底：设计令牌、reset、纸面背景与全局焦点/滚动条。
+   令牌取值与前台 frontend/src/styles/base.css 保持同一份——后台和前台是同一份报纸，
+   纸色（--paper）、墨色、栏线一旦分叉，同一张封面图在两处就会显得偏色；
+   而 Playfair Display / IBM Plex Mono 必须在两边都真正加载（见 admin_base.html），
+   否则后台中文标题掉到系统宋体、正文掉到 Consolas，两处排印立刻不像同一家刊物。
+   这里只放令牌与底色，不含任何后台组件样式。 */
+
+:root {
+  color-scheme: light;
+
+  /* —— 与前台同源的报刊令牌 —— */
+  --paper: #f6f1e8;
+  --paper-dark: #ded5c2;
+  --paper-tint: #fdfbf7;
+  --paper-card: rgba(246, 241, 232, 0.88);
+  --ink: #1c1710;
+  --ink-mid: #3b3328;
+  --ink-light: #5e5548;
+  --ink-faded: #8a7f6f;
+  --accent: #8b2500;
+  --accent-light: #b84a2a;
+  --accent-glow: rgba(184, 74, 42, 0.35);
+  --rule: #2a241c;
+  --rule-light: rgba(42, 36, 28, 0.16);
+  --rule-subtle: rgba(42, 36, 28, 0.08);
+  --code-bg: #221d18;
+  --code-fg: #eae2d5;
+  --code-bar: #1a1612;
+  --f-display: "Playfair Display", "Noto Serif SC", "Songti SC", Georgia, serif;
+  --f-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Courier New", monospace;
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring-gentle: cubic-bezier(0.2, 0.88, 0.24, 1);
+  --ui-font: var(--f-mono);
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --ring-focus: 0 0 0 3px rgba(139, 37, 0, 0.2);
+  --shadow-lg: 0 20px 46px rgba(42, 36, 28, 0.12);
+  --bg: var(--paper);
+  --text: var(--ink);
+  --muted: var(--ink-light);
+  --soft: var(--ink-faded);
+
+  /* —— 半透明纸面：颜色只在这里定义一次，透明度留给使用处 ——
+     用 rgb(var(--x-rgb) / a) 而非散落的 rgba(244,239,230,.9)，
+     否则改了 --paper 也没用：几十处字面量仍是旧纸色。 */
+  --paper-rgb: 246 241 232;
+  --paper-tint-rgb: 253 251 247;
+  --paper-wash-rgb: 236 230 218;
+  --paper-dark-rgb: 222 213 194;
+  --ink-rgb: 28 23 16;
+  --rule-rgb: 42 36 28;
+  --accent-rgb: 139 37 0;
+  --accent-light-rgb: 184 74 42;
+
+  /* —— 后台专有：状态色与栏线中档（前台没有需要，故不放进同源令牌） —— */
+  --rule-mid: rgba(42, 36, 28, 0.42);
+  --success-bg: rgba(78, 98, 82, 0.12);
+  --success-line: rgba(78, 98, 82, 0.42);
+  --success-text: #3f5f43;
+  --error-bg: rgba(139, 37, 0, 0.09);
+  --error-line: rgba(139, 37, 0, 0.36);
+  --error-text: #8b2500;
+  --shadow: 0 24px 70px rgba(42, 36, 28, 0.1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+  scrollbar-color: var(--ink-faded) var(--paper-dark);
+  scrollbar-width: thin;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(139, 37, 0, 0.055), transparent 34rem),
+    linear-gradient(90deg, rgba(42, 36, 28, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(42, 36, 28, 0.035) 1px, transparent 1px),
+    var(--paper);
+  background-size: auto, 42px 42px, 42px 42px, auto;
+  font-family: var(--f-mono);
+  font-size: 0.86rem;
+  line-height: 1.72;
+}
+
+/* 纸纹与网点：与前台同一套装饰，只是后台不挂桌面宠物与光标拖尾。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(26, 22, 17, 0.006) 3px, rgba(26, 22, 17, 0.006) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 5px, rgba(26, 22, 17, 0.004) 5px, rgba(26, 22, 17, 0.004) 6px);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+code {
+  font-family: var(--f-mono);
+}
+
+::selection {
+  color: var(--paper);
+  background: var(--accent);
+}
+
+/* 与前台同一枚焦点环。后台此前没有任何全局 :focus-visible，
+   键盘操作时只能靠浏览器默认描边，深浅全看当前底色。 */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--paper-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-faded);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-light);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

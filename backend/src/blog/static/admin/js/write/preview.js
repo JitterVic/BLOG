@@ -61,10 +61,8 @@ export function updateFrontPreview() {
   frontPreviewQuote.hidden = !quote;
   frontPreviewTags.innerHTML = tags.map((tag) => `<span>#${escapeHtml(tag)}</span>`).join("");
   if (cover) {
-    frontPreviewCover.classList.add("has-image");
     frontPreviewCover.innerHTML = `<img src="${escapeHtml(cover)}" alt="" />`;
   } else {
-    frontPreviewCover.classList.remove("has-image");
     frontPreviewCover.textContent = "无封面图时，前台显示文字卡片。";
   }
 }
