@@ -692,13 +692,21 @@ def test_reading_frame_narrows_to_make_room_for_the_side_panels():
         assert "var(--post-panel-breath)" in terms, "面板与框线之间要留呼吸带"
 
 
-def test_side_panels_are_pinned_by_script_not_by_sticky():
-    """两块面板的纵向吸附必须由脚本算，不能交给 position: sticky。
+def test_side_panels_are_pinned_without_touching_the_scroll_path():
+    """吸附态必须是 fixed，且滚动过程中一行脚本都不跑。
 
-    sticky 只允许面板待在它那条网格区域之内，而区域高度由正文决定（清单本身不参与
-    行高计算，目录又比正文矮）。短文下区域很快就滚过去，sticky 会把面板夹着一起上滑：
-    实测 700px 高窗口 + 217px 短文，面板顶部会从 109 滑到 -193，头部那枚收起/展开
-    按钮先钻到固定顶栏底下、再滑出屏幕——表现就是「收起来了就打不开」。
+    这里挡的是两次真实翻车：
+    · 交给 position: sticky —— 它只允许面板待在那条网格区域之内，而区域高度由正文
+      决定（清单不参与行高计算，目录又比正文矮）。短文下区域很快就滚过去，sticky 会
+      把面板夹着一起上滑：实测 700px 高窗口 + 217px 短文，面板顶部从 109 滑到 -193，
+      头部那枚收起/展开按钮先钻到固定顶栏底下、再滑出屏幕——表现就是「收起来了就打
+      不开」。
+    · 每帧在绝对定位的面板上手写 top —— 浏览器先把面板当普通内容滚上去，主线程之后
+      才派发 scroll 事件、脚本再把 top 补回来，这一来一回必然差一帧。实测按 55px/帧
+      滚动时面板顶部稳定停在 53px，而吸附线在 108.8px，偏差正好等于一帧的滚动量且
+      不收敛，看上去就是面板一直在抖。fixed 元素不参与滚动，位置恒定，脚本只在跨过
+      吸附线那一刻切一次类名，因此 --panel-shift 这个「每帧写一次 top」的通道必须
+      彻底不存在。
 
     同时锁住 pointer-events：外层盒子高 0、宽度仍占着左栏，必须设 none 才不会挡住
     正文列的命中测试，而它是继承属性，面板必须显式写回 auto，否则按钮看得见却点不动。
@@ -709,9 +717,37 @@ def test_side_panels_are_pinned_by_script_not_by_sticky():
         assert blocks, f"找不到 .{panel} 基准规则"
         # 只检查基准档：≤1280px 那条横向目录条本来就该留在文档流里用 sticky 吸顶
         base = re.sub(r"/\*.*?\*/", "", blocks[0], flags=re.S)
-        assert "position: absolute" in base, f".{panel} 应当绝对定位，位置交给脚本"
+        assert "position: absolute" in base, f".{panel} 吸附前应当绝对定位"
         assert "position: sticky" not in base, f".{panel} 不能再用 sticky 吸附"
-        assert "var(--panel-shift" in base, f".{panel} 需要 --panel-shift 决定吸附位置"
+        assert "top: 0" in base, f".{panel} 吸附前应贴区域顶端，不该由脚本给坐标"
+
+    pin_rule = re.search(
+        r"\.article-rail\.is-pinned,\s*\r?\n\s*\.article-toc\.is-pinned\s*\{([^}]*)\}",
+        css,
+        re.S,
+    )
+    assert pin_rule is not None, "找不到 .is-pinned 吸附规则"
+    assert "position: fixed" in pin_rule.group(1), "吸附态必须 fixed，否则会落后滚动一帧"
+    assert "top: var(--panel-pin" in pin_rule.group(1), "吸附线由 --panel-pin 提供"
+
+    # 必须限定在桌面档位里：.article-toc.is-pinned 的权重高于窄屏那条 .article-toc，
+    # 跑到档位外面就会把 ≤1280px 的横向目录条也变成固定定位。
+    enclosing = css[: pin_rule.start()]
+    assert enclosing.rindex("@media (min-width: 1281px)") > enclosing.rfind("@media (max-width: 1280px)"), (
+        ".is-pinned 必须写在 ≥1281px 档位内"
+    )
+    narrow = css[css.index("@media (max-width: 1280px)"):]
+    assert "position: sticky" in narrow, "窄屏横向目录条仍要留在文档流里 sticky 吸顶"
+
+    # 每帧写 top 的通道必须不存在：CSS 侧不能有 --panel-shift，脚本侧也不能写它。
+    assert "--panel-shift" not in css, "不能再让脚本每帧写 top，吸附态交给 fixed"
+    pin = Path("frontend/src/composables/usePanelPin.js").read_text(encoding="utf-8")
+    assert "--panel-shift" not in pin
+    assert '"--panel-pin"' in pin, "吸附线 px 值需要由脚本写入，与 pinRem 同源"
+    assert "getBoundingClientRect" in pin and "scroll" in pin and "resize" in pin
+    assert "MIN_VISIBLE_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
+    # 只在数值变化时写样式，稳定态的滚动不该产生任何样式改写。
+    assert "lastAvail" in pin and "if (avail !== lastAvail)" in pin
 
     assert "var(--panel-avail" in css, "面板可用高度需要由脚本给出"
 
@@ -722,9 +758,6 @@ def test_side_panels_are_pinned_by_script_not_by_sticky():
     assert shared is not None
     assert "pointer-events: auto" in shared.group(1), "面板必须显式写回可点击"
 
-    pin = Path("frontend/src/composables/usePanelPin.js").read_text(encoding="utf-8")
-    assert "getBoundingClientRect" in pin and "scroll" in pin and "resize" in pin
-    assert "MIN_VISIBLE_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
 
 def test_article_rail_is_not_laid_out_below_its_breakpoint():
     """清单在轨道不够宽时必须彻底不布局，而不是靠 JS 挡住。

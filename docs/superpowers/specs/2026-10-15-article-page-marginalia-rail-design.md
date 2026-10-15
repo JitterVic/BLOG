@@ -588,3 +588,75 @@ per-panel width terms; `test_panel_chevrons_point_outward_when_collapsing` allow
 `backend/tests/test_backend.py` holds 195 passing tests. The article column invariant still holds
 under every toggle combination at 1690×950: the body stays at left 460 / width 760 / top -527 while
 both panels are collapsed, expanded, or mixed.
+
+## Revision after scroll-smoothness review (2026-10-15, fourth round)
+
+Reported symptom: both panels flicker/stutter while scrolling — they do not track the copy.
+
+**Root cause (measured).** The panel is an absolutely positioned element inside the document, and
+`usePanelPin.js` corrected its position with `top: var(--panel-shift)` on every `scroll` event. The
+browser moves the panel as ordinary content first, then dispatches the scroll event, and only then does
+the handler write the correction back. The write therefore always lands one frame after the paint:
+
+| scrollY | layout top | panel top (measured) | pin line | `--panel-shift` |
+|---|---|---|---|---|
+| 5129 | −4018 | 54 | 108.8 | 4072px |
+| 5184 | −4074 | 53 | 108.8 | 4127px |
+| 5239 | −4129 | 53 | 108.8 | 4182px |
+
+The panel sits at 53–54px instead of 108.8px and the error is exactly one frame's scroll delta, per
+frame, without ever converging — at 55px/frame the panel was permanently 55px behind. Faster scrolling
+made it worse, which is precisely the "flicker" in the report. Sampled over 14 frames the old build gave
+`railTop` variants `[53, 54]`; the target is a single value.
+
+**Fix: move the pinned state out of the scroll path.** The vertical lifecycle is now three segments,
+and the scroll handler writes no coordinates at all:
+
+1. *Before the pin line* — `top: 0` inside the grid area, so the panel simply sits at the reading
+   area's top and scrolls with the copy, compositor-handled, no JS.
+2. *Past the pin line* — `.article-toc.is-pinned` / `.article-rail.is-pinned` switch to
+   `position: fixed; top: var(--panel-pin)`. Fixed elements do not participate in scrolling at all,
+   so there is nothing to lag behind.
+3. *Insufficient room* — `is-parked` hides the panel as before.
+
+Both states place the panel at the same y at the crossing point (in flow its top *is* the area top, and
+the switch happens when that equals the pin line), so the handover is seamless. Measured across the
+crossing:
+
+| scrollY | area top | panel top | state |
+|---|---|---|---|
+| 400 | 710 | 710 | flow |
+| 900 | 210 | 210 | flow |
+| 990 | 120 | 120 | flow |
+| 1005 | 105 | 109 | pinned (fixed) |
+| 1060 | 50 | 109 | pinned (fixed) |
+| 6000 | −4890 | 109 | pinned (fixed) |
+
+`--panel-shift` is gone from `post.css` and the composable, and the test suite now forbids it: any
+return to a per-frame `top` reintroduces the one-frame lag. The handler only computes the area rect,
+the available height and two booleans, and writes `--panel-avail` **only when the number changes** —
+in the steady state a scroll frame produces no style writes whatsoever. `--panel-pin` (the pin line in
+px, derived from the same `pinRem` the math uses) is written on mount and on resize, so CSS and JS
+cannot drift apart.
+
+Two consequences worth recording:
+
+- `position: fixed` resolves `left`/`right` against the viewport rather than against the grid area,
+  which moves each panel ~7px inward (half the scrollbar). Re-measured clearances at 1920 / 1690 /
+  1600 / 1440 / 1320 / 1281 are +34/+13/+13/+13/—/— px on the left and +106/+58/+59/+61/+13/+12 px on
+  the right, with the reading column still exactly 760px everywhere.
+- The rule lives inside `@media (min-width: 1281px)` because `.article-toc.is-pinned` outweighs the
+  narrow-screen `.article-toc`; left unscoped it would turn the ≤1280px horizontal TOC strip into a
+  fixed panel. Verified at 1200 and 390: `position: sticky`, `top: 56.8px`, flex strip intact.
+
+Re-verified after the fix: 14 frames of 55px/frame scrolling give a single `railTop` value (109) and a
+single `--panel-avail` value (963px); the TOC's inner nav does not scroll during article scrolling
+(`navScrollTop` stayed 0 over 40 frames), so its smooth active-item alignment is not a second source of
+jitter; on a short article (6576px document) the panel goes flow → pinned → parked with the toggle
+always hit-testable.
+
+`backend/tests/test_backend.py` holds 195 passing tests; the pin test was renamed to
+`test_side_panels_are_pinned_without_touching_the_scroll_path` and now asserts `position: fixed` for the
+pinned state, that `--panel-shift` exists nowhere, that `--panel-pin` is script-fed, that the rule is
+scoped to ≥1281px while the narrow strip keeps `position: sticky`, and that `--panel-avail` is only
+written when it changes.

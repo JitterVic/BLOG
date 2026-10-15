@@ -61,8 +61,8 @@
   padding: 0 0 4rem;
   display: grid;
   /* 面板是绝对定位的网格子元素：网格容器一旦成为包含块，面板的包含块就是它自己
-     那一格（rail / toc 区）。于是 --panel-shift 可以直接当作「距本格顶部」的距离，
-     两个面板的吸附线天然对⻬，宽度百分比也仍是轨道宽度。 */
+     那一格（rail / toc 区），因此吸附前 top: 0 就是「贴本格顶部」，宽度百分比仍是
+     轨道宽度。吸附态（fixed）改按视口解析，见 usePanelPin.js 与 .is-pinned。 */
   position: relative;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--post-article-width)) minmax(0, 1fr);
   grid-template-areas: "rail article toc";
@@ -97,11 +97,14 @@
 
 .article-toc {
   grid-area: toc;
-  /* 绝对定位 + --panel-shift（见 usePanelPin.js）：吸附位置自己算，不交给 sticky，
-     否则会被夹在这条网格区域的纵向范围里，短文下一滚就把表头推出屏幕。 */
+  /* 绝对定位：纵向吸附由 usePanelPin.js 分段 + .is-pinned 接管（见下），不交给 sticky，
+     否则会被夹在这条网格区域的纵向范围里，短文下一滚就把表头推出屏幕。
+     右侧目录：`right: 0` 在吸附态（fixed）会按视口解析，正好也是贴窗口右边缘。 */
   position: absolute;
   right: 0;
-  top: var(--panel-shift, 0px);
+  /* 吸附前：贴在区域顶端，随正文一起滚。吸附态由 .is-pinned 换成 fixed —— 绝对定位 +
+     每帧写 top 必然落后滚动一帧（见 usePanelPin.js 的实测），fixed 不参与滚动。 */
+  top: 0;
   /* 宽度三重夹取：不超过设计宽度、不超过「轨道宽 − 间隙」、不超过「框外留白 −
      边缘余量 − 呼吸带」——最后一项才是「不压到版面框」的保证，前两项只管不挤正文。 */
   width: min(
@@ -271,19 +274,19 @@
    前两道保证不挤正文（只要轨道不够宽，面板就自己变窄），第三道才是「不压到框线」的
    保证——正文列固定 760px，轨道往往比面板宽不了多少，只靠前两道必然越界。
 
-   纵向位置（--panel-shift）与可用高度（--panel-avail）都由
-   composables/usePanelPin.js 写在元素上，两条侧栏共用。这一层不能省：
-   面板装在一条高度由正文决定的网格区域里，既然它不能参与行高计算（参与的话短文页
-   会被撑高，见下），它就不能再靠 position:sticky 把自己钉住——sticky 只允许面板
-   待在那条区域之内，区域一滚过去面板就被夹着上滑，短文下会一路滑出屏幕，头部那枚
-   收起按钮也就点不到了（实测 700px 高窗口 + 217px 短文：面板顶部滑到 -193）。 */
+   纵向位置由 usePanelPin.js 决定分段：吸附前贴区域顶端随正文滚（top: 0），越过
+   吸附线后挂 .is-pinned 换成 fixed；可用高度（--panel-avail）也由它写。
+   这一层不能省：面板装在一条高度由正文决定的网格区域里，既然它不能参与行高计算
+   （参与的话短文页会被撑高，见下），它就不能靠 position:sticky 把自己钉住——sticky
+   只允许面板待在那条区域之内，区域一滚过去面板就被夹着上滑，短文下会一路滑出屏幕，
+   头部那枚收起按钮也就点不到了（实测 700px 高窗口 + 217px 短文：面板顶部滑到 -193）。
+   而每帧在绝对定位的元素上写 top 同样不行：DOM 改写永远晚于滚动一帧，面板会一直抖。 */
 .article-rail {
   grid-area: rail;
-  /* 绝对定位：包含块就是本格（rail 区），因此 --panel-shift 可以直接当「距本格顶部」
-     的距离用，宽度百分比也仍是轨道宽度。吸附位置必须自己算——理由见 usePanelPin.js。 */
+  /* 绝对定位：包含块就是本格（rail 区），宽度百分比也仍是轨道宽度。 */
   position: absolute;
   left: 0;
-  top: var(--panel-shift, 0px);
+  top: 0;
   /* 压过 .print-page::after 那道左侧纸纹（z-index 10），否则纸纹会盖在清单文字上 */
   z-index: 20;
   /* 高度必须与「阅读版式那一行」解耦。
@@ -318,6 +321,17 @@
 }
 
 @media (min-width: 1281px) {
+  /* 吸附态：整块面板脱离滚动，钉在吸附线上。fixed 元素不参与滚动，因此不存在
+     「先被滚上去、再被脚本补回来」的那一帧错位。top 用 px：--panel-pin 由
+     usePanelPin.js 按同一份 pinRem 写入，两边不会各写一个常量。
+     必须限定在 ≥1281px：窄屏那条横向目录条要留在文档流里用 sticky 吸顶，
+     而 .article-toc.is-pinned 的权重高于窄屏档位的 .article-toc。 */
+  .article-rail.is-pinned,
+  .article-toc.is-pinned {
+    position: fixed;
+    top: var(--panel-pin, 6.8rem);
+  }
+
   /* 区域已经走完：整体隐去，避免留下一条几十像素的碎片让人误点。
      窄屏那条横向目录条是正常文档流里的一行，不属于这套吸附，不能跟着隐去。 */
   .article-rail.is-parked,

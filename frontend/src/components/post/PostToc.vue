@@ -17,9 +17,10 @@ const hostRef = ref(null);
 let alignmentFrame = 0;
 let resizeAlignmentTimer = 0;
 
-// 与左侧清单同一套吸附：交给 position: sticky 会被夹在网格区域的纵向范围里，
-// 短文下一滚就把头部（含收起按钮）推出屏幕。
-const { parked } = usePanelPin(hostRef);
+// 与左侧清单同一套吸附（见 usePanelPin.js）：sticky 会被夹在网格区域的纵向范围里，
+// 短文下一滚就把头部（含收起按钮）推出屏幕；而每帧手写 top 又会永远落后滚动一帧，
+// 滚起来一直在抖。越过吸附线后 .is-pinned 换成 fixed，位置由浏览器给。
+const { pinned, parked } = usePanelPin(hostRef);
 
 // 折叠只属于桌面竖排目录。窄屏那条横向胶囊目录条本来就只占一行，
 // 没有可折的余地；若把偏好直接套上去，在桌面折过目录的人一缩小窗口
@@ -133,7 +134,7 @@ onBeforeUnmount(() => {
   <aside
     ref="hostRef"
     class="article-toc"
-    :class="{ 'is-collapsed': isCollapsed, 'is-parked': parked }"
+    :class="{ 'is-collapsed': isCollapsed, 'is-parked': parked, 'is-pinned': pinned }"
   >
     <!-- 折叠态：贴右边缘的竖排书脊，保留当前章节号 -->
     <button
