@@ -1,7 +1,8 @@
 ﻿param(
   [switch]$SkipFrontend,
   [switch]$StrictLaunch,
-  [int]$Port = 5055
+  [int]$Port = 5055,
+  [string]$EnvFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,6 +30,15 @@ function Get-EnvValue {
     [string]$Default = ""
   )
 
+  # -EnvFile 模式下这份文件是唯一来源：既不读进程变量，也不回落到开发用的 .env。
+  # 否则生产核验会被开发配置里的值「补上」，变成假绿。
+  if ($Script:EnvFileOnly) {
+    if ($Script:EnvFileValues.ContainsKey($Name)) {
+      return $Script:EnvFileValues[$Name]
+    }
+    return $Default
+  }
+
   $current = [Environment]::GetEnvironmentVariable($Name, 'Process')
   if ($null -ne $current -and $current -ne '') {
     return $current
@@ -55,6 +65,35 @@ function Get-EnvValue {
   }
 
   return $Default
+}
+
+<#
+  解析一份环境文件为哈希表（不改动当前进程环境）。
+
+  用途：在本机跑 -StrictLaunch 时提供生产取值，而不必改动开发用的 .env——那份 .env
+  里的空 BLOG_PUBLIC_BASE_URL 会让严格核验失败，而把它填成真域名又必须同时
+  BLOG_COOKIE_SECURE=true，本地 http 登录会因此失效。取值只在严格核验与冒烟服务里生效
+  （冒烟服务前才注入进程环境），pytest 仍在日常环境下跑：测试用例对 BLOG_TRUSTED_PROXY_COUNT
+  之类取值的假设是开发默认值，把生产取值带进去会让用例失真。
+#>
+function Read-EnvFile {
+  param([Parameter(Mandatory)] [string]$Path)
+
+  $values = @{}
+  foreach ($rawLine in Get-Content $Path -Encoding UTF8) {
+    $line = $rawLine.Trim()
+    if (-not $line -or $line.StartsWith('#')) { continue }
+    if ($line.StartsWith('export ')) { $line = $line.Substring(7).Trim() }
+    $idx = $line.IndexOf('=')
+    if ($idx -lt 1) { continue }
+    $key = $line.Substring(0, $idx).Trim()
+    $value = $line.Substring($idx + 1).Trim()
+    if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+    if ($key) { $values[$key] = $value }
+  }
+  return $values
 }
 
 function Assert-LaunchConfig {
@@ -101,6 +140,21 @@ function Assert-LaunchConfig {
 
 Write-Host "== BLOG 一键验证 ==" -ForegroundColor Cyan
 
+$Script:EnvFileValues = @{}
+$Script:EnvFileOnly = $false
+if ($EnvFile) {
+  $envFilePath = $EnvFile
+  if (-not [System.IO.Path]::IsPathRooted($envFilePath)) {
+    $envFilePath = Join-Path $Root $envFilePath
+  }
+  if (-not (Test-Path $envFilePath)) {
+    throw "找不到环境文件: $envFilePath"
+  }
+  $Script:EnvFileValues = Read-EnvFile -Path $envFilePath
+  $Script:EnvFileOnly = $true
+  Write-Host "环境文件: $EnvFile（$($Script:EnvFileValues.Count) 项；只作用于严格核验与冒烟服务，pytest 仍走日常环境）" -ForegroundColor DarkGray
+}
+
 if ($StrictLaunch) {
   Write-Host "[0/3] 严格上线配置检查" -ForegroundColor Green
   Assert-LaunchConfig
@@ -132,6 +186,16 @@ if (-not $SkipFrontend) {
 }
 
 Write-Host "[3/3] API 冒烟验证（临时后端，端口 $Port）" -ForegroundColor Green
+
+# 冒烟服务要用与严格核验同一套取值：这里才把它们注入进程环境，
+# 子进程（临时后端）因此继承到生产配置，而前面的 pytest 仍是日常环境。
+if ($Script:EnvFileOnly) {
+  foreach ($key in $Script:EnvFileValues.Keys) {
+    [Environment]::SetEnvironmentVariable($key, $Script:EnvFileValues[$key], 'Process')
+  }
+  Write-Host "冒烟服务使用 $EnvFile 的取值" -ForegroundColor DarkGray
+}
+
 if (Test-PortInUse -Port $Port) {
   throw "port $Port is already in use; rerun with -Port <free-port>"
 }

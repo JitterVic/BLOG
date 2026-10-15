@@ -1,6 +1,6 @@
 [project]
 name = "blog-backend"
-version = "1.0.0"
+version = "0.0.0"
 description = "Flask + Vue 个人博客的服务端（API + Jinja 管理后台 + SPA 托管）"
 requires-python = ">=3.10"
 dependencies = [

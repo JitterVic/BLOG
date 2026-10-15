@@ -24,18 +24,39 @@
 
 ## 阶段二：发布前自动化核验
 
-在执行线上部署前，必须在本地或 CI 流水线中通过完整性核验：
+在执行线上部署前，必须在本地或 CI 流水线中通过完整性核验。
+
+**在服务器上执行**（该机的 `.env` 已按阶段一填好）：
+
+```bash
+# Linux 部署机上同样可用（脚本为 PowerShell，需 pwsh 7+）：
+pwsh -File ./scripts/verify.ps1 -StrictLaunch
+```
+
+**在本机执行**（本机 `.env` 通常是开发配置，`BLOG_PUBLIC_BASE_URL` 留空，直接加
+`-StrictLaunch` 会被拦下来）。此时把生产取值放进**另一份文件**，用 `-EnvFile` 指过去即可：
 
 ```powershell
-# Windows 开发机严格模式核验：
-powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch
+# 1) 复制一份生产取值模板（该文件不要提交，放 output/ 或仓库外）
+Copy-Item .env.example output\launch-check.env
+# 2) 按阶段一填写，至少这六项：
+#    BLOG_DEBUG=false / BLOG_SECRET_KEY=<≥32 位随机> / BLOG_ADMIN_PASSWORD=<≥12 位强密码>
+#    BLOG_ADMIN_PREFIX=/<自定义隐藏路径> / BLOG_PUBLIC_BASE_URL=https://<真实域名>
+#    BLOG_REQUIRE_PUBLIC_BASE_URL=true / BLOG_COOKIE_SECURE=true
+# 3) 严格核验
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -StrictLaunch -EnvFile output\launch-check.env
 ```
+
+`-EnvFile` 的语义：**这份文件是严格核验的唯一配置来源**（不读进程变量、也不回落到开发
+`.env`），但只在「严格配置检查」与「冒烟服务」两步生效，`pytest` 仍在日常环境下跑——测试
+用例对 `BLOG_TRUSTED_PROXY_COUNT` 之类取值的假设是开发默认值，把生产取值带进测试进程会让
+用例失真。开发用的 `.env` 因此可以一直保持「留空、可 http 登录」的状态。
 
 **核验卡点标准**：
 - [ ] 后端单元与集成测试套件全部通过（`pytest backend/tests`）
 - [ ] 前端构建成功生成 `frontend/dist/` 静态产物（`npm run build`）
 - [ ] API 冒烟接口正常响应（`/api/health`, `/api/posts`, `/api/site`）
-- [ ] 生产配置安全策略校验无违规项
+- [ ] 生产配置安全策略校验无违规项（`[0/3] 严格上线配置检查` 无输出即通过）
 
 ---
 
