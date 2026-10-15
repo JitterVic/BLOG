@@ -642,9 +642,9 @@ def test_article_rail_is_not_laid_out_below_its_breakpoint():
     assert base is not None, "找不到 .article-rail 基准规则"
     assert "display: none" in base.group(1), "基准档必须不布局，否则窄屏会出现隐式行"
 
-    widen = re.search(r"@media\s*\(min-width:\s*1360px\)\s*\{([^}]*)\}", css, re.S)
+    widen = re.search(r"@media\s*\(min-width:\s*1440px\)\s*\{([^}]*)\}", css, re.S)
     assert widen is not None, "找不到清单的 min-width 档位"
-    assert "display: flex" in widen.group(1)
+    assert "display: block" in widen.group(1)
 
     assert base.start() < widen.start(), "基准档必须先于放宽档位"
     assert base.start() < css.index("@media (max-width: 1280px)"), (
@@ -652,25 +652,33 @@ def test_article_rail_is_not_laid_out_below_its_breakpoint():
     )
 
 
-def test_article_rail_height_cap_is_derived_from_the_article_body():
-    """左侧清单的高度上限必须由正文高度推导，不能只按视口封顶。
+def test_article_rail_height_is_decoupled_from_the_reading_row():
+    """左侧清单的高度不能参与阅读版式那一行的高度计算。
 
-    清单是阅读版式的网格项，盒高会参与那一行的高度计算。一篇只有一段的短文配 30 条
-    清单时，只按视口封顶会在正文之后空出几百像素的留白（实测 327px），并且折叠清单
-    时整页高度骤降、浏览器把滚动位置夹了回去（实测 scrollY 1400 → 1201）。
-    因此上限取「正文高度 / 可用视口 / 绝对封顶」的最小值，并在正文高度变化后重算。
+    清单天生可以很长。若让它像右侧目录那样直接撑开盒子，网格行高就跟着它走：
+    30 条清单（实测 944px）配一篇只有一段的短文，会在正文之后空出几百像素只有
+    左栏的留白（实测 327px），折叠清单时整页高度骤降、浏览器还会把读者的滚动位置
+    夹回去（实测 scrollY 1400 → 1201）。所以外层盒子高 0、真正的面板绝对定位撑开：
+    面板因此能占到「视口减去顶栏」的整段高度，文档高度却完全不受它影响。
     """
-    source = Path("frontend/src/composables/useRailHeight.js").read_text(encoding="utf-8")
-    assert "offsetHeight" in source, "上限必须读正文的实际高度"
-    assert "ResizeObserver" in source, "正文高度变化后必须重算"
-    assert "Math.min(bodyHeight, available, CAP_PX)" in source
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    rail = re.search(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
+    assert rail is not None, "找不到 .article-rail 基准规则"
+    assert "height: 0;" in rail.group(1), "清单外层盒子必须不占高度"
+    assert "max-height" not in rail.group(1), "高度上限不能压在参与行高计算的那一层"
 
-    # 正文元素来自模板 ref；`<script setup>` 会在模板里把它解包成元素本身，
-    # 所以消费侧必须同时接住「元素」与「ref 包着的元素」两种形态。
-    assert "instanceof Element" in source, "要兼容模板传进来的已解包元素"
+    panel = re.search(r"\.article-rail__body,\s*\r?\n\s*\.article-rail__spine\s*\{([^}]*)\}", css, re.S)
+    assert panel is not None, "展开态与折叠态的面板需要同一条定位规则"
+    assert "position: absolute" in panel.group(1)
+
+    body = re.search(r"\.article-rail__body\s*\{([^}]*)\}", css, re.S)
+    assert body is not None
+    assert "max-height: calc(100vh - 8.5rem)" in body.group(1), (
+        "面板高度只应受可用视口约束（按正文高度收窄会让长清单只剩几行）"
+    )
 
     view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
-    assert ':body-ref="articleBodyRef"' in view, "清单必须拿到正文元素才能推导上限"
+    assert ":body-ref" not in view, "清单高度已与正文解耦，不需要再传正文元素进来"
 
 
 def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():

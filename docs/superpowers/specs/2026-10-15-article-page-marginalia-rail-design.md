@@ -87,8 +87,8 @@ siblings cannot read properties declared on each other:
 
 ```css
 .post-reading-layout {
-  --post-rail-width: 17rem;                        /* 272px */
-  --post-rail-gap: clamp(1.5rem, 2.4vw, 3rem);
+  --post-rail-width: 19.5rem;                      /* 312px */
+  --post-rail-gap: clamp(1.25rem, 2vw, 2.25rem);
   grid-template-areas: "rail article toc";
 }
 .post-reading-layout--no-toc                      { grid-template-areas: "rail article .";   }
@@ -97,31 +97,42 @@ siblings cannot read properties declared on each other:
 ```
 
 `.article-rail` mirrors `.article-toc`: `grid-area: rail`, `justify-self: start`, `position: sticky`,
-`top: 6.8rem`, `overflow: hidden` with an inner scrolling `nav`,
+`top: 6.8rem`, `overflow: visible` with an inner scrolling `nav`,
 `margin-left: clamp(0.5rem, 1vw, 1.5rem)`, `width: min(var(--post-rail-width), calc(100% - var(--post-rail-gap)))`,
-`border-top: 2px solid var(--ink)`, transparent background. The `min()` bound is the load-bearing part:
-the panel can never grow into the article track, at any width, whatever the viewport does.
+and a transparent background. The `min()` bound is the load-bearing part: the panel can never grow into
+the article track, at any width, whatever the viewport does.
 
-Its height cap cannot simply mirror the TOC's `calc(100vh - 8.5rem)`. The rail is a grid item, so its
-box height participates in the row's height; a list of 30 rows (944px measured) next to a
-single-paragraph article put ~700px of empty column beneath the text and made the whole document
-shorter when collapsed, which let the browser clamp the reader's scroll position. The cap is therefore
-derived per article by `useRailHeight.js` as `max(10rem, min(bodyHeight, viewportAvailable, 34rem))`,
-recomputed through a `ResizeObserver` on the article body, and applied as an inline `max-height`
-(34rem in CSS is only the pre-measurement fallback). Overflow scrolls inside `nav`, and the
-active-row alignment still lands on the current article.
+Its height, however, must **not** mirror the TOC's `max-height: calc(100vh - 8.5rem)`. The rail is a
+grid item, so its box height participates in the row's height: a 30-row list (944px measured) next to a
+single-paragraph article added ~700px of empty column beneath the text, and collapsing it shrank the
+document enough that the browser clamped the reader's scroll position (scrollY 1400 → 1201). Capping
+the panel by the article body only traded that for a crippled list (38 rows in a 217px box, ~3 rows
+visible). The rail is therefore decoupled from the row entirely:
 
-Clearance check at the narrow end (1360px, the rail's breakpoint): track 300px,
-`--post-rail-gap` = 32.64px, so width = min(272, 267.36) = 267.36px, `margin-left` = 13.6px →
-the rail ends at 280.96px and the article track starts at 300px. At 1920px: rail 19.2→291.2px,
-article 580→1340px, TOC 1680.6→1900.6px — the two panels hug their viewport edges with visually
-equal insets, which is the look the right-hand TOC already has.
+- `.article-rail` itself is `height: 0` — a zero-height sticky box that contributes nothing to the
+  row's height;
+- the expanded panel (`.article-rail__body`) and the collapsed spine (`.article-rail__spine`) are both
+  `position: absolute; top: 0; left: 0; width: 100%` inside it, so they render at full size while the
+  document height stays independent of them;
+- the panel's own cap is `max-height: calc(100vh - 8.5rem)`, i.e. the whole available viewport, and the
+  overflow scrolls inside `nav` with the current article aligned into view.
 
-Below 1360px the rail is not laid out at all. This must be enforced in CSS, not only in JS: at
+Consequence: the rail can be tall and useful, and toggling it cannot change the document height (and
+therefore cannot clamp the scroll position) for any article length.
+
+Clearance check at the narrow end (1440px, the rail's breakpoint): track 340px,
+`--post-rail-gap` = 28.8px, so width = min(312, 311.2) = 311.2px, `margin-left` = 14.4px →
+the rail spans 14.4 → 325.6px and the article track starts at 340px. At 1920px: rail 14 → 326px
+(312 wide), article 575 → 1335px, TOC 1656 → 1896px — the two panels hug their viewport edges with
+visually equal insets, which is the look the right-hand TOC already has.
+
+Below 1440px the rail is not laid out at all. This must be enforced in CSS, not only in JS: at
 ≤1280px `.post-reading-layout` collapses to a single column with `grid-template-areas: "toc" "article"`,
 and an *unhidden* rail item would be auto-placed into an implicit row and appear in the stacked
-layout. So the base rule is `display: none` and the `@media (min-width: 1360px)` block switches it to
-`flex`. A `display: none` element is not a grid item, so the ≤1280px block needs no change.
+layout. So the base rule is `display: none` and the `@media (min-width: 1440px)` block switches it to
+`block`. A `display: none` element is not a grid item, so the ≤1280px block needs no change. The
+`matchMedia` gate in `PostView` uses the same 1440px value, otherwise the component would render and
+fetch a list that CSS hides.
 
 ### 2. Rail content: the current 栏目's 编年索引
 
@@ -169,14 +180,31 @@ No backend change is required.
 
 ### 4. Collapse: two spines, one mechanism
 
-Both panels collapse to a 2.25rem 竖排书脊 at their own edge, using `writing-mode: vertical-rl`, with
-`border-left`/`border-right` replacing `border-top` in the collapsed state:
+Both panels collapse to a 2rem 竖排书脊 at their own edge, using `writing-mode: vertical-rl`, with a
+`border-right` (rail) / `border-left` (TOC) hairline standing in for the expanded panel's `border-top`:
 
-- Rail spine: 文章清单 + the total count, hugging the left edge.
-- TOC spine: 目录 + the active section number, hugging the right edge, so "where am I in this article"
-  survives collapsing.
+- Rail spine: an outward chevron + 文章清单 + the total count, hugging the left edge.
+- TOC spine: an outward chevron + 目录 + the active section number, hugging the right edge, so
+  "where am I in this article" survives collapsing.
 
-Expanded heads get a small toggle button (`aria-expanded`, `aria-controls`) next to the existing count.
+Both affordances are drawn the same way so the two panels read as a matched pair:
+
+- expanded: a 1.55rem circular hairline button holding a small chevron
+  (`<svg viewBox="0 0 24 24">` with `fill: none; stroke: currentColor`), pointing in the collapse
+  direction (left for the rail, right for the TOC; the TOC/rail SVGs are mirrored with
+  `transform: rotate(180deg)`), `title` for the tooltip, and `:hover` filling it with the accent colour.
+  A text button ("收起") was tried first and read as body copy competing with the panel label in a
+  200px column.
+- collapsed: the spine carries the same chevron rotated to open outward, plus the vertical label and
+  the count. Hover tints the spine with `rgba(139, 37, 0, 0.05)` and switches the stroke to accent.
+- the spine geometry is fixed at `min-height: 11rem` so both collapsed states leave the bottom-right
+  corner free for the desktop pet.
+
+One head rule serves both panels (`.article-toc__head, .article-rail__head`), with a hairline
+`border-bottom` under the label row and the display-serif count in accent red. The directory's
+"阅读时，目录会跟随当前章节。" caption was removed — the following behaviour is now visible from the
+active row itself, and the caption only added a third text style to a 240px column.
+
 State lives in `localStorage` (`zhizhi-article-rail-collapsed`, `zhizhi-article-toc-collapsed`) through
 a shared `usePersistedCollapse` composable; the value is applied during setup so there is no
 expand-then-collapse flash. The TOC toggle is desktop-only (≥1281px) — the ≤1280px horizontal strip
@@ -203,7 +231,6 @@ New files:
   toggle, 加载更多, 完整目录 link, active-row alignment.
 - `frontend/src/composables/usePostRail.js` — scope resolution, singleton cache, stale-while-revalidate,
   pagination state.
-- `frontend/src/composables/useRailHeight.js` — derives the rail's height cap from the article body.
 - `frontend/src/composables/useMediaQuery.js` — reactive `matchMedia` wrapper.
 - `frontend/src/composables/usePersistedCollapse.js` — persisted collapse state shared by both panels.
 - `frontend/src/lib/postGroups.js` — `groupByYear(posts)`.
@@ -256,9 +283,10 @@ New static contract tests in `backend/tests/test_backend.py`, in the style of
 3. The rail is not laid out below its breakpoint: `display: none` in the base rule and
    `@media (min-width: 1360px)` enabling it, so it can never be auto-placed into the ≤1280px stacked
    area template.
-4. The height cap is derived from the article body (reads `offsetHeight`, re-measures through a
-   `ResizeObserver`, tolerates both a template ref and the element `<script setup>` unwraps it into),
-   and `PostView` passes the body element to the rail.
+4. The rail's height is decoupled from the reading row: `.article-rail` is `height: 0` with no
+   `max-height`, both panels inside it are `position: absolute`, and the panel's own cap is
+   `calc(100vh - 8.5rem)` — i.e. the list may not be re-capped by the article body, and the rail must
+   not receive a body element.
 
 ### Real-browser checks
 
@@ -289,7 +317,7 @@ Console must be free of new errors or Vue warnings.
 - Both panels collapse to an edge spine and the choice survives reload and article switches.
 - Collapsing or expanding any panel leaves the article column's position, width, and the scroll
   position unchanged.
-- No rail, no rail request, and no layout change below 1360px.
+- No rail, no rail request, and no layout change below 1440px.
 - The rail cannot overlap the reading column at any width at or above its breakpoint.
 - A rail fetch failure degrades to today's page silently.
 - Frontend build, backend tests, and real-browser verification pass.
@@ -301,32 +329,37 @@ Verified against the temporary fixture database
 generators are `output/playwright/create_article_rail_fixture.py` and
 `extend_article_rail_fixture.py` (`output/` is git-ignored); `storage/blog.db` was never opened.
 
-Measured at 1920×1080 on a long article, article body left/width across all five toggle states:
+Measured at 1920×1080 on a 38-row 栏目 with a single-paragraph article, in every toggle state:
 
-| state | rail | TOC | article body | scrollY |
-| --- | --- | --- | --- | --- |
-| both expanded | 14 → 286 (272 wide) | 1676 → 1896 (220) | **575 / 760** | 1300 |
-| rail collapsed | 14 → 50 (36) | 1676 → 1896 | **575 / 760** | 1300 |
-| both collapsed | 14 → 50 | 1860 → 1896 (36) | **575 / 760** | 1300 |
-| TOC collapsed | 14 → 286 | 1860 → 1896 | **575 / 760** | 1300 |
+| state | rail panel | TOC | article body | document height | scrollY |
+| --- | --- | --- | --- | --- | --- |
+| both expanded | 14 → 326, 312×944 | 1656 → 1896 (240) | **575 / 760** | 1201 | 900 |
+| rail collapsed | 14 → 46, 32×176 | 1656 → 1896 | **575 / 760** | 1201 | 900 |
+| TOC collapsed | 14 → 326, 312×944 | 1864 → 1896 (32) | **575 / 760** | 1201 | 900 |
 
-The rail's right edge (286) never reaches the article's left edge (575); the document height is
-identical in every state, so no state change can clamp the scroll position.
+The rail's right edge (326) never reaches the article's left edge (575); the document height is
+identical in every state, so no state change can clamp the scroll position — including on a
+single-paragraph article, which the earlier body-derived cap could not achieve.
 
 Other confirmed behaviours:
 
 - one `/api/posts?category=…&page=1&limit=30` request per scope; switching articles and resizing
-  1920 → 1440 → 1280 → 1920 renders or hides the rail with **no** further list request;
+  1920 → 1500 → 1440 → 1400 renders or hides the rail with **no** further list request;
 - 栏目 below three published posts falls back to the site-wide latest list (`随想` → head 最新, 17 rows,
   footer link `/posts`); exactly three posts keeps the category (`算法` → head 算法3/3);
-- the current row is kept visible inside the rail's own scroll area: for a 30-row 栏目 the nav scrolled
-  to 90 (its maximum) to reveal the current row, and with a body-derived 217px cap it scrolled to 817;
+- the rail shows 21 rows at 1920×1080 and 17 at 1440×900 (a fixed 217px cap showed three), and the
+  current row is aligned into that area on mount, on article switch, and after a viewport resize
+  (`navScrollTop` 351 / 534 respectively);
+- the rail appears at 1440 and above and is absent from the DOM at 1400;
 - 加载更多 appears only when the server reports `has_more` (30 of 38 rows) and grows the list to 38
-  without changing `scrollHeight`;
-- collapsed spines render as 36px vertical plates: 文章清单 + count on the left, 目录 + the active
-  section number on the right, and the rail/TOC restore collapsed on first paint after a reload;
-- 1280px and 390px viewports render no rail, issue no rail request, and keep the single-column
-  `"toc" "article"` template; the TOC strip is untouched and has no collapse toggle;
+  without changing the document height;
+- collapsed spines render as 2rem vertical plates carrying a chevron, 文章清单 + count on the left and
+  目录 + the active section number on the right; the rail/TOC restore collapsed on first paint after a
+  reload;
+- the directory's caption paragraph is gone from the DOM; toggles render as circular hairline buttons
+  containing the chevron SVG;
+- 1280px and 390px viewports render no rail and keep the single-column `"toc" "article"` template with
+  the horizontal TOC strip at its sticky offset and no collapse toggle;
 - no console errors or Vue warnings.
 
 `test_backend.py` now holds 191 passing tests (four added above); `npm run build` and
@@ -339,6 +372,37 @@ Other confirmed behaviours:
   selectors would have been dead code.
 - `usePostRail` does not expose loading/error refs: nothing consumes them, a failed rail fetch simply
   leaves the rendered list in place and the component unmounted.
-- The rail's grid-level `max-height` was replaced by the body-derived inline cap described in section 1
-  after real-browser measurement showed a 327px document-height difference on a single-paragraph
-  article (which clamped scrollY from 1400 to 1201 when the rail was collapsed).
+
+## Revision after visual review (2026-10-15)
+
+Review feedback: the directory caption was unnecessary, the rail was too narrow to be pleasant or
+convenient, and neither collapse control looked good. All three were fixed by changing the design, not
+the styling alone:
+
+1. `.article-toc > p` ("阅读时，目录会跟随当前章节。") was deleted along with its CSS in both the desktop
+   and the ≤1280px blocks. The behaviour is visible from the active row; the caption only added a third
+   text style to a narrow column.
+2. The rail was widened from 17rem to 19.5rem (`--post-rail-width`), the TOC from 220px to 15rem, and
+   the rail's breakpoint raised from 1360px to 1440px so the panel is never squeezed by the `min()`
+   bound at the width where it is shown. The gap token was tightened to
+   `clamp(1.25rem, 2vw, 2.25rem)` so the full 312px fits at 1440px.
+3. Row typography was reworked: titles moved from the inherited 0.62rem monospace to the 0.72rem
+   display serif used by the `/posts` index, dates to a 0.56rem mono caption, row padding to
+   `0.55rem 0.5rem 0.55rem 0.75rem`, plus a hairline separator between adjacent rows and an accent
+   left border with a faint tint for the current row.
+4. The height cap was replaced by the decoupling described in section 1. The body-derived cap
+   (`useRailHeight.js`, now deleted) solved document inflation but left the list showing ~3 rows; a
+   zero-height sticky box with an absolutely positioned panel gives the list the whole available
+   viewport (21 rows at 1080p with the 38-row fixture) while keeping the document height independent
+   of the rail.
+5. Both collapse controls were redesigned (see section 4): circular hairline chevron buttons when
+   expanded, chevron + vertical label + count spines when collapsed, with hover states.
+6. The rail's active-row alignment now also re-runs on window resize, mirroring `PostToc`. Without it,
+   shrinking the viewport left the current row below the rail's visible area (measured at 1440×900).
+7. The `matchMedia` gate in `PostView` was moved to 1440px to match the CSS breakpoint; left at 1360 it
+   rendered and fetched the rail in the 1360–1440 band where CSS hides it.
+
+The unit-test contract for the height rule changed accordingly:
+`test_article_rail_height_is_decoupled_from_the_reading_row` now asserts the zero-height outer box, the
+absolutely positioned panels and the viewport-only cap, and that `PostView` does not pass a body
+element.

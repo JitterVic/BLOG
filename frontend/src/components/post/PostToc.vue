@@ -139,6 +139,7 @@ onBeforeUnmount(() => {
       title="展开目录"
       @click="expand"
     >
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       <span class="article-toc__spine-label">目录</span>
       <strong>{{ pad(activeIndex >= 0 ? activeIndex + 1 : items.length) }}</strong>
     </button>
@@ -156,7 +157,7 @@ onBeforeUnmount(() => {
           title="收起目录"
           @click="collapse"
         >
-          收起
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
       <nav id="article-toc-nav" ref="navigationRef" aria-label="文章目录">
@@ -172,7 +173,6 @@ onBeforeUnmount(() => {
           <em>{{ item.label }}</em>
         </button>
       </nav>
-      <p>阅读时，目录会跟随当前章节。</p>
     </template>
   </aside>
 </template>

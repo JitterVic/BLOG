@@ -26,7 +26,7 @@ const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 
 // 左侧清单只在阅读版式真有那条空轨道时才存在。断点同时管住渲染与请求：
 // 窄屏既不该多拿一份列表，也不该把它塞进单列版式里。
-const railEnabled = useMediaQuery("(min-width: 1360px)");
+const railEnabled = useMediaQuery("(min-width: 1440px)");
 const {
   railPosts,
   railTotal,
@@ -224,9 +224,6 @@ onBeforeUnmount(() => {
           :mode="railMode"
           :category="railCategory"
           :current-slug="route.params.slug"
-          :current-title="post.title"
-          :body-ref="articleBodyRef"
-          :enabled="railEnabled"
           @more="loadMoreRail"
         />
 

@@ -48,7 +48,7 @@
 
 - **状态管理**：采用单例 Composables 模式（如 `useSite.js`, `usePosts.js`, `usePost.js`），在模块作用域持有响应式状态并去重并发请求，不引入额外的状态管理库（Pinia/Vuex）。
 - **组件划分**：按业务模块拆分子目录（`components/home/`, `components/post/`, `components/posts/`, `components/pet/`），通用 UI 组件平铺于 `components/`。
-- **文章阅读页（`/posts/:slug`）**：阅读版式是**视口级对称三轨网格**（`.post-reading-layout` = `1fr / 760px / 1fr`，区域 `rail article toc`），正文因此恒定居中且宽度不随侧栏开合变化。左轨是当前栏目的编年索引（`components/post/PostRail.vue`，数据取 `/api/posts?category=…` 并由 `composables/usePostRail.js` 做成模块级单例缓存），右轨是章节目录（`PostToc.vue`）；两者都可折叠成竖排书脊并记住偏好，侧栏只在 ≥1360px 存在。清单高度上限由正文高度推导（`composables/useRailHeight.js`），避免长清单把短文页撑高。
+- **文章阅读页（`/posts/:slug`）**：阅读版式是**视口级对称三轨网格**（`.post-reading-layout` = `1fr / 760px / 1fr`，区域 `rail article toc`），正文因此恒定居中且宽度不随侧栏开合变化。左轨是当前栏目的编年索引（`components/post/PostRail.vue`，数据取 `/api/posts?category=…` 并由 `composables/usePostRail.js` 做成模块级单例缓存），右轨是章节目录（`PostToc.vue`）；两者都可折叠成竖排书脊并记住偏好，侧栏只在 ≥1440px 存在。清单的 sticky 盒子高 0、面板绝对定位撑开，因此再长的清单既不会把短文页撑高，也不会被正文高度反向夹窄。
 - **文章目录页（`/posts`）**：单一形态——按年份分组的编年索引（`components/posts/ArchiveLedger.vue`），配 `PostsToolbox.vue` 的栏目筛选与搜索。索引行 = 日期 / 标题 + 摘要 / 时长 + 标签；筛选走服务端 `category` 参数，因此筛选与翻页可以并存。
 - **样式体系**：基于原生 CSS 变量构建 `styles/editorial.css`，聚合 12 个按层叠顺序加载的主题模块（reset, tokens, layout, typography, components, print 等）。
 

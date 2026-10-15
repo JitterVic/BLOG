@@ -21,12 +21,12 @@
 
 .post-reading-layout {
   --post-article-width: 760px;
-  --post-toc-width: 220px;
+  --post-toc-width: 15rem;
   --post-toc-gap: clamp(2rem, 3vw, 3rem);
   /* 左侧清单的宽度与它同正文之间保留下来的间隙。与 --toc-* 同理必须声明在这里：
      面板是这份网格的并列子元素，自定义属性不向上查找、也不横向传递。 */
-  --post-rail-width: 17rem;
-  --post-rail-gap: clamp(1.5rem, 2.4vw, 3rem);
+  --post-rail-width: 19.5rem;
+  --post-rail-gap: clamp(1.25rem, 2vw, 2.25rem);
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
@@ -79,25 +79,6 @@
   justify-self: end;
   overflow: hidden;
   border-top: 2px solid var(--ink, #2a241c);
-}
-.article-toc__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  color: var(--ink-faded, #958b7b);
-  font-family: var(--f-mono, monospace);
-  font-size: 0.52rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.article-toc__head strong {
-  color: var(--accent, #8b2500);
-  font-family: var(--f-display, serif);
-  font-size: 1.3rem;
-  letter-spacing: 0;
 }
 
 .article-toc nav {
@@ -164,99 +145,153 @@
   color: var(--accent, #8b2500);
 }
 
-.article-toc > p {
-  margin: 1.4rem 0 0;
+/* --- 侧栏标题栏（目录 / 清单共用）---
+   收起/展开是一枚细线小箭头按钮，不是「收起」两个字：文字按钮在这么窄的栏里
+   和栏目标签、位次挤在同一行，既像正文又抢视线。 */
+.article-toc__head,
+.article-rail__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.6rem;
   color: var(--ink-faded, #958b7b);
-  font-size: 0.55rem;
-  line-height: 1.7;
+  border-bottom: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+}
+
+.article-toc__head {
+  justify-content: space-between;
+  font-family: var(--f-mono, monospace);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.article-toc__head strong,
+.article-rail__head strong {
+  color: var(--accent, #8b2500);
+  font-family: var(--f-display, serif);
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.article-toc__toggle,
+.article-rail__toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  color: var(--ink-faded, #958b7b);
+  background: transparent;
+  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color 0.24s ease, border-color 0.24s ease, background 0.24s ease;
+}
+
+.article-toc__toggle svg,
+.article-rail__toggle svg,
+.article-toc__spine svg,
+.article-rail__all svg {
+  width: 0.72rem;
+  height: 0.72rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.article-toc__toggle:hover,
+.article-toc__toggle:focus-visible,
+.article-rail__toggle:hover,
+.article-rail__toggle:focus-visible {
+  color: var(--paper, #f4efe6);
+  background: var(--accent, #8b2500);
+  border-color: var(--accent, #8b2500);
+  outline: 0;
+}
+
+/* 目录在右栏，收起方向朝右；清单在左栏，收起方向朝左。 */
+.article-toc__toggle svg {
+  transform: rotate(180deg);
 }
 
 /* --- 左侧文章清单 ---
-   与右侧目录完全对称：都贴自己那一侧边缘（justify-self 分列 start / end）、都只占
-   一条 1fr 轨道、都 sticky。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一
-   不会压到正文的保证；只要轨道不够宽，面板就自己变窄，而不是去挤正文。 */
+   与右侧目录对称：都贴自己那一侧边缘（justify-self 分列 start / end）、都只占一条
+   1fr 轨道、都 sticky。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一不会压到
+   正文的保证；只要轨道不够宽，面板就自己变窄，而不是去挤正文。 */
 .article-rail {
   grid-area: rail;
   position: sticky;
   top: 6.8rem;
   /* 压过 .print-page::after 那道左侧纸纹（z-index 10），否则纸纹会盖在清单文字上 */
   z-index: 20;
-  /* 与右侧目录不同：清单天然可以很长，而它的盒高会参与阅读版式那一行的高度计算。
-     所以上限由正文实际高度推导（见 composables/useRailHeight.js），由内联样式给出；
-     换成 34rem 只是没有测量值时的兜底。超出部分由 nav 自己滚动，
-     而当前篇的定位逻辑会把它滚进可视区。 */
-  max-height: 34rem;
+  /* 高度必须与「阅读版式那一行」解耦。
+     清单天生可以很长，若让它像目录那样直接撑开盒子，网格行高就跟着它走：30 条清单
+     （实测 944px）配一篇只有一段的短文，会在正文之后空出几百像素只有左栏的留白
+     （实测 327px），折叠清单时整页高度骤降，浏览器还会把读者的滚动位置夹回去
+     （实测 1400 → 1201）。所以这个盒子高 0、不参与行高计算，真正的面板由内部绝对
+     定位撑开——面板因此能占满可用视口，而文档高度完全不受它影响。 */
+  height: 0;
   width: min(var(--post-rail-width), calc(100% - var(--post-rail-gap)));
-  min-height: 0;
   margin-left: clamp(0.5rem, 1vw, 1.5rem);
   /* 轨道不够宽的档位一律不布局。必须是 display 而不是「移出视口」之类的手法：
      ≤1280px 的单列区域模板里没有 rail 这一格，一个仍可见的面板会被自动放进
      隐式行，直接冒在正文上方。display:none 的元素不是网格项，因此那条分支不必改。 */
   display: none;
-  flex-direction: column;
   justify-self: start;
-  overflow: hidden;
-  padding: 0.9rem 0 0.5rem;
-  border-top: 2px solid var(--ink, #2a241c);
+  /* 不能用 overflow:hidden 裁自己——内部面板是绝对定位的，会被一起裁掉 */
+  overflow: visible;
 }
 
-@media (min-width: 1360px) {
+@media (min-width: 1440px) {
   .article-rail {
-    display: flex;
+    display: block;
   }
 }
 
+/* 展开态与折叠态都挂在这一层：它才是真正被看到的那个面板 */
+.article-rail__body,
+.article-rail__spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .article-rail__body {
-  min-height: 0;
-  flex: 1 1 auto;
+  /* 面板高度只受可用视口约束（原来这里还夹着正文高度，结果 38 条清单只剩 217px、
+     一屏看到三行）。超出部分由 nav 自己滚动，当前篇的定位逻辑会把它滚进可视区。 */
+  max-height: calc(100vh - 8.5rem);
+  padding: 0 0 0.8rem;
   display: flex;
   flex-direction: column;
+  border-top: 2px solid var(--ink, #2a241c);
 }
 
 .article-rail__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6rem;
-  margin-bottom: 0.8rem;
-  color: var(--ink-faded, #958b7b);
+  flex: 0 0 auto;
+  justify-content: flex-start;
   font-family: var(--f-mono, monospace);
-  font-size: 0.52rem;
-  letter-spacing: 0.14em;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
 }
 
-.article-rail__head strong {
-  color: var(--accent, #8b2500);
-  font-family: var(--f-display, serif);
-  font-size: 1.1rem;
-  letter-spacing: 0;
+.article-rail__head > strong {
+  margin-left: auto;
+  font-size: 1.15rem;
 }
 
 .article-rail__head strong i {
   color: var(--ink-faded, #958b7b);
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-style: normal;
-}
-
-.article-rail__toggle,
-.article-toc__toggle {
-  padding: 0;
-  color: var(--ink-faded, #958b7b);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-family: var(--f-mono, monospace);
-  font-size: 0.52rem;
-  letter-spacing: 0.14em;
-  transition: color 0.24s ease;
-}
-
-.article-rail__toggle:hover,
-.article-rail__toggle:focus-visible,
-.article-toc__toggle:hover,
-.article-toc__toggle:focus-visible {
-  color: var(--accent, #8b2500);
-  outline: 0;
 }
 
 .article-rail nav {
@@ -268,44 +303,48 @@
 }
 
 .article-rail__year {
-  margin: 0.9rem 0 0.3rem;
-  padding-left: 0.6rem;
+  margin: 1.1rem 0 0.45rem;
+  padding-left: 0.75rem;
   color: var(--ink-faded, #958b7b);
-  font-family: var(--f-mono, monospace);
-  font-size: 0.54rem;
-  letter-spacing: 0.22em;
+  font-family: var(--f-display, serif);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
 }
 
 .article-rail nav > .article-rail__year:first-child {
-  margin-top: 0;
-}
-
-.article-rail__row,
-.article-rail__current {
-  display: grid;
-  grid-template-columns: 2.4rem minmax(0, 1fr);
-  gap: 0.45rem;
-  padding: 0.42rem 0.35rem 0.42rem 0.6rem;
-  color: var(--ink-light, #6b6152);
-  border-left: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
-  font-size: 0.62rem;
-  line-height: 1.5;
-  transition: color 0.24s ease, border-color 0.24s ease;
+  margin-top: 0.2rem;
 }
 
 .article-rail__row {
+  display: grid;
+  grid-template-columns: 2.8rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.55rem 0.5rem 0.55rem 0.75rem;
+  color: var(--ink-light, #5e5548);
+  border-left: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
   text-decoration: none;
+  /* 用衬线正文体而不是继承下来的等宽体：中文标题在等宽小字号下每个字都占满字身，
+     既难扫读也显得挤；字号也从 0.62rem 提到 0.72rem。 */
+  font-family: var(--f-display, serif);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  transition: color 0.24s ease, border-color 0.24s ease, background 0.24s ease;
+}
+
+/* 行之间留一道极淡的分隔：清单是一份列表，靠留白分隔在长列表里看不清边界 */
+.article-rail__row + .article-rail__row {
+  border-top: 1px solid rgba(42, 36, 28, 0.07);
 }
 
 .article-rail__date {
-  color: var(--rule-light, rgba(42, 36, 28, 0.35));
+  padding-top: 0.1rem;
+  color: var(--rule-light, rgba(42, 36, 28, 0.38));
   font-family: var(--f-mono, monospace);
-  font-size: 0.5rem;
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
 }
 
-.article-rail__row em,
-.article-rail__current em {
-  /* 两行封顶：清单是「找得到」，不是「读完」，但一行截断会把长标题的同名前缀全削平 */
+.article-rail__row em {
   display: -webkit-box;
   overflow: hidden;
   font-style: normal;
@@ -314,46 +353,44 @@
 }
 
 .article-rail__row:hover,
-.article-rail__row:focus-visible,
-.article-rail__row.is-current {
+.article-rail__row:focus-visible {
   color: var(--accent, #8b2500);
   border-left-color: var(--accent, #8b2500);
+  background: rgba(139, 37, 0, 0.04);
   outline: 0;
 }
 
-.article-rail__row.is-current em {
+.article-rail__row.is-current {
+  color: var(--ink, #1c1710);
+  border-left: 2px solid var(--accent, #8b2500);
+  padding-left: calc(0.75rem - 1px);
+  background: rgba(139, 37, 0, 0.06);
   font-weight: 600;
 }
 
-.article-rail__current {
-  margin: 0 0 0.4rem;
+.article-rail__row.is-current .article-rail__date {
   color: var(--accent, #8b2500);
-  border-left: 2px solid var(--accent, #8b2500);
-}
-
-.article-rail__current span {
-  font-family: var(--f-mono, monospace);
-  font-size: 0.5rem;
-  letter-spacing: 0.08em;
+  font-weight: 400;
 }
 
 .article-rail__more {
   width: 100%;
-  margin: 0.8rem 0 0;
-  padding: 0.5rem;
-  color: var(--ink-faded, #958b7b);
+  margin: 0.9rem 0 0;
+  padding: 0.55rem;
+  color: var(--ink-light, #5e5548);
   background: transparent;
   border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
   cursor: pointer;
   font-family: var(--f-mono, monospace);
-  font-size: 0.54rem;
+  font-size: 0.58rem;
   letter-spacing: 0.12em;
-  transition: color 0.24s ease, border-color 0.24s ease;
+  transition: color 0.24s ease, border-color 0.24s ease, background 0.24s ease;
 }
 
 .article-rail__more:hover:not(:disabled),
 .article-rail__more:focus-visible:not(:disabled) {
-  color: var(--accent, #8b2500);
+  color: var(--paper, #f4efe6);
+  background: var(--accent, #8b2500);
   border-color: var(--accent, #8b2500);
   outline: 0;
 }
@@ -364,15 +401,22 @@
 }
 
 .article-rail__all {
-  display: block;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-top: 0.9rem;
-  padding-left: 0.6rem;
-  color: var(--ink-faded, #958b7b);
+  padding-left: 0.75rem;
+  color: var(--ink-light, #5e5548);
   font-family: var(--f-mono, monospace);
-  font-size: 0.54rem;
+  font-size: 0.58rem;
   letter-spacing: 0.12em;
   text-decoration: none;
   transition: color 0.24s ease;
+}
+
+.article-rail__all svg {
+  transition: transform 0.24s ease;
 }
 
 .article-rail__all:hover,
@@ -381,13 +425,19 @@
   outline: 0;
 }
 
+.article-rail__all:hover svg {
+  transform: translateX(2px);
+}
+
 /* --- 折叠态：竖排书脊 ---
    两条书脊共用一套写法，各自贴在正文那一侧的边上（左栏贴右边线、右栏贴左边线）。
    展开态的面板与正文之间本来就没有背景与分隔，所以折叠后留下的必须是一条有分量的
    竖线，否则「这里还有一栏」这件事就消失了。 */
 .article-rail.is-collapsed {
-  width: 2.25rem;
-  border-top: 0;
+  width: 2rem;
+}
+
+.article-rail.is-collapsed .article-rail__spine {
   border-right: 2px solid var(--ink, #2a241c);
 }
 
@@ -397,10 +447,9 @@
      是「自上而下」，所以这里不能写 column（那会变成横排）。 */
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.7rem;
-  min-height: 9rem;
-  padding: 0.9rem 0 0.6rem;
+  gap: 0.9rem;
+  min-height: 11rem;
+  padding: 1rem 0 0.8rem;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   color: var(--ink-faded, #958b7b);
@@ -408,9 +457,9 @@
   border: 0;
   cursor: pointer;
   font-family: var(--f-mono, monospace);
-  font-size: 0.54rem;
-  letter-spacing: 0.18em;
-  transition: color 0.24s ease;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  transition: color 0.24s ease, background 0.24s ease;
 }
 
 .article-rail__spine {
@@ -421,11 +470,28 @@
   width: 100%;
 }
 
+.article-rail__spine svg,
+.article-toc__spine svg {
+  /* 书脊上的箭头指向「拉出来的方向」：左栏朝左、右栏朝右 */
+  width: 0.8rem;
+  height: 0.8rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.article-toc__spine svg {
+  transform: rotate(180deg);
+}
+
 .article-rail__spine:hover,
 .article-rail__spine:focus-visible,
 .article-toc__spine:hover,
 .article-toc__spine:focus-visible {
   color: var(--accent, #8b2500);
+  background: rgba(139, 37, 0, 0.05);
   outline: 0;
 }
 
@@ -433,12 +499,13 @@
 .article-toc__spine strong {
   color: var(--accent, #8b2500);
   font-family: var(--f-display, serif);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
+  font-weight: 400;
   letter-spacing: 0.06em;
 }
 
 .article-toc.is-collapsed {
-  width: 2.25rem;
+  width: 2rem;
   border-top: 0;
   border-left: 2px solid var(--ink, #2a241c);
 }
@@ -514,10 +581,6 @@
 
   .article-toc button.active span {
     color: rgba(244, 239, 230, 0.68);
-  }
-
-  .article-toc > p {
-    display: none;
   }
 
   .post-reading-layout .print-markdown h2,

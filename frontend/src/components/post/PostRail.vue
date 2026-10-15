@@ -4,7 +4,6 @@ import { RouterLink } from "vue-router";
 
 import { shortDate } from "../../composables/useFormat";
 import { usePersistedCollapse } from "../../composables/usePersistedCollapse";
-import { useRailHeight } from "../../composables/useRailHeight";
 import { groupByYear } from "../../lib/postGroups";
 
 /**
@@ -14,7 +13,7 @@ import { groupByYear } from "../../lib/postGroups";
  * 贴右边缘对称。这样折叠与否只改变自己的宽度，正文轨道的中心与宽度都不动，
  * 也就不会出现「折叠侧栏时文字在读者眼皮底下重排」。
  *
- * 行只给日期 + 标题：约 270px 宽放不下摘要，摘要留给 /posts 的索引。
+ * 行只给日期 + 标题：约 300px 宽放不下摘要，摘要留给 /posts 的索引。
  */
 const props = defineProps({
   posts: { type: Array, required: true },
@@ -24,24 +23,20 @@ const props = defineProps({
   mode: { type: String, default: "category" },
   category: { type: String, default: "" },
   currentSlug: { type: String, default: "" },
-  currentTitle: { type: String, default: "" },
-  bodyRef: { type: Object, default: null },
-  enabled: { type: Boolean, default: true },
 });
 
 defineEmits(["more"]);
 
 // 展开态是默认：折起来虽然干净，但先折起来等于让人永远发现不了这一栏。
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-rail-collapsed");
-const { railMaxHeight } = useRailHeight(props.bodyRef, computed(() => props.enabled));
 
 const navigationRef = ref(null);
 let alignmentFrame = 0;
+let resizeAlignmentTimer = 0;
 
 const groups = computed(() => groupByYear(props.posts));
 const scopeLabel = computed(() => (props.mode === "latest" ? "最新" : props.category || "全部"));
 const currentIndex = computed(() => props.posts.findIndex((post) => post.slug === props.currentSlug));
-const currentMissing = computed(() => Boolean(props.currentSlug) && currentIndex.value < 0);
 const allHref = computed(() => (
   props.mode === "category" && props.category
     ? `/posts?category=${encodeURIComponent(props.category)}`
@@ -82,15 +77,33 @@ async function scheduleAlignment() {
   alignmentFrame = window.requestAnimationFrame(alignActiveRow);
 }
 
+/**
+ * 视口变矮后清单可视区也变矮，当前篇可能落到可视区之外——挂载时对齐过一次
+ * 并不够，所以随 resize 再对齐（与右侧目录同一套做法）。
+ */
+async function handleResize() {
+  await scheduleAlignment();
+  window.clearTimeout(resizeAlignmentTimer);
+  resizeAlignmentTimer = window.setTimeout(() => {
+    resizeAlignmentTimer = 0;
+    scheduleAlignment();
+  }, 320);
+}
+
 watch(
   [() => props.posts.length, () => props.currentSlug, collapsed],
   scheduleAlignment,
   { flush: "post" },
 );
 
-onMounted(scheduleAlignment);
+onMounted(() => {
+  window.addEventListener("resize", handleResize, { passive: true });
+  scheduleAlignment();
+});
 
 onBeforeUnmount(() => {
+  window.removeEventListener("resize", handleResize);
+  window.clearTimeout(resizeAlignmentTimer);
   if (alignmentFrame) window.cancelAnimationFrame(alignmentFrame);
 });
 </script>
@@ -99,7 +112,6 @@ onBeforeUnmount(() => {
   <aside
     class="article-rail rv"
     :class="{ 'is-collapsed': collapsed }"
-    :style="railMaxHeight ? { maxHeight: `${railMaxHeight}px` } : undefined"
     data-reveal-delay="100"
     aria-label="文章清单"
   >
@@ -112,6 +124,7 @@ onBeforeUnmount(() => {
       title="展开文章清单"
       @click="expand"
     >
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       <span class="article-rail__spine-label">文章清单</span>
       <strong>{{ pad(total) }}</strong>
     </button>
@@ -128,16 +141,11 @@ onBeforeUnmount(() => {
           title="收起文章清单"
           @click="collapse"
         >
-          收起
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
         </button>
       </div>
 
       <nav ref="navigationRef" aria-label="文章清单导航">
-        <div v-if="currentMissing" class="article-rail__current">
-          <span>当前</span>
-          <em>{{ currentTitle }}</em>
-        </div>
-
         <template v-for="([year, items]) in groups" :key="year">
           <p class="article-rail__year">{{ year }}</p>
           <RouterLink
@@ -163,7 +171,10 @@ onBeforeUnmount(() => {
         </button>
       </nav>
 
-      <RouterLink class="article-rail__all" :to="allHref">完整目录 →</RouterLink>
+      <RouterLink class="article-rail__all" :to="allHref">
+        <span>完整目录</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+      </RouterLink>
     </div>
   </aside>
 </template>
