@@ -602,13 +602,17 @@ def test_article_rail_width_tokens_are_in_scope():
 
 
 def test_side_panels_cannot_reach_the_reading_column():
-    """左右面板都不能挤动正文轨道。
+    """左右面板都不能挤动正文轨道，也不能压到版面框上。
 
     正文能恒定居中、宽度不变，靠的是「三条轨道宽度固定 + 面板只决定自己那一格里的
     位置」：面板宽度用 min() 夹在自己那格的轨道宽以内，左右各自贴向本侧（left: 0 /
     right: 0）。面板是绝对定位的网格子元素，包含块就是它自己那一格，所以这里的
     百分比仍是轨道宽度——一旦有轨道改成 auto，或把面板宽度改成 auto 内容撑开，
     面板就会压到正文轨道上。
+
+    但「不挤正文」不等于「好看」：正文列只有 760px，1fr 轨道在窄一点的视口上比
+    面板宽不了多少，于是面板会越过版面框的框线（实测 1440 下框左边缘在 x=125，
+    而清单宽 312）。所以宽度还必须夹上第三项——版面框外侧的留白。
     """
     css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
     layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
@@ -622,14 +626,70 @@ def test_side_panels_cannot_reach_the_reading_column():
     assert "var(--post-article-width)" in columns
 
     rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
-    assert "min(var(--post-rail-width), calc(100% - var(--post-rail-gap)))" in rail
+    for term in (
+        "var(--post-rail-width)",
+        "calc(100% - var(--post-rail-gap))",
+        "var(--post-outer-margin",
+    ):
+        assert term in rail, f"清单宽度缺少夹取项 {term}"
     assert "left: 0" in rail
+    assert "var(--post-rail-margin)" in rail, "清单的边缘余量必须与宽度上限同源"
 
     toc_blocks = re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S)
     assert toc_blocks
     toc = "\n".join(toc_blocks)
-    assert "min(var(--post-toc-width), calc(100% - var(--post-toc-gap)))" in toc
+    for term in (
+        "var(--post-toc-width)",
+        "calc(100% - var(--post-toc-gap))",
+        "var(--post-outer-margin",
+    ):
+        assert term in toc, f"目录宽度缺少夹取项 {term}"
     assert "right: 0" in toc, "右侧目录必须贴本格右边缘"
+    assert "var(--post-toc-margin)" in toc, "目录的边缘余量必须与宽度上限同源"
+
+
+def test_reading_frame_narrows_to_make_room_for_the_side_panels():
+    """阅读页的版面框必须随视口收窄，把两侧栏位让出来。
+
+    1888px 以内宽度的视口放不下「1180px 的框 + 312px 清单 + 240px 目录」，
+    框不收窄，面板只会越过框线。框宽与外侧留白必须来自同一个变量：
+    --post-outer-margin 既是面板宽度上限的减项，也是面板与框线之间距离的来源，
+    两边各算一遍迟早会漂移。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+
+    root = re.search(r"\.print-post-view\s*\{([^}]*)\}", css, re.S)
+    assert root is not None, "找不到 .print-post-view 的变量声明块"
+    assert "--post-frame-width" in root.group(1), "框宽必须声明在框与面板的共同祖先上"
+    assert "--post-outer-margin" in root.group(1), "外侧留白必须由框宽推导"
+    assert "var(--post-frame-width)" in root.group(1)
+
+    widen = re.search(r"@media\s*\(min-width:\s*1281px\)\s*\{([^}]*)\}", css, re.S)
+    assert widen is not None
+    assert ".print-post-view .print-page" in widen.group(1)
+    assert ".print-post-view .print-related-section" in widen.group(1), (
+        "相关阅读区与正文框必须同宽，否则两个框线会错开"
+    )
+    assert widen.group(1).count("width: var(--post-frame-width)") == 1
+
+    # 收窄档位必须晚于 layout.css 的原框宽规则才生效：post.css 是后加载的那一层。
+    entry = Path("frontend/src/styles/editorial.css").read_text(encoding="utf-8")
+    assert entry.index('"./layout.css"') < entry.index('"./post.css"'), (
+        "post.css 必须排在 layout.css 之后，否则框宽覆盖不生效"
+    )
+
+    # 面板的宽度上限必须真的用上外侧留白，否则收窄框宽只是白收。
+    for panel, margin_token in (
+        ("article-rail", "--post-rail-margin"),
+        ("article-toc", "--post-toc-margin"),
+    ):
+        body = re.findall(r"\." + panel + r"\s*\{([^}]*)\}", css, re.S)[0]
+        width = re.search(r"width:\s*min\((.*?)\);", body, re.S)
+        assert width is not None, f".{panel} 必须用 min() 夹取宽度"
+        terms = width.group(1)
+        assert "var(--post-outer-margin" in terms
+        assert margin_token in terms
+        assert "var(--post-panel-breath)" in terms, "面板与框线之间要留呼吸带"
 
 
 def test_side_panels_are_pinned_by_script_not_by_sticky():
@@ -685,6 +745,41 @@ def test_article_rail_is_not_laid_out_below_its_breakpoint():
     assert base.start() < widen.start(), "基准档必须先于放宽档位"
     assert base.start() < css.index("@media (max-width: 1280px)"), (
         "基准的 display:none 必须排在窄屏单列档位之前"
+    )
+
+
+def test_panel_chevrons_point_outward_when_collapsing():
+    """收起箭头朝外、展开箭头朝内，四条控制件都不能漏。
+
+    四个控制件的模板路径并不统一：左栏两处与目录书脊用的是朝左的 `M15 5l-7 7 7 7`，
+    目录的收起按钮用的是朝右的 `M9 5l7 7-7 7`。要满足「左栏收起朝左、左栏展开朝右、
+    目录收起朝右、目录展开朝左」，只有左栏书脊需要翻转；此前错给目录的两处各加了一次
+    180°，结果目录的收起键朝左（用户看到的就是这个）。与其逐个核对路径方向，不如把
+    「整份 post.css 里只允许一处 rotate(180deg)，且必须落在左栏书脊上」钉死。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    hits = re.findall(r"([^{}]+)\{([^{}]*rotate\(180deg\)[^{}]*)\}", css, re.S)
+    assert len(hits) == 1, f"只允许一次箭头翻转，实际命中 {len(hits)} 处"
+    selector = hits[0][0].strip()
+    assert selector == ".article-rail__spine svg", (
+        f"翻转必须只作用于左栏书脊（面板从左侧拉出，箭头指向正文），实际是 {selector}"
+    )
+
+
+def test_router_view_survives_query_only_navigation():
+    """路由视图的 key 只能取 path，不能取 fullPath。
+
+    取 fullPath 时任何只改查询串的导航都会换 key：`加载更多` 把 page 写回 URL 的那一刻
+    整页重建，先闪一次骨架屏（看起来就是「刷新了页面」），再由 onMounted 从头拉一遍
+    列表，第二页的内容才补上；从文章页点「完整目录」跳 /posts?cat=… 同理，还会因为
+    筛选被重建成初始态而多刷一次。`PostsView` 已经监听了 route.query 做就地更新，
+    key 必须把它放过去。
+    """
+    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
+    assert ':key="viewRoute.path"' in app
+    assert "viewRoute.fullPath" not in app.split("<template>", 1)[1], (
+        "模板里不能再按 fullPath 建 key"
     )
 
 

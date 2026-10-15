@@ -19,6 +19,28 @@
   min-height: calc(100svh - 8.5rem);
 }
 
+/* --- 版面框宽度：给两侧面板让出栏位 ---
+   左右面板不住在框里，它们落在版面框两侧的留白中（见 .post-reading-layout 的两条 1fr 轨道）。
+   框宽一旦超过「视口 − 2 × 面板栏位」，面板就必然压到框线上：1180px 的框要视口宽到 1888px
+   以上才容得下 312px 的清单，而 1440 下框的左边缘在 x=125，清单却要 312px。所以阅读页的框
+   宽改为跟视口一起收缩，下限 800px——下限处正文列（固定 760px、始终居中）仍完整落在框内，
+   两侧各留 20px 纸边；视口回到 1884px 以上时框宽恢复为 1180px，与原设计完全一致。
+
+   变量必须挂在 .print-post-view 上：版面框（.print-page / .print-related-section）与面板
+   （.post-reading-layout 的子元素）是两个分支，只有共同祖先能让它们读到同一组数值。 */
+.print-post-view {
+  --post-frame-width: min(1180px, max(800px, calc(100vw - 40rem)));
+  --post-outer-margin: calc((100vw - var(--post-frame-width)) / 2);
+}
+
+@media (min-width: 1281px) {
+  /* 只有 ≥1281px 才有侧栏可言（目录的降级形态是正文上方的横向条，不吃侧向空间）。 */
+  .print-post-view .print-page,
+  .print-post-view .print-related-section {
+    width: var(--post-frame-width);
+  }
+}
+
 .post-reading-layout {
   --post-article-width: 760px;
   --post-toc-width: 15rem;
@@ -27,6 +49,12 @@
      面板是这份网格的并列子元素，自定义属性不向上查找、也不横向传递。 */
   --post-rail-width: 19.5rem;
   --post-rail-gap: clamp(1.25rem, 2vw, 2.25rem);
+  /* 面板各自距视口边缘的余量，既是 margin 也是宽度上限里的减项——两处必须同源，
+     否则面板会压到框线或顶出视口。--post-panel-breath 是面板与框线之间必须留下的
+     呼吸带；没有它，面板会紧贴框线，视觉上仍像是「越界」。 */
+  --post-rail-margin: clamp(0.5rem, 1vw, 1.5rem);
+  --post-toc-margin: clamp(0.35rem, 1vw, 1.25rem);
+  --post-panel-breath: 1.1rem;
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
@@ -74,12 +102,18 @@
   position: absolute;
   right: 0;
   top: var(--panel-shift, 0px);
-  width: min(var(--post-toc-width), calc(100% - var(--post-toc-gap)));
+  /* 宽度三重夹取：不超过设计宽度、不超过「轨道宽 − 间隙」、不超过「框外留白 −
+     边缘余量 − 呼吸带」——最后一项才是「不压到版面框」的保证，前两项只管不挤正文。 */
+  width: min(
+    var(--post-toc-width),
+    calc(100% - var(--post-toc-gap)),
+    calc(var(--post-outer-margin, 15rem) - var(--post-toc-margin) - var(--post-panel-breath))
+  );
   max-height: var(--panel-avail, calc(100vh - 8.5rem));
   min-height: 0;
   margin-left: var(--post-toc-gap);
   /* 贴向视口右侧边缘，与正文阅读列拉开距离，避免干扰阅读 */
-  margin-right: clamp(0.35rem, 1vw, 1.25rem);
+  margin-right: var(--post-toc-margin);
   padding: 0.9rem 0 0.5rem;
   display: flex;
   flex-direction: column;
@@ -222,15 +256,20 @@
   outline: 0;
 }
 
-/* 目录在右栏，收起方向朝右；清单在左栏，收起方向朝左。 */
-.article-toc__toggle svg {
+/* 箭头方向约定：收起点向「面板退出去的方向」，展开点向「正文那一侧」。
+   四条模板路径里，左栏的收起、右栏的书脊本来就是对的（左栏收起朝左、右栏展开朝左），
+   只有左栏书脊是反的——面板从左侧拉出来，箭头应指向右（正文方向），故补一次翻转。
+   右栏收起按钮用另一条朝右的路径，同样不需要变换；此前给它加的 180° 正是用户看到的
+   「右边该向右收拢却朝左」的成因。 */
+.article-rail__spine svg {
   transform: rotate(180deg);
 }
 
 /* --- 左侧文章清单 ---
-   与右侧目录对称：都贴自己那一侧边缘（justify-self 分列 start / end）、都只占一条
-   1fr 轨道。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一不会压到正文的保证；
-   只要轨道不够宽，面板就自己变窄，而不是去挤正文。
+   与右侧目录对称：都贴自己那一侧边缘（left: 0 / right: 0）、都只占一条 1fr 轨道。宽度用
+   min() 夹三道：设计宽度、「轨道宽 − 间隙」、「版面框外侧留白 − 边缘余量 − 呼吸带」。
+   前两道保证不挤正文（只要轨道不够宽，面板就自己变窄），第三道才是「不压到框线」的
+   保证——正文列固定 760px，轨道往往比面板宽不了多少，只靠前两道必然越界。
 
    纵向位置（--panel-shift）与可用高度（--panel-avail）都由
    composables/usePanelPin.js 写在元素上，两条侧栏共用。这一层不能省：
@@ -254,8 +293,13 @@
      （实测 1400 → 1201）。所以这个盒子高 0、不参与行高计算，真正的面板由内部绝对
      定位撑开——面板因此能占满可用视口，而文档高度完全不受它影响。 */
   height: 0;
-  width: min(var(--post-rail-width), calc(100% - var(--post-rail-gap)));
-  margin-left: clamp(0.5rem, 1vw, 1.5rem);
+  /* 三重夹取，理由同 .article-toc 的宽度：至少要保证面板不会压到版面框的左侧框线。 */
+  width: min(
+    var(--post-rail-width),
+    calc(100% - var(--post-rail-gap)),
+    calc(var(--post-outer-margin, 15rem) - var(--post-rail-margin) - var(--post-panel-breath))
+  );
+  margin-left: var(--post-rail-margin);
   /* 轨道不够宽的档位一律不布局。必须是 display 而不是「移出视口」之类的手法：
      ≤1280px 的单列区域模板里没有 rail 这一格，一个仍可见的面板会被自动放进
      隐式行，直接冒在正文上方。display:none 的元素不是网格项，因此那条分支不必改。 */
@@ -488,7 +532,9 @@ html.motion-off .article-toc {
 }
 
 /* --- 折叠态：竖排书脊 ---
-   两条书脊共用一套写法，各自贴在正文那一侧的边上（左栏贴右边线、右栏贴左边线）。
+   两条书脊共用一套写法，展开态与折叠态都挂在窗口左右边缘的同一条竖线上（左栏 left:0、
+   右栏 right:0），因此收起后标签留在原地而不是跳到别处——这也是它们与正文列之间隔着
+   整段外侧留白的原因：留白越窄，书脊越贴近框线（下限由宽度夹取保证）。
    展开态的面板与正文之间本来就没有背景与分隔，所以折叠后留下的必须是一条有分量的
    竖线，否则「这里还有一栏」这件事就消失了。 */
 .article-rail.is-collapsed {
@@ -531,7 +577,7 @@ html.motion-off .article-toc {
 
 .article-rail__spine svg,
 .article-toc__spine svg {
-  /* 书脊上的箭头指向「拉出来的方向」：左栏朝左、右栏朝右 */
+  /* 书脊上的箭头指向面板回来的方向：左栏朝右、右栏朝左 */
   width: 0.8rem;
   height: 0.8rem;
   fill: none;
@@ -539,10 +585,6 @@ html.motion-off .article-toc {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.article-toc__spine svg {
-  transform: rotate(180deg);
 }
 
 .article-rail__spine:hover,

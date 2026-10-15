@@ -47,7 +47,7 @@ const scopeLabel = computed(() => (props.mode === "latest" ? "最新" : props.ca
 const currentIndex = computed(() => props.posts.findIndex((post) => post.slug === props.currentSlug));
 const allHref = computed(() => (
   props.mode === "category" && props.category
-    ? `/posts?category=${encodeURIComponent(props.category)}`
+    ? `/posts?cat=${encodeURIComponent(props.category)}`
     : "/posts"
 ));
 

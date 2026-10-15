@@ -21,10 +21,15 @@ const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: t
 /**
  * 页面切换后重播入场动效。
  *
- * 路由视图用 `:key="viewRoute.fullPath"` 强制重建，DOM 是新的，理论上观察器会
- * 重新处理；但重建后的元素初始就落在视口内时，观察器回调与 Vue 补丁存在竞态，
- * 会出现「切回来是静止的」。这里在过渡结束（页面已就位）后显式重播一次，
- * 保证每次切页都能看到入场层次。
+ * 路由视图用 `:key="viewRoute.path"` 强制重建（只按 path，不按 fullPath）：
+ * 筛选、翻页这类只改查询串的导航必须留在同一个视图实例里就地更新——`PostsView`
+ * 为此专门监听了 `route.query`。若把 fullPath 挂上 key，`加载更多` 把 page 写回
+ * URL 的那一刻就会整页重建：先是骨架屏（看起来像刷新了页面），随后 onMounted 再
+ * 从头拉一遍列表，才补出第二页的内容。
+ *
+ * 重建后的元素初始就落在视口内时，观察器回调与 Vue 补丁存在竞态，会出现「切回来
+ * 是静止的」。这里在过渡结束（页面已就位）后显式重播一次，保证每次切页都能看到
+ * 入场层次。
  */
 function replayPageReveal() {
   const view = document.querySelector(".print-main > .print-page, .print-main > .home-view, .print-main > .print-subpage, .print-main > .print-post-view");
@@ -100,7 +105,7 @@ onBeforeUnmount(() => {
     <main class="app-main print-main">
       <router-view v-slot="{ Component, route: viewRoute }">
         <Transition name="page-fade" mode="out-in" @after-enter="replayPageReveal">
-          <component :is="Component" :key="viewRoute.fullPath" />
+          <component :is="Component" :key="viewRoute.path" />
         </Transition>
       </router-view>
     </main>

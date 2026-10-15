@@ -467,3 +467,124 @@ area (412 → 212), pin at 108, shrink as the area ends and park; 1280/390 keep 
 single-column layout with the sticky horizontal TOC strip.
 
 `backend/tests/test_backend.py` holds 192 passing tests.
+
+## Revision after frame-crossing review (2026-10-15, third round)
+
+Three issues reported from real use, all reproduced and measured before changing anything.
+
+### 1 & 2. Two navigations looked like full page reloads
+
+`App.vue` keyed the router view by `viewRoute.fullPath`. Any query-only navigation therefore
+changed the key and remounted the whole view:
+
+- On `/posts`, `加载更多` appends page 2, then `scheduleRouteSync` writes `?page=2` back to the URL.
+  The remount re-rendered the skeleton (which reads as "the page refreshed") and `onMounted`
+  refetched page 1 before the appending list reappeared.
+- From an article, the rail's 完整目录 link used `?category=`, but `PostsView` only reads `q` / `cat` /
+  `page`, so the filter was dropped, the URL was normalised to `/posts` and the view remounted a
+  second time.
+
+Fixes: the key is now `viewRoute.path` (a query change updates the mounted view in place, which
+`PostsView` already supports via its `route.query` watcher), and the link is `?cat=`.
+
+Measured after the fix: on `/posts?cat=教学`, one click on 加载更多 produced exactly **one** request
+(`/api/posts?category=教学&sort=latest&limit=10&page=2`), the row count went 10 → 20, the first row's
+DOM node survived (`isConnected === true`) and no skeleton state appeared; from
+`/posts/article-rail-long-read`, clicking 完整目录 landed on `/posts?cat=工程` with exactly **one**
+request and the 工程 chip marked active.
+
+### 3. The panels still crossed the page frame
+
+The frame (`.print-page`) is `min(1180px, 100vw - 48px)`. At 1920 the frame is 1180 with 370px of
+margin per side, so everything fits; below 1884 the frame stays 1180 while the margins shrink, and the
+panels — which are capped only by their own 1fr track — walk straight over the frame's border.
+Measured against the previous rules (`!important` overrides reproducing them exactly), the panel's
+overlap with the frame's box was:
+
+| viewport | frame | rail (overlap) | TOC (overlap) |
+|---|---|---|---|
+| 1920 | 365–1545 (1180) | 14–326 (none) | 1656–1896 (none) |
+| 1690 | 250–1430 (1180) | 12–324 (**74**) | 1428–1668 (**2**) |
+| 1600 | 205–1385 (1180) | 11–323 (**118**) | 1339–1579 (**46**) |
+| 1500 | 155–1335 (1180) | 10–322 (**167**) | 1240–1480 (**95**) |
+| 1440 | 125–1305 (1180) | 9–321 (**196**) | 1181–1421 (**124**) |
+
+This is exactly what the report's screenshot shows: on a 1920 screen nothing looks wrong, and the
+narrower the window the further both panels march over the frame, worst on the left because the rail is
+the wider of the two.
+
+There is no arrangement at those widths that keeps a 1180px frame, a 760px reading column, a 312px
+rail and a 240px TOC apart, so the frame itself now narrows:
+
+```css
+.print-post-view {
+  --post-frame-width: min(1180px, max(800px, calc(100vw - 40rem)));
+  --post-outer-margin: calc((100vw - var(--post-frame-width)) / 2);
+}
+@media (min-width: 1281px) {
+  .print-post-view .print-page,
+  .print-post-view .print-related-section { width: var(--post-frame-width); }
+}
+```
+
+The tokens live on `.print-post-view` because the frame and the panels are two branches of the tree
+and must read the same numbers. The 800px floor is reached at 1440 and keeps the full 760px reading
+column inside the frame with 20px of paper on each side; at 1884px and above the frame is 1180 again,
+so wide screens are byte-for-byte unchanged. `.print-related-section` narrows with it, otherwise the
+two frames would disagree by 380px just below the article.
+
+Each panel's width now takes a third `min()` term, the clearance from the frame:
+
+```css
+width: min(
+  var(--post-rail-width),
+  calc(100% - var(--post-rail-gap)),
+  calc(var(--post-outer-margin) - var(--post-rail-margin) - var(--post-panel-breath))
+);
+```
+
+`--post-rail-margin` / `--post-toc-margin` are the same variables that drive `margin-left` /
+`margin-right`, so the edge inset and the width budget cannot drift apart. Measured after the fix
+(article body 760px in every row, no overlap anywhere):
+
+| viewport | frame | rail | TOC | clearance |
+|---|---|---|---|---|
+| 1920 | 365–1545 (1180) | 14–326 (312) | 1656–1896 (240) | +39 / +111 |
+| 1884 | 347–1527 (1180) | 14–326 (312) | 1620–1860 (240) | +21 / +93 |
+| 1700 | 315–1375 (1060) | 12–297 (285) | 1438–1678 (240) | +18 / +63 |
+| 1690 | 315–1365 (1050) | 12–297 (285) | 1428–1668 (240) | +18 / +63 |
+| 1600 | 315–1275 (960) | 11–297 (286) | 1339–1579 (240) | +18 / +64 |
+| 1512 | 315–1187 (872) | 10–297 (287) | 1252–1492 (240) | +18 / +65 |
+| 1440 | 315–1115 (800) | 9–297 (288) | 1181–1421 (240) | +18 / +66 |
+| 1320 | 255–1055 (800) | hidden | 1073–1302 (229) | — / +18 |
+| 1281 | 236–1036 (800) | hidden | 1053–1264 (210) | — / +17 |
+
+Below 1440 the rail is not laid out at all, so only the TOC needs the clearance and it thins from 240
+to 210 by 1281; below 1281 the TOC returns to its horizontal sticky strip and the frame goes back to
+`min(1180px, 100vw - 48px)`.
+
+### 4. The collapse chevrons pointed the wrong way
+
+The four controls do not share one path direction: the rail's toggle and spine and the TOC's spine use
+the left-pointing `M15 5l-7 7 7 7`, the TOC's toggle uses the right-pointing `M9 5l7 7-7 7`. Round two
+added `rotate(180deg)` to the TOC's toggle and spine, which flipped both of the ones that were already
+correct — that is why the right-hand panel showed a left arrow where a right one was expected.
+
+The required convention is: collapse points outward (rail → left, TOC → right), expand points inward
+(rail → right, TOC → left). Only the rail's spine was wrong; it now carries the single 180° rotation
+in `post.css` (verified from computed styles in all four states: rail toggle `none` + left path, TOC
+toggle `none` + right path, rail spine `matrix(-1,0,0,-1,0,0)`, TOC spine `none`).
+
+### Test contract
+
+`test_side_panels_cannot_reach_the_reading_column` was extended to require the third `min()` term and
+that each panel's edge inset comes from the same variable as its width budget;
+`test_reading_frame_narrows_to_make_room_for_the_side_panels` is new and locks the frame tokens, the
+`min-width: 1281px` scope, the `editorial.css` load order that makes the override effective, and the
+per-panel width terms; `test_panel_chevrons_point_outward_when_collapsing` allows exactly one
+`rotate(180deg)` in `post.css` and requires it to land on `.article-rail__spine svg`;
+`test_router_view_survives_query_only_navigation` bars `fullPath` from the router view's key.
+
+`backend/tests/test_backend.py` holds 195 passing tests. The article column invariant still holds
+under every toggle combination at 1690×950: the body stays at left 460 / width 760 / top -527 while
+both panels are collapsed, expanded, or mixed.
