@@ -25,7 +25,8 @@ const { site, ensureSite } = useSite();
 const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 
 // 左侧清单只在阅读版式真有那条空轨道时才存在。断点同时管住渲染与请求：
-// 窄屏既不该多拿一份列表，也不该把它塞进单列版式里。
+// 窄屏既不该多拿一份列表，也不该把它塞进单列版式里。断点值必须与 post.css 的
+// `@media (min-width: 1440px)` 一致，否则会出现「渲染了、发了请求，却被 CSS 藏起来」。
 const railEnabled = useMediaQuery("(min-width: 1440px)");
 const {
   railPosts,
@@ -119,10 +120,6 @@ watch([post, loading, relatedPosts], () => {
 
 watch([post, site], () => {
   updatePostMeta();
-});
-
-watch(() => railPosts.value.length, () => {
-  refreshReveal();
 });
 
 watch(railEnabled, (enabled) => {

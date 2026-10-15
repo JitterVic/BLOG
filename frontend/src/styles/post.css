@@ -23,7 +23,7 @@
   --post-article-width: 760px;
   --post-toc-width: 15rem;
   --post-toc-gap: clamp(2rem, 3vw, 3rem);
-  /* 左侧清单的宽度与它同正文之间保留下来的间隙。与 --toc-* 同理必须声明在这里：
+  /* 左侧清单的宽度与它同正文之间保留下来的gap。与 --toc-* 同理必须声明在这里：
      面板是这份网格的并列子元素，自定义属性不向上查找、也不横向传递。 */
   --post-rail-width: 19.5rem;
   --post-rail-gap: clamp(1.25rem, 2vw, 2.25rem);
@@ -32,15 +32,19 @@
   margin-left: calc(50% - 50vw);
   padding: 0 0 4rem;
   display: grid;
+  /* 面板是绝对定位的网格子元素：网格容器一旦成为包含块，面板的包含块就是它自己
+     那一格（rail / toc 区）。于是 --panel-shift 可以直接当作「距本格顶部」的距离，
+     两个面板的吸附线天然对⻬，宽度百分比也仍是轨道宽度。 */
+  position: relative;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--post-article-width)) minmax(0, 1fr);
   grid-template-areas: "rail article toc";
   align-items: start;
 }
 
 /* Keep the reading column centered whether or not the article has a TOC.
-   四条区域组合穷举「左右面板在不在」：三条轨道的宽度与顺序从不改变，面板只决定
-   轨道里放什么。因此正文的中心与宽度与折叠状态无关——这也正是「折叠侧栏不该让
-   文字在读者眼皮底下重排」这条要求能靠纯 CSS 满足的原因。 */
+   四条区域组合穷举「左右面板在不在」：三条轨道的宽度与顺序从不改变，只有正文那一格
+   被占用，因此正文的中心与宽度与折叠状态无关——这正是「折叠侧栏不该让文字在读者
+   眼皮底下重排」这条要求能靠纯 CSS 满足的原因。 */
 .post-reading-layout--no-toc {
   grid-template-areas: "rail article .";
 }
@@ -65,10 +69,13 @@
 
 .article-toc {
   grid-area: toc;
-  position: sticky;
-  top: 6.8rem;
+  /* 绝对定位 + --panel-shift（见 usePanelPin.js）：吸附位置自己算，不交给 sticky，
+     否则会被夹在这条网格区域的纵向范围里，短文下一滚就把表头推出屏幕。 */
+  position: absolute;
+  right: 0;
+  top: var(--panel-shift, 0px);
   width: min(var(--post-toc-width), calc(100% - var(--post-toc-gap)));
-  max-height: calc(100vh - 8.5rem);
+  max-height: var(--panel-avail, calc(100vh - 8.5rem));
   min-height: 0;
   margin-left: var(--post-toc-gap);
   /* 贴向视口右侧边缘，与正文阅读列拉开距离，避免干扰阅读 */
@@ -76,7 +83,6 @@
   padding: 0.9rem 0 0.5rem;
   display: flex;
   flex-direction: column;
-  justify-self: end;
   overflow: hidden;
   border-top: 2px solid var(--ink, #2a241c);
 }
@@ -91,7 +97,7 @@
   scrollbar-width: thin;
 }
 
-.article-toc button {
+.article-toc nav button {
   position: relative;
   display: grid;
   grid-template-columns: 1.7rem minmax(0, 1fr);
@@ -110,38 +116,38 @@
   transition: color 0.24s ease, border-color 0.24s ease, padding 0.24s ease;
 }
 
-.article-toc button span {
+.article-toc nav button span {
   padding-left: 0.6rem;
   color: var(--rule-light, rgba(42, 36, 28, 0.35));
   font-family: var(--f-mono, monospace);
   font-size: 0.5rem;
 }
 
-.article-toc button em {
+.article-toc nav button em {
   overflow: hidden;
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.article-toc button.is-subsection {
+.article-toc nav button.is-subsection {
   padding-left: 0.5rem;
   font-size: 0.54rem;
 }
 
-.article-toc button:hover,
-.article-toc button:focus-visible,
-.article-toc button.active {
+.article-toc nav button:hover,
+.article-toc nav button:focus-visible,
+.article-toc nav button.active {
   color: var(--accent, #8b2500);
   border-left-color: var(--accent, #8b2500);
   outline: 0;
 }
 
-.article-toc button.active {
+.article-toc nav button.active {
   padding-left: 0.25rem;
 }
 
-.article-toc button.active span {
+.article-toc nav button.active span {
   color: var(--accent, #8b2500);
 }
 
@@ -223,12 +229,22 @@
 
 /* --- 左侧文章清单 ---
    与右侧目录对称：都贴自己那一侧边缘（justify-self 分列 start / end）、都只占一条
-   1fr 轨道、都 sticky。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一不会压到
-   正文的保证；只要轨道不够宽，面板就自己变窄，而不是去挤正文。 */
+   1fr 轨道。宽度用 min() 夹在「轨道宽 − 间隙」以内，这是它唯一不会压到正文的保证；
+   只要轨道不够宽，面板就自己变窄，而不是去挤正文。
+
+   纵向位置（--panel-shift）与可用高度（--panel-avail）都由
+   composables/usePanelPin.js 写在元素上，两条侧栏共用。这一层不能省：
+   面板装在一条高度由正文决定的网格区域里，既然它不能参与行高计算（参与的话短文页
+   会被撑高，见下），它就不能再靠 position:sticky 把自己钉住——sticky 只允许面板
+   待在那条区域之内，区域一滚过去面板就被夹着上滑，短文下会一路滑出屏幕，头部那枚
+   收起按钮也就点不到了（实测 700px 高窗口 + 217px 短文：面板顶部滑到 -193）。 */
 .article-rail {
   grid-area: rail;
-  position: sticky;
-  top: 6.8rem;
+  /* 绝对定位：包含块就是本格（rail 区），因此 --panel-shift 可以直接当「距本格顶部」
+     的距离用，宽度百分比也仍是轨道宽度。吸附位置必须自己算——理由见 usePanelPin.js。 */
+  position: absolute;
+  left: 0;
+  top: var(--panel-shift, 0px);
   /* 压过 .print-page::after 那道左侧纸纹（z-index 10），否则纸纹会盖在清单文字上 */
   z-index: 20;
   /* 高度必须与「阅读版式那一行」解耦。
@@ -247,6 +263,8 @@
   justify-self: start;
   /* 不能用 overflow:hidden 裁自己——内部面板是绝对定位的，会被一起裁掉 */
   overflow: visible;
+  /* 盒子高 0，命中测试交给面板自己；否则会在正文列上留下一条看不见的挡板 */
+  pointer-events: none;
 }
 
 @media (min-width: 1440px) {
@@ -255,7 +273,18 @@
   }
 }
 
-/* 展开态与折叠态都挂在这一层：它才是真正被看到的那个面板 */
+@media (min-width: 1281px) {
+  /* 区域已经走完：整体隐去，避免留下一条几十像素的碎片让人误点。
+     窄屏那条横向目录条是正常文档流里的一行，不属于这套吸附，不能跟着隐去。 */
+  .article-rail.is-parked,
+  .article-toc.is-parked {
+    visibility: hidden;
+  }
+}
+
+/* 展开态与折叠态都挂在这一层：它才是真正被看到的那个面板。
+   必须显式写回 pointer-events:auto —— pointer-events 是继承属性，外层盒子设了 none
+   之后整块面板都会点不到（命中测试直接穿到网格容器上，表现为「按钮看得见却点不动」）。 */
 .article-rail__body,
 .article-rail__spine {
   position: absolute;
@@ -263,16 +292,45 @@
   left: 0;
   width: 100%;
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 .article-rail__body {
-  /* 面板高度只受可用视口约束（原来这里还夹着正文高度，结果 38 条清单只剩 217px、
-     一屏看到三行）。超出部分由 nav 自己滚动，当前篇的定位逻辑会把它滚进可视区。 */
-  max-height: calc(100vh - 8.5rem);
+  /* 可用高度由 usePanelPin 给出：既不超过「视口减去顶栏」，也不超过「本区域末端
+     减去吸附后的顶部」。少了后一道，区域快走完时面板会被自己的高度顶出屏幕。 */
+  max-height: var(--panel-avail, calc(100vh - 8.5rem));
   padding: 0 0 0.8rem;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-top: 2px solid var(--ink, #2a241c);
+  animation: side-panel-in 0.5s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+/* 入场动效不用 `.rv`：这两块面板是绝对定位的，交给观察器判定意味着「没拿到 .vis 就
+   整栏不可见、还点不到」，而外层盒子又高 0，零面积目标的可见性判定不值得赌。
+   自带 both 填充的关键帧播完即停在可见态，不存在卡在 opacity:0 的路径。 */
+@keyframes side-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.article-rail__body,
+.article-rail__spine,
+.article-toc {
+  animation: side-panel-in 0.5s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+html.motion-off .article-rail__body,
+html.motion-off .article-rail__spine,
+html.motion-off .article-toc {
+  animation: none;
 }
 
 .article-rail__head {
@@ -460,6 +518,7 @@
   font-size: 0.6rem;
   letter-spacing: 0.2em;
   transition: color 0.24s ease, background 0.24s ease;
+  animation: side-panel-in 0.4s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
 .article-rail__spine {
@@ -540,6 +599,7 @@
   .article-toc {
     position: sticky;
     top: var(--toc-sticky-top);
+    right: auto;
     z-index: 90;
     width: auto;
     max-height: none;
@@ -561,8 +621,8 @@
     scrollbar-width: thin;
   }
 
-  .article-toc button,
-  .article-toc button.is-subsection {
+  .article-toc nav button,
+  .article-toc nav button.is-subsection {
     flex: 0 0 auto;
     width: auto;
     max-width: 15rem;
@@ -572,14 +632,14 @@
     border-radius: 999px;
   }
 
-  .article-toc button.active {
+  .article-toc nav button.active {
     padding-left: 0.7rem;
     color: var(--paper, #f4efe6);
     border-color: var(--accent, #8b2500);
     background: var(--accent, #8b2500);
   }
 
-  .article-toc button.active span {
+  .article-toc nav button.active span {
     color: rgba(244, 239, 230, 0.68);
   }
 

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { useMediaQuery } from "../../composables/useMediaQuery";
+import { usePanelPin } from "../../composables/usePanelPin";
 import { usePersistedCollapse } from "../../composables/usePersistedCollapse";
 
 const props = defineProps({
@@ -12,8 +13,13 @@ const props = defineProps({
 defineEmits(["navigate"]);
 
 const navigationRef = ref(null);
+const hostRef = ref(null);
 let alignmentFrame = 0;
 let resizeAlignmentTimer = 0;
+
+// 与左侧清单同一套吸附：交给 position: sticky 会被夹在网格区域的纵向范围里，
+// 短文下一滚就把头部（含收起按钮）推出屏幕。
+const { parked } = usePanelPin(hostRef);
 
 // 折叠只属于桌面竖排目录。窄屏那条横向胶囊目录条本来就只占一行，
 // 没有可折的余地；若把偏好直接套上去，在桌面折过目录的人一缩小窗口
@@ -125,9 +131,9 @@ onBeforeUnmount(() => {
 
 <template>
   <aside
-    class="article-toc rv"
-    :class="{ 'is-collapsed': isCollapsed }"
-    data-reveal-delay="100"
+    ref="hostRef"
+    class="article-toc"
+    :class="{ 'is-collapsed': isCollapsed, 'is-parked': parked }"
   >
     <!-- 折叠态：贴右边缘的竖排书脊，保留当前章节号 -->
     <button

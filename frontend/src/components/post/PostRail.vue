@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink } from "vue-router";
 
 import { shortDate } from "../../composables/useFormat";
+import { usePanelPin } from "../../composables/usePanelPin";
 import { usePersistedCollapse } from "../../composables/usePersistedCollapse";
 import { groupByYear } from "../../lib/postGroups";
 
@@ -12,6 +13,11 @@ import { groupByYear } from "../../lib/postGroups";
  * 它住在阅读版式左边那条本来空置的 1fr 轨道里，并且贴左边缘对齐 —— 与右侧目录
  * 贴右边缘对称。这样折叠与否只改变自己的宽度，正文轨道的中心与宽度都不动，
  * 也就不会出现「折叠侧栏时文字在读者眼皮底下重排」。
+ *
+ * 高度上它与那条网格行解耦：外层 aside 高 0、不参与行高计算，展开态与书脊都由
+ * 内部绝对定位撑开（见 post.css）。副作用是面板在 sticky 盒子到达吸附位置之前
+ * 会从行的顶部开始排，因此还得把「它自己顶部到视口底部」的剩余空间同步给 CSS，
+ * 否则底部（含「完整目录」）会被屏幕裁掉，看起来像清单比左栏还长。
  *
  * 行只给日期 + 标题：约 300px 宽放不下摘要，摘要留给 /posts 的索引。
  */
@@ -31,8 +37,10 @@ defineEmits(["more"]);
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-rail-collapsed");
 
 const navigationRef = ref(null);
+const hostRef = ref(null);
 let alignmentFrame = 0;
 let resizeAlignmentTimer = 0;
+const { parked } = usePanelPin(hostRef);
 
 const groups = computed(() => groupByYear(props.posts));
 const scopeLabel = computed(() => (props.mode === "latest" ? "最新" : props.category || "全部"));
@@ -110,9 +118,9 @@ onBeforeUnmount(() => {
 
 <template>
   <aside
-    class="article-rail rv"
-    :class="{ 'is-collapsed': collapsed }"
-    data-reveal-delay="100"
+    ref="hostRef"
+    class="article-rail"
+    :class="{ 'is-collapsed': collapsed, 'is-parked': parked }"
     aria-label="文章清单"
   >
     <!-- 折叠态：贴左边缘的竖排书脊，点一下展开 -->

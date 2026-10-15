@@ -102,23 +102,40 @@ siblings cannot read properties declared on each other:
 and a transparent background. The `min()` bound is the load-bearing part: the panel can never grow into
 the article track, at any width, whatever the viewport does.
 
-Its height, however, must **not** mirror the TOC's `max-height: calc(100vh - 8.5rem)`. The rail is a
-grid item, so its box height participates in the row's height: a 30-row list (944px measured) next to a
-single-paragraph article added ~700px of empty column beneath the text, and collapsing it shrank the
-document enough that the browser clamped the reader's scroll position (scrollY 1400 → 1201). Capping
-the panel by the article body only traded that for a crippled list (38 rows in a 217px box, ~3 rows
-visible). The rail is therefore decoupled from the row entirely:
+Its height and vertical position, however, must **not** mirror the TOC's original
+`position: sticky; max-height: calc(100vh - 8.5rem)` recipe, and neither may the TOC's own.
 
-- `.article-rail` itself is `height: 0` — a zero-height sticky box that contributes nothing to the
-  row's height;
-- the expanded panel (`.article-rail__body`) and the collapsed spine (`.article-rail__spine`) are both
-  `position: absolute; top: 0; left: 0; width: 100%` inside it, so they render at full size while the
-  document height stays independent of them;
-- the panel's own cap is `max-height: calc(100vh - 8.5rem)`, i.e. the whole available viewport, and the
-  overflow scrolls inside `nav` with the current article aligned into view.
+**Height.** The rail is a grid item, so its box height participates in the row's height: a 30-row
+list (944px measured) next to a single-paragraph article added ~700px of empty column beneath the
+text, and collapsing it shrank the document enough that the browser clamped the reader's scroll
+position (scrollY 1400 → 1201). Capping the panel by the article body only traded that for a crippled
+list (38 rows in a 217px box, ~3 rows visible). So the rail's box is decoupled from the row:
+`height: 0` on `.article-rail`, with the expanded panel (`.article-rail__body`) and the collapsed
+spine (`.article-rail__spine`) `position: absolute; top: 0; left: 0; width: 100%` inside it. The
+document height is then independent of both panels.
 
-Consequence: the rail can be tall and useful, and toggling it cannot change the document height (and
-therefore cannot clamp the scroll position) for any article length.
+**Position.** Both panels are `position: absolute` grid children, which makes each one's containing
+block its own grid area — so `--panel-shift` can be a plain "distance from the top of my area", and
+percentage widths still resolve against the track. `position: sticky` cannot be used here: sticky
+only allows the panel to sit *within* its grid area, and the area's height is decided by the article
+body (the rail deliberately does not contribute to it, and the TOC is shorter than any real article).
+On a short article the area scrolls by within ~200px, and sticky drags the panel up with it — the
+panel's top slid from 109 to **-193** in a 700px-high window with a 217px article, taking the collapse
+button under the fixed header and then off-screen entirely ("collapsed and now it won't open").
+
+`usePanelPin.js` therefore computes, on every scroll/resize:
+
+- `--panel-shift` = `max(areaTop, 6.8rem) - areaTop` — the panel follows the reading area in, then
+  stays pinned under the fixed header;
+- `--panel-avail` = `min(viewportHeight - top - 8, areaBottom - top)` — the panel never exceeds the
+  viewport, and shrinks instead of spilling over whatever follows the reading area;
+- `is-parked` when that room drops below 96px, i.e. the area has effectively been read past — the
+  panel is hidden rather than left as an unclickable sliver.
+
+Entering the area the panel grows from the bottom edge; once pinned both panels sit at the same line
+and keep the same height for the whole article. Verified on a short article (700px window) and a long
+one (1080p/900p): panels always inside the viewport, toggles and spines always hit-testable, article
+column unmoved.
 
 Clearance check at the narrow end (1440px, the rail's breakpoint): track 340px,
 `--post-rail-gap` = 28.8px, so width = min(312, 311.2) = 311.2px, `margin-left` = 14.4px →
@@ -231,6 +248,8 @@ New files:
   toggle, 加载更多, 完整目录 link, active-row alignment.
 - `frontend/src/composables/usePostRail.js` — scope resolution, singleton cache, stale-while-revalidate,
   pagination state.
+- `frontend/src/composables/usePanelPin.js` — computes `--panel-shift` / `--panel-avail` / `is-parked`
+  for both side panels on scroll and resize.
 - `frontend/src/composables/useMediaQuery.js` — reactive `matchMedia` wrapper.
 - `frontend/src/composables/usePersistedCollapse.js` — persisted collapse state shared by both panels.
 - `frontend/src/lib/postGroups.js` — `groupByYear(posts)`.
@@ -402,7 +421,49 @@ the styling alone:
 7. The `matchMedia` gate in `PostView` was moved to 1440px to match the CSS breakpoint; left at 1360 it
    rendered and fetched the rail in the 1360–1440 band where CSS hides it.
 
-The unit-test contract for the height rule changed accordingly:
-`test_article_rail_height_is_decoupled_from_the_reading_row` now asserts the zero-height outer box, the
+The unit-test contract changed accordingly: `test_side_panels_are_pinned_by_script_not_by_sticky`
+locks in that neither base panel rule may use `position: sticky`, that they read `--panel-shift` /
+`--panel-avail`, and that the rail's `pointer-events: none` is paired with `pointer-events: auto` on
+the panels themselves;
+`test_article_rail_height_is_decoupled_from_the_reading_row` asserts the zero-height outer box, the
 absolutely positioned panels and the viewport-only cap, and that `PostView` does not pass a body
 element.
+
+## Revision after layout review (2026-10-15, second round)
+
+Follow-up defects reported from real use, both traced to the same root cause and measured at 1920×700
+with a 217px article:
+
+1. **"The left column is longer than the page."** Because the panel is anchored to the top of its grid
+   area, before the area reached the sticky offset the panel's bottom extended past the fold — the
+   完整目录 footer was clipped at the viewport edge (panel 155 → 794 in a 780px window).
+2. **"Once collapsed, it won't open."** Sticky clamps the panel to its grid area; on a short article
+   the area passes in ~200px of scrolling, so the panel slid from 109 up to **-193**. The collapse
+   button's centre then resolved to `DIV.print-nav__inner` (the fixed site header) at 700px height,
+   and on the right the TOC's toggle was at y=-63 — entirely off-screen.
+
+Fixes:
+
+- both panels are now `position: absolute` grid children whose containing block is their own grid area,
+  with `--panel-shift` / `--panel-avail` / `is-parked` supplied by `usePanelPin.js` (scroll + resize
+  driven, no `position: sticky` anywhere in the base rules);
+- the panel's height is `min(viewport room, room before the area ends)`, so it is never clipped by the
+  fold and never spills past the reading area;
+- the entrance animation is a self-filling keyframe (`side-panel-in`) instead of `.rv`: a zero-height
+  box's intersection result is not worth betting on, and a missing `.vis` made the whole panel invisible
+  *and* unclickable;
+- `.article-rail` carries `pointer-events: none` (its zero-height box must not shadow the article
+  column) and the panels write `pointer-events: auto` back — `pointer-events` is inherited, so without
+  it every control in the panel hit-tested through to the grid container ("visible but dead").
+
+Also fixed in this round: `.article-toc button` (the directory row rule) was also styling the toggle
+and the spine, which made the toggle `width: 100%` — a 240×25 box crossing the viewport's right edge
+(1721 → 1961 at 1920) instead of a 25px round button. Row rules are now scoped to `.article-toc nav button`.
+
+Verified after the fix: at 1920×1080 and 1920×640, scroll positions 900/4000 and 900 respectively, both
+toggles and both spines hit-test to themselves and real mouse clicks collapse and expand them; the
+article body stays at left 575 (1920) / 335 (1440) throughout; on the short article the panels track the
+area (412 → 212), pin at 108, shrink as the area ends and park; 1280/390 keep the untouched
+single-column layout with the sticky horizontal TOC strip.
+
+`backend/tests/test_backend.py` holds 192 passing tests.

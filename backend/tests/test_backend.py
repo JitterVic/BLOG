@@ -604,10 +604,11 @@ def test_article_rail_width_tokens_are_in_scope():
 def test_side_panels_cannot_reach_the_reading_column():
     """左右面板都不能挤动正文轨道。
 
-    正文能恒定居中、宽度不变，靠的是「三条轨道宽度固定 + 面板只决定轨道里放什么」：
-    面板宽度用 min() 夹在自己的轨道内，并各自贴向本侧边缘（start / end）。一旦有
-    轨道改成 auto，或让面板参与居中，折叠面板就会推动正文重排——实测正是这条不变量
-    在挡着「折叠侧栏时文字在读者眼皮底下跳位」。
+    正文能恒定居中、宽度不变，靠的是「三条轨道宽度固定 + 面板只决定自己那一格里的
+    位置」：面板宽度用 min() 夹在自己那格的轨道宽以内，左右各自贴向本侧（left: 0 /
+    right: 0）。面板是绝对定位的网格子元素，包含块就是它自己那一格，所以这里的
+    百分比仍是轨道宽度——一旦有轨道改成 auto，或把面板宽度改成 auto 内容撑开，
+    面板就会压到正文轨道上。
     """
     css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
     layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
@@ -622,13 +623,48 @@ def test_side_panels_cannot_reach_the_reading_column():
 
     rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
     assert "min(var(--post-rail-width), calc(100% - var(--post-rail-gap)))" in rail
-    assert "justify-self: start" in rail
+    assert "left: 0" in rail
 
     toc_blocks = re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S)
-    assert any("justify-self: end" in body for body in toc_blocks), (
-        "右侧目录必须贴右边缘，面板贴边是「折叠不移动正文」的前提"
-    )
+    assert toc_blocks
+    toc = "\n".join(toc_blocks)
+    assert "min(var(--post-toc-width), calc(100% - var(--post-toc-gap)))" in toc
+    assert "right: 0" in toc, "右侧目录必须贴本格右边缘"
 
+
+def test_side_panels_are_pinned_by_script_not_by_sticky():
+    """两块面板的纵向吸附必须由脚本算，不能交给 position: sticky。
+
+    sticky 只允许面板待在它那条网格区域之内，而区域高度由正文决定（清单本身不参与
+    行高计算，目录又比正文矮）。短文下区域很快就滚过去，sticky 会把面板夹着一起上滑：
+    实测 700px 高窗口 + 217px 短文，面板顶部会从 109 滑到 -193，头部那枚收起/展开
+    按钮先钻到固定顶栏底下、再滑出屏幕——表现就是「收起来了就打不开」。
+
+    同时锁住 pointer-events：外层盒子高 0、宽度仍占着左栏，必须设 none 才不会挡住
+    正文列的命中测试，而它是继承属性，面板必须显式写回 auto，否则按钮看得见却点不动。
+    """
+    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    for panel in ("article-rail", "article-toc"):
+        blocks = re.findall(r"\." + panel + r"\s*\{([^}]*)\}", css, re.S)
+        assert blocks, f"找不到 .{panel} 基准规则"
+        # 只检查基准档：≤1280px 那条横向目录条本来就该留在文档流里用 sticky 吸顶
+        base = re.sub(r"/\*.*?\*/", "", blocks[0], flags=re.S)
+        assert "position: absolute" in base, f".{panel} 应当绝对定位，位置交给脚本"
+        assert "position: sticky" not in base, f".{panel} 不能再用 sticky 吸附"
+        assert "var(--panel-shift" in base, f".{panel} 需要 --panel-shift 决定吸附位置"
+
+    assert "var(--panel-avail" in css, "面板可用高度需要由脚本给出"
+
+    rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
+    assert "pointer-events: none" in rail, "零高的外层盒子不该拦住正文列的点击"
+
+    shared = re.search(r"\.article-rail__body,\s*\r?\n\s*\.article-rail__spine\s*\{([^}]*)\}", css, re.S)
+    assert shared is not None
+    assert "pointer-events: auto" in shared.group(1), "面板必须显式写回可点击"
+
+    pin = Path("frontend/src/composables/usePanelPin.js").read_text(encoding="utf-8")
+    assert "getBoundingClientRect" in pin and "scroll" in pin and "resize" in pin
+    assert "MIN_VISIBLE_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
 
 def test_article_rail_is_not_laid_out_below_its_breakpoint():
     """清单在轨道不够宽时必须彻底不布局，而不是靠 JS 挡住。
@@ -673,8 +709,8 @@ def test_article_rail_height_is_decoupled_from_the_reading_row():
 
     body = re.search(r"\.article-rail__body\s*\{([^}]*)\}", css, re.S)
     assert body is not None
-    assert "max-height: calc(100vh - 8.5rem)" in body.group(1), (
-        "面板高度只应受可用视口约束（按正文高度收窄会让长清单只剩几行）"
+    assert "max-height: var(--panel-avail, calc(100vh - 8.5rem))" in body.group(1), (
+        "面板高度由脚本给出（视口与区域末端的较小值），按正文高度收窄会让长清单只剩几行"
     )
 
     view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
