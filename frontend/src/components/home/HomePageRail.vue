@@ -23,7 +23,7 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
             type="button"
             class="rail-button"
             :class="{ 'is-current': currentPage === page.index }"
-            :aria-current="currentPage === page.index ? 'true' : undefined"
+            :aria-current="currentPage === page.index ? 'page' : undefined"
             :aria-label="`第 ${page.index + 1} 版 · ${page.name}`"
             :title="page.name"
             @click="goToPage(page.index)"
@@ -109,6 +109,16 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
   background-size: 17px 1px;
 }
 
+/* 按下时轨道线收半格、字色压向朱红：轨道是纯文字按钮，没有这个反馈
+   在触屏上点完完全不知道是否生效（页面翻过去了才知道）。 */
+.rail-button:active {
+  color: var(--accent);
+}
+
+.rail-button:active .rail-button__tick {
+  background-size: 14px 1px;
+}
+
 .rail-button.is-current {
   color: var(--accent, #8b2500);
 }
@@ -121,10 +131,10 @@ const { currentPage, isFlipActive, goToPage } = usePageFlip();
   font-weight: 700;
 }
 
-/* Tab 进入时给一个克制的焦点环（默认 outline 被全局 reset 掉了） */
+/* Tab 进入时与全站一致：用统一的焦点环令牌，而不是局部再造一套 outline */
 .rail-button:focus-visible {
-  outline: 1px solid var(--accent, #8b2500);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--ring-focus);
 }
 
 .rail-fade-enter-active,

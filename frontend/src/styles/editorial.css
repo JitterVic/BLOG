@@ -13,3 +13,4 @@
 @import "./posts.css";     /* 归档与标签视图 */
 @import "./covers.css";    /* 封面图处理 */
 @import "./compat.css";    /* 反馈框与窄屏兼容兜底 */
+@import "./print.css";     /* 打印样式（仅 @media print 生效） */

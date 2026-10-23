@@ -101,7 +101,7 @@ const spriteTransform = computed(() => {
     <div class="sprite-stage" :style="{ transform: spriteTransform }">
       <img
         :src="currentSprite"
-        :alt="`博客吉祥物猫咪桌宠 - ${state}`"
+        alt=""
         class="cat-sprite-img"
         draggable="false"
       />

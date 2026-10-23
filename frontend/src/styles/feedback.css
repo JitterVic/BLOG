@@ -57,7 +57,7 @@
   bottom: 0;
   height: 2px;
   overflow: hidden;
-  background: rgba(42, 36, 28, 0.08);
+  background: rgb(var(--rule-rgb) / 0.08);
   pointer-events: none;
 }
 
@@ -82,7 +82,7 @@
 /* Cover title breathing room and soft shadow */
 .focused-cover__body .cover-title,
 .focused-cover__body h1 {
-  text-shadow: 0 1px 0 rgba(244, 239, 230, 0.4);
+  text-shadow: 0 1px 0 rgb(var(--paper-rgb) / 0.4);
 }
 
 .focused-cover__body .print-cover__summary {
@@ -114,7 +114,7 @@
 .print-feature-image:hover,
 .print-feature-image:focus-visible {
   transform: translateY(-4px);
-  box-shadow: 0 22px 48px rgba(42, 36, 28, 0.14);
+  box-shadow: 0 22px 48px rgb(var(--rule-rgb) / 0.14);
   outline: 0;
 }
 
@@ -197,7 +197,7 @@
 .print-article-strip:hover,
 .print-article-strip:focus-visible {
   transform: translateY(-4px);
-  box-shadow: 0 16px 36px rgba(42, 36, 28, 0.1);
+  box-shadow: 0 16px 36px rgb(var(--rule-rgb) / 0.1);
   outline: 0;
 }
 
@@ -211,18 +211,15 @@
   opacity: 0.85;
 }
 
-/* Quiet about cards */
+/* 关于页卡片是静态内容，不做悬浮上浮。
+   上浮 + 阴影是「可点卡片」的语言，静态卡跟着动会让人以为能点开
+   （曾经有读者反馈过「关于页卡片点了没反应」）。留给它的只有纸面层次。 */
 .quiet-about-card {
-  transition:
-    transform 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
-    box-shadow 0.32s ease,
-    background 0.32s ease;
+  transition: background 0.32s ease, border-color 0.32s ease;
 }
 
 .quiet-about-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 40px rgba(42, 36, 28, 0.08);
-  background: rgba(244, 239, 230, 0.55);
+  background: rgb(var(--paper-rgb) / 0.55);
 }
 
 .quiet-contact-list a {
@@ -258,7 +255,7 @@
 
 /* Mobile nav open state */
 .print-nav.menu-open {
-  background: rgba(244, 239, 230, 0.98);
+  background: rgb(var(--paper-rgb) / 0.98);
 }
 
 .print-menu-button span {
@@ -285,18 +282,18 @@
 /* Section alternating paper tint for rhythm */
 .home-latest-section {
   background:
-    linear-gradient(180deg, rgba(244, 239, 230, 0.18), rgba(235, 229, 216, 0.42));
+    linear-gradient(180deg, rgb(var(--paper-rgb) / 0.18), rgb(var(--paper-shade-rgb) / 0.42));
 }
 
 .home-hot-section {
   background:
-    radial-gradient(circle at 88% 12%, rgba(139, 37, 0, 0.05), transparent 28%),
-    linear-gradient(180deg, rgba(244, 239, 230, 0.22), rgba(235, 229, 216, 0.48));
+    radial-gradient(circle at 88% 12%, rgb(var(--accent-rgb) / 0.05), transparent 28%),
+    linear-gradient(180deg, rgb(var(--paper-rgb) / 0.22), rgb(var(--paper-shade-rgb) / 0.48));
 }
 
 .unified-posts-page .print-section,
 .quiet-about-page .print-section {
-  box-shadow: inset 0 1px 0 rgba(255, 253, 247, 0.35);
+  box-shadow: inset 0 1px 0 rgb(var(--paper-tint-rgb) / 0.35);
 }
 
 /* Anchor offset under fixed header */
@@ -308,7 +305,7 @@
 
 /* Soft focus rings for keyboard users */
 .cover-button:focus-visible, .print-nav__item:focus-visible, .cat-filter-button:focus-visible, .home-hot-row:focus-visible{
-  outline: 2px solid rgba(139, 37, 0, 0.35);
+  outline: 2px solid rgb(var(--accent-rgb) / 0.35);
   outline-offset: 3px;
 }
 
@@ -430,7 +427,7 @@ html.motion-off .rv.vis {
 }
 
 .cover-button.ghost-link:hover {
-  color: var(--paper, #f4efe6);
+  color: var(--paper);
   background: var(--ink, #1c1710);
   border-color: var(--ink, #1c1710);
   border-style: solid;
@@ -449,7 +446,7 @@ html.motion-off .rv.vis {
   height: 1.4rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.2));
+  border: 1px solid var(--rule-light);
   font-size: 0.72rem;
   animation: print-cue-bob 1.8s ease-in-out infinite;
 }
@@ -470,33 +467,6 @@ html.motion-off .rv.vis {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr);
   gap: 1.5rem;
-}
-
-.sk-block,
-.sk-line {
-  position: relative;
-  overflow: hidden;
-  background: rgba(42, 36, 28, 0.06);
-  border-radius: 2px;
-}
-
-.sk-block::after,
-.sk-line::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 253, 247, 0.55),
-    transparent
-  );
-  animation: sk-shimmer 1.35s ease-in-out infinite;
-}
-
-@keyframes sk-shimmer {
-  100% { transform: translateX(100%); }
 }
 
 .sk-block--tall {
@@ -548,7 +518,7 @@ html.motion-off .rv.vis {
 .sk-search-input {
   position: relative;
   overflow: hidden;
-  background: rgba(42, 36, 28, 0.08);
+  background: rgb(var(--rule-rgb) / 0.08);
   border-radius: var(--radius-xs, 2px);
 }
 
@@ -564,7 +534,7 @@ html.motion-off .rv.vis {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.52) 50%,
+    rgb(var(--paper-tint-rgb) / 0.62) 50%,
     transparent 100%
   );
   animation: sk-shimmer 1.75s infinite cubic-bezier(0.4, 0, 0.2, 1);
@@ -584,7 +554,7 @@ html.motion-off .rv.vis {
 
 .sk-line--title {
   height: 28px;
-  background: rgba(42, 36, 28, 0.14);
+  background: rgb(var(--rule-rgb) / 0.14);
 }
 
 .sk-line--subtle {
@@ -665,27 +635,39 @@ html.motion-off .rv.vis {
   height: 34px;
 }
 
-.sk-cards-grid {
+/* 目录页骨架不再使用卡片网格（改成编年索引行，见 .sk-ledger）：
+   .sk-cards-grid / .sk-card / .sk-tag-row 三条已无任何模板引用的规则随之删除。 */
+
+/* 热点版骨架行：此前 .sk-hot-row / .home-skeleton-hot 类名只出现在模板里，
+   没有任何规则——四行骨架退化成四组裸线条，和真实榜单（序号列 + 标题列）对不上。
+   这里补齐与 .home-hot-row 同构的网格。 */
+.sk-hot-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.9rem, 2vw, 1.6rem);
+  padding: clamp(0.75rem, 1.7vh, 1.15rem) 0.45rem;
+  border-bottom: 1px solid var(--rule-light);
 }
 
-.sk-card {
-  padding: 1.6rem;
-  background: var(--paper-card, rgba(246, 241, 232, 0.8));
-  border: 1px solid var(--rule-light);
+.sk-hot-row .sk-copy {
+  gap: 0.5rem;
 }
 
-.sk-tag-row {
-  display: flex;
-  gap: 0.6rem;
-  margin-top: 1.2rem;
+.sk-hot-row .sk-line {
+  margin-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .sk-hot-row {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 1rem;
+  }
 }
 
 .sk-generic-wrap {
   padding: 2.5rem;
-  background: rgba(42, 36, 28, 0.025);
+  background: rgb(var(--rule-rgb) / 0.025);
   border: 1px dashed var(--rule-light);
 }
 
@@ -709,12 +691,62 @@ html.motion-off .rv.vis {
   box-shadow: 6px 6px 0 var(--rule-light);
   text-align: center;
   overflow: hidden;
-  transition: transform 0.3s var(--ease-quart), box-shadow 0.3s var(--ease-quart);
 }
 
-.editorial-state-card:hover {
-  transform: translate3d(0, -2px, 0);
-  box-shadow: 8px 8px 0 var(--rule-light);
+/* 状态卡不是按钮：以前悬停会轻微上浮 + 阴影变深，传达的是「可点击」，
+   而它唯一的可点元素是里面的重试按钮。去掉上浮，只保留套印质感。 */
+.editorial-state-card--compact {
+  padding: 1rem 1.35rem;
+  margin: 1.25rem 0;
+  border-width: 1px;
+  box-shadow: none;
+  text-align: left;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 1.25rem;
+  row-gap: 0.2rem;
+}
+
+.editorial-state-card--compact .async-state__eyebrow,
+.editorial-state-card--compact .state-card-title,
+.editorial-state-card--compact .state-card-desc {
+  grid-column: 1;
+}
+
+.editorial-state-card--compact .state-card-title {
+  margin: 0.15rem 0;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.editorial-state-card--compact .state-card-desc {
+  max-width: none;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.editorial-state-card--compact .state-card-actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  justify-content: flex-end;
+  align-self: center;
+  margin: 0;
+}
+
+/* 窄屏：操作按钮落到文案下方，避免两栏把说明挤成三行 */
+@media (max-width: 560px) {
+  .editorial-state-card--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editorial-state-card--compact .state-card-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
 }
 
 .state-card-stamp {
@@ -935,7 +967,7 @@ html.motion-off .rv.vis {
   transform: scaleX(0);
   transform-origin: left center;
   background: linear-gradient(90deg, var(--accent), var(--accent-light, #b84a2a));
-  box-shadow: 0 0 8px var(--accent-glow, rgba(184, 74, 42, 0.35));
+  box-shadow: 0 0 8px var(--accent-glow);
   transition: transform 0.18s linear;
 }
 
@@ -1030,7 +1062,7 @@ html.motion-off .rv.vis {
   font-weight: 900;
   color: var(--accent, #8b2500);
   opacity: 0.88;
-  box-shadow: 0 0 0 3px var(--paper, #f6f1e8), 0 0 0 4px var(--rule-subtle, rgba(42, 36, 28, 0.08));
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--rule-subtle, rgba(42, 36, 28, 0.08));
 }
 
 @keyframes spin-seal-rotate {
@@ -1055,5 +1087,123 @@ html.motion-off .spin-seal__ring {
 
 html.motion-off .route-progress__fill {
   transition: none;
+}
+
+/* ==========================================================================
+   PRESS FEEDBACK —— 铅字压印
+   ==========================================================================
+   全站此前只有代码复制按钮有按下态。触屏没有 hover，按下的一瞬间若毫无变化，
+   手指会怀疑没点中而重复点击。这里统一成「落版」：按下时整体下沉 1px、
+   轻微收边，配合各控件已有的颜色过渡，像铅字落在纸上。 */
+
+.cover-button:active,
+.tab:active,
+.cat-filter-button:active,
+.article-directory-meta button:active,
+.article-search__field button:active,
+.code-copy-button:active,
+.article-toc nav button:active,
+.article-toc__toggle:active,
+.article-toc__spine:active,
+.article-rail__toggle:active,
+.article-rail__spine:active,
+.article-rail__scope:active,
+.article-rail__scope-option:active,
+.article-rail__more:active,
+.article-rail__all:active,
+.home-page-rail .rail-button:active,
+.print-menu-button:active,
+.article-lightbox__close:active {
+  transform: translateY(1px) scale(0.995);
+}
+
+/* 链接式按钮（返回文章 / 完整目录 / 列表标题）按下时直接压深墨色 */
+.print-post-topline a:active,
+.archive__title:active,
+.article-rail__row:active em,
+.home-secondary-card:active .art__t,
+.home-hot-row:active h3,
+.print-read-more:active {
+  color: var(--accent);
+}
+
+/* 行级条目（目录索引 / 榜单 / 简讯）按下时纸面压深一档 */
+.archive__li:active,
+.home-hot-row:active,
+.home-secondary-card:active,
+.post-sequence-nav a:active {
+  background: rgb(var(--rule-rgb) / 0.05);
+}
+
+/* 导航项按下的手绘圈反馈定义在 header.css（那里拥有 .nav-circle 的基准变换）。 */
+
+/* ==========================================================================
+   目录页骨架：形状必须与 ArchiveLedger 的编年索引一致
+   ========================================================================== */
+
+.sk-ledger {
+  padding: 0 2.5rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.sk-ledger__year {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+  padding: 0.9rem 0 0.6rem;
+  border-bottom: 3px double var(--rule);
+}
+
+.sk-ledger__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.95rem 0.45rem;
+  border-bottom: 1px solid var(--rule-light);
+}
+
+.sk-ledger__copy {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.sk-ledger .sk-line {
+  margin-bottom: 0;
+}
+
+.sk-line--year {
+  width: 96px;
+  height: 26px;
+  background: rgb(var(--rule-rgb) / 0.12);
+}
+
+.sk-line--date {
+  width: 54px;
+  height: 10px;
+}
+
+.sk-line--rowmeta {
+  height: 10px;
+  width: 80%;
+}
+
+@media (max-width: 760px) {
+  .sk-ledger {
+    padding: 0 1.35rem;
+  }
+
+  .sk-ledger__row {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 0.9rem;
+  }
+
+  .sk-line--rowmeta {
+    display: none;
+  }
 }
 

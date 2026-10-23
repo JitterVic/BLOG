@@ -40,25 +40,27 @@
 }
 
 .cat-filter-button__count {
-  color: var(--ink-faded);
+  /* 计数是功能性小字：--ink-faded 在纸色上只有约 3.5:1，达不到 AA。
+     改 --ink-light（约 6.6:1），选中态仍由下面那条纸色规则覆盖。 */
+  color: var(--ink-light);
   font-size: 0.52rem;
   font-variant-numeric: tabular-nums;
 }
 
 .cat-filter-button:hover {
   color: var(--ink);
-  background: rgba(139, 37, 0, 0.06);
+  background: rgb(var(--accent-rgb) / 0.06);
   border-color: var(--accent);
 }
 
 .cat-filter-button.active {
-  color: var(--paper, #f6f1e8);
+  color: var(--paper);
   background: var(--accent);
   border-color: var(--accent);
 }
 
 .cat-filter-button.active .cat-filter-button__count {
-  color: rgba(246, 241, 232, 0.72);
+  color: rgb(var(--paper-rgb) / 0.72);
 }
 
 .article-search {
@@ -82,11 +84,12 @@
   border-radius: 999px;
   font-family: var(--f-mono);
   font-size: 0.68rem;
-  transition: width 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  /* 不再用 width 过渡做「聚焦变宽」：761–1000px 区间里那 60px 会把
+     左侧栏目胶囊挤到换行，而用户此刻正要输入，最不该看到版面跳动。 */
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .article-search__field input:focus {
-  width: 300px;
   border-color: var(--accent);
   box-shadow: var(--ring-focus);
 }
@@ -153,6 +156,7 @@
 }
 
 .posts-index .archive__li {
+  position: relative;
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr) auto;
   align-items: baseline;
@@ -160,12 +164,32 @@
   min-height: 0;
   padding: clamp(0.42rem, 1.2svh, 0.95rem) 0.6rem clamp(0.42rem, 1.2svh, 0.95rem) 0.75rem;
   border-bottom: 1px solid var(--rule-light);
-  transition: background 0.2s ease, padding-left 0.2s ease;
+  /* 悬停/按下只换底色：此前还让 padding-left 从 0.75rem 变到 1.1rem，
+     每次划过都让整行文字横移 5px，整页索引像在「呼吸」。 */
+  transition: background 0.2s ease;
 }
 
 .posts-index .archive__li:hover {
-  background: rgba(42, 36, 28, 0.035);
-  padding-left: 1.1rem;
+  background: rgb(var(--rule-rgb) / 0.035);
+}
+
+/* 按下比悬停再深一档：行内可点区域是整行，按下时要有「落版」的确认感 */
+.posts-index .archive__li:active {
+  background: rgb(var(--rule-rgb) / 0.07);
+}
+
+/* 整行可点：链接只包标题文字时，读者的鼠标停在摘要或元信息上会以为点不动。
+   用「拉伸链接」把标题的点击区域扩到整行，而不改变 DOM 结构与读屏顺序。 */
+.posts-index .archive__title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.posts-index .archive__li:focus-within {
+  background: rgb(var(--rule-rgb) / 0.04);
+  box-shadow: var(--ring-focus);
 }
 
 /* 最新一篇用左侧朱色标尺点出来，读者一眼知道从哪读起 */
@@ -194,7 +218,7 @@
   display: inline-block;
   margin-right: 0.4rem;
   padding: 0.06rem 0.34rem;
-  color: var(--paper, #f6f1e8);
+  color: var(--paper);
   background: var(--accent);
   font-family: var(--f-mono);
   font-size: 0.5rem;
@@ -207,7 +231,8 @@
 .posts-index .archive__excerpt {
   max-width: min(100%, 52em);
   margin: 0.3rem 0 0;
-  color: var(--ink-faded);
+  /* 摘要需要被读清楚，--ink-faded 在这个字号下对比度不足，降一档到 --ink-light */
+  color: var(--ink-light);
   font-size: 0.68rem;
   line-height: 1.6;
   display: -webkit-box;
@@ -225,7 +250,7 @@
 }
 
 .posts-index .archive__read {
-  color: var(--ink-faded);
+  color: var(--ink-light);
   font-family: var(--f-mono);
   font-size: 0.54rem;
   letter-spacing: 0.08em;
@@ -325,6 +350,9 @@
   }
   .cat-filter-button {
     flex: 0 0 auto;
+    /* 触摸目标下限：胶囊原本约 22px 高，指腹点不中还会误触相邻栏目 */
+    min-height: 40px;
+    padding: 0.42rem 0.78rem;
   }
   .article-search {
     align-items: stretch;
@@ -332,11 +360,23 @@
   .article-search__field input,
   .article-search__field input:focus {
     width: 100%;
+    min-height: 42px;
+  }
+  /* 清除按钮原本只有 19px 宽、贴着输入框右缘，手指几乎点不到 */
+  .article-search__field button {
+    right: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 0.62rem;
   }
   /* 窄屏：日期与元信息让位给标题，摘要收到标题下面 */
   .posts-index .archive__li {
     grid-template-columns: 54px minmax(0, 1fr);
     row-gap: 0.3rem;
+    min-height: 52px;
   }
   .posts-index .archive__meta {
     grid-column: 2;

@@ -9,6 +9,7 @@ const { site } = useSite();
 const mobileMenuOpen = ref(false);
 const isScrolled = ref(false);
 const scrollProgress = ref(0);
+const menuButton = ref(null);
 let scrollFrame = 0;
 
 const navLinks = [
@@ -24,8 +25,25 @@ const progressStyle = computed(() => ({
   transform: `scaleX(${scrollProgress.value})`,
 }));
 
-function closeMobileMenu() {
+/**
+ * 关闭移动端菜单。
+ * 模板里的 @click 会把 MouseEvent 当第一个参数传进来，因此只认布尔 true；
+ * 否则每次点导航链接都会顺手抢回焦点。
+ */
+function closeMobileMenu(restoreFocus) {
+  if (!mobileMenuOpen.value) return;
   mobileMenuOpen.value = false;
+  if (restoreFocus === true) {
+    menuButton.value?.focus({ preventScroll: true });
+  }
+}
+
+// Esc 收起菜单并把焦点还给触发按钮：展开的面板是覆盖层，
+// 键盘用户按 Esc 是唯一符合直觉的退出方式（此前只能再 Tab 回按钮）。
+function onMenuKeydown(event) {
+  if (event.key !== "Escape" || !mobileMenuOpen.value) return;
+  event.preventDefault();
+  closeMobileMenu(true);
 }
 
 function updateScrollState() {
@@ -56,11 +74,13 @@ onMounted(() => {
   updateScrollState();
   window.addEventListener("scroll", scheduleScrollUpdate, { passive: true });
   window.addEventListener("resize", scheduleScrollUpdate, { passive: true });
+  window.addEventListener("keydown", onMenuKeydown);
 });
 
 onUnmounted(() => {
   window.removeEventListener("scroll", scheduleScrollUpdate);
   window.removeEventListener("resize", scheduleScrollUpdate);
+  window.removeEventListener("keydown", onMenuKeydown);
   if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
 });
 </script>
@@ -87,6 +107,7 @@ onUnmounted(() => {
             :to="item.to"
             class="print-nav__item"
             :class="{ active: isActive(item) }"
+            :aria-current="isActive(item) ? 'page' : undefined"
           >
             <span class="print-nav__label">
               <span class="print-nav__label-text">{{ item.label }}</span>
@@ -116,11 +137,13 @@ onUnmounted(() => {
         </nav>
 
         <button
+          ref="menuButton"
           type="button"
           class="mobile-menu-button print-menu-button"
           :class="{ open: mobileMenuOpen }"
           :aria-label="menuLabel"
           :aria-expanded="mobileMenuOpen"
+          aria-controls="mobile-nav-panel"
           @click="mobileMenuOpen = !mobileMenuOpen"
         >
           <span></span>
@@ -131,7 +154,8 @@ onUnmounted(() => {
     </div>
 
     <nav
-      v-if="mobileMenuOpen"
+      v-show="mobileMenuOpen"
+      id="mobile-nav-panel"
       class="mobile-nav-panel print-mobile-nav"
       aria-label="移动端导航"
     >
@@ -140,6 +164,7 @@ onUnmounted(() => {
         :key="item.name"
         :to="item.to"
         :class="{ active: isActive(item) }"
+        :aria-current="isActive(item) ? 'page' : undefined"
         @click="closeMobileMenu"
       >
         <strong>{{ item.label }}</strong>

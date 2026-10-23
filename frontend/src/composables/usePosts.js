@@ -4,6 +4,20 @@ import { getPosts, isRequestAbort } from "../services/api";
 
 const DEFAULT_POSTS_ERROR = "文章列表加载失败，请稍后再试。";
 
+/** 断网与 5xx 的处置方式不同（刷新 vs 等待），文案要分开说。 */
+function messageForListError(err, fallback) {
+  switch (err?.code) {
+    case "REQUEST_TIMEOUT":
+      return "文章列表加载超时，请稍后重试。";
+    case "NETWORK_ERROR":
+      return "网络连接失败，请检查网络后重试。";
+    case "HTTP_ERROR":
+      return "文章列表服务暂时不可用，请稍后重试。";
+    default:
+      return fallback;
+  }
+}
+
 export function usePosts({ errorMessage = DEFAULT_POSTS_ERROR } = {}) {
   const posts = ref([]);
   const error = ref("");
@@ -51,9 +65,7 @@ export function usePosts({ errorMessage = DEFAULT_POSTS_ERROR } = {}) {
         total.value = 0;
         page.value = 1;
         hasMore.value = false;
-        error.value = err?.code === "REQUEST_TIMEOUT"
-          ? "文章列表加载超时，请稍后重试。"
-          : errorMessage;
+        error.value = messageForListError(err, errorMessage);
       }
       return [];
     } finally {
@@ -83,7 +95,9 @@ export function usePosts({ errorMessage = DEFAULT_POSTS_ERROR } = {}) {
       if (requestId === requestSequence && !isRequestAbort(err)) {
         loadMoreError.value = err?.code === "REQUEST_TIMEOUT"
           ? "加载更多超时，请重试。"
-          : "加载更多失败，请重试。";
+          : err?.code === "NETWORK_ERROR"
+            ? "网络中断，这一页没取回来，请重试。"
+            : "加载更多失败，请重试。";
       }
       return [];
     } finally {

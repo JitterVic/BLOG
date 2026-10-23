@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import CatPet from "./components/pet/CatPet.vue";
@@ -40,13 +40,32 @@ function replayPageReveal() {
   replayReveal(view || document.querySelector(".print-main"), { skipRunningCharAnimation: true });
 }
 
-// 加载页离场后立刻重播一次：首屏的入场动效必须在这一刻才可见
-// （加载页整屏遮挡约 1.55s，封面若在被遮挡期间就入场，揭开时已是静止的）。
+/**
+ * 加载页遮挡期间，页面主体必须不可聚焦。
+ *
+ * 全屏遮罩只是视觉覆盖，Tab 键照样能走进遮罩下面的链接（读屏更是直接读到正文），
+ * 而此刻数据还没到、版面还是空的。用 inert 把 header/main 摘出可交互树，
+ * 加载页离场时（onLoaderReady）立刻恢复。
+ */
+function setBootLock(locked) {
+  for (const selector of ["#main-content", ".site-header"]) {
+    const el = document.querySelector(selector);
+    if (!el) continue;
+    if (locked) el.setAttribute("inert", "");
+    else el.removeAttribute("inert");
+  }
+}
+
+/** 加载页是否已经离场：加锁只在此之前发生，避免「先解锁再加锁」把页面锁死。 */
+const loaderDone = ref(false);
+
 function onLoaderReady() {
   // 摘掉「加载页遮挡中」的挂起状态：`html.loader-done` 一旦加上，
   // 下面那条 `html:not(.loader-done)` 的按住规则立即失效，
   // 封面的 `.rv` 与逐字浮现单字才回到可过渡的基准态，紧接着重播即可见。
+  loaderDone.value = true;
   document.documentElement.classList.add("loader-done");
+  setBootLock(false);
   requestAnimationFrame(() => replayPageReveal());
 }
 
@@ -80,7 +99,32 @@ watch(
   { immediate: true },
 );
 
+/**
+ * SPA 换页后的焦点移交。
+ *
+ * 客户端路由不会重置焦点：在被卸载的节点上按下的链接，卸载后焦点落回 <body>，
+ * 键盘用户下一次 Tab 又从顶栏第一个链接开始，等于每翻一页重走一遍导航。
+ * 这里在真正的「页面切换」后把焦点交还正文起点（#main-content 带 tabindex="-1"），
+ * 只认 path 不认 query —— 筛选/翻页是同一视图内的就地更新，抢焦点会打断输入。
+ */
+let focusRouteSettled = false;
+watch(
+  () => route.path,
+  async () => {
+    if (!focusRouteSettled) {
+      focusRouteSettled = true;
+      return;
+    }
+    await nextTick();
+    const main = document.getElementById("main-content");
+    if (main && !main.contains(document.activeElement)) {
+      main.focus({ preventScroll: true });
+    }
+  },
+);
+
 onMounted(async () => {
+  if (!loaderDone.value) setBootLock(true);
   try {
     await ensureSite();
   } catch (err) {
@@ -96,13 +140,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page-shell print-shell" :class="pageTheme">
+    <a class="skip-link" href="#main-content">跳至主要内容</a>
     <InitialLoader @ready="onLoaderReady" />
     <RouteProgress />
     <CursorEffects />
     <CatPet />
     <SiteHeader />
 
-    <main class="app-main print-main">
+    <main id="main-content" class="app-main print-main" tabindex="-1">
       <router-view v-slot="{ Component, route: viewRoute }">
         <Transition name="page-fade" mode="out-in" @after-enter="replayPageReveal">
           <component :is="Component" :key="viewRoute.path" />

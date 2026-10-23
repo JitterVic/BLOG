@@ -22,7 +22,7 @@
   left: 2.5rem;
   z-index: 6;
   padding: 0.22rem 0.55rem;
-  color: var(--paper, #f4efe6);
+  color: var(--paper);
   background: var(--accent, #8b2500);
   font-family: var(--f-mono, monospace);
   font-size: 0.48rem;
@@ -33,7 +33,7 @@
 
 .home-latest-feature .print-feature-image {
   min-height: clamp(400px, 48vw, 570px);
-  border: 1px solid rgba(244, 239, 230, 0.14);
+  border: 1px solid rgb(var(--paper-rgb) / 0.14);
   box-shadow:
     0 22px 55px rgba(35, 25, 16, 0.16),
     inset 0 0 0 1px rgba(255, 255, 255, 0.035);
@@ -51,7 +51,7 @@
     rotateY(var(--feature-tilt-y));
   box-shadow:
     0 30px 70px rgba(35, 25, 16, 0.22),
-    0 0 0 1px rgba(184, 74, 42, 0.28);
+    0 0 0 1px rgb(var(--accent-light-rgb) / 0.28);
 }
 
 .home-latest-feature .print-feature-image::before {
@@ -82,8 +82,8 @@
   display: grid;
   place-content: center;
   gap: 0.05rem;
-  color: rgba(244, 239, 230, 0.88);
-  border: 1px solid rgba(244, 239, 230, 0.3);
+  color: rgb(var(--paper-rgb) / 0.88);
+  border: 1px solid rgb(var(--paper-rgb) / 0.3);
   border-radius: 50%;
   background: rgba(25, 20, 16, 0.2);
   backdrop-filter: blur(5px);
@@ -111,7 +111,7 @@
   z-index: 2;
   width: 22rem;
   aspect-ratio: 1;
-  border: 1px solid rgba(244, 239, 230, 0.09);
+  border: 1px solid rgb(var(--paper-rgb) / 0.09);
   border-radius: 50%;
   pointer-events: none;
   animation: feature-orbit-spin 24s linear infinite;
@@ -121,7 +121,7 @@
 .feature-orbit::after {
   content: "";
   position: absolute;
-  border: 1px solid rgba(244, 239, 230, 0.07);
+  border: 1px solid rgb(var(--paper-rgb) / 0.07);
   border-radius: 50%;
 }
 
@@ -159,7 +159,7 @@
 
 .feature-kicker {
   margin-top: clamp(2.2rem, 5vw, 4.5rem);
-  color: rgba(244, 239, 230, 0.62);
+  color: rgb(var(--paper-rgb) / 0.62);
   font-family: var(--f-mono, monospace);
   font-size: 0.55rem;
   font-weight: 600;
@@ -186,7 +186,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
-  color: rgba(244, 239, 230, 0.76);
+  color: rgb(var(--paper-rgb) / 0.76);
   font-family: var(--f-mono, monospace);
   font-size: 0.54rem;
   letter-spacing: 0.12em;
@@ -198,7 +198,7 @@
   height: 1.7rem;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(244, 239, 230, 0.32);
+  border: 1px solid rgb(var(--paper-rgb) / 0.32);
   border-radius: 50%;
   font-size: 0.8rem;
   transition: transform 0.28s var(--ease-spring), background 0.28s ease;
@@ -207,7 +207,7 @@
 .print-feature-image:hover .feature-open-hint b,
 .print-feature-image:focus-visible .feature-open-hint b {
   color: var(--ink, #1c1710);
-  background: var(--paper, #f4efe6);
+  background: var(--paper);
   transform: translate(3px, -3px) rotate(8deg);
 }
 
@@ -225,8 +225,8 @@
   border-top: 1px solid var(--rule-light);
   border-bottom: 1px solid var(--rule-light);
   background:
-    linear-gradient(135deg, rgba(255, 253, 247, 0.38), transparent 52%),
-    rgba(239, 232, 219, 0.2);
+    linear-gradient(135deg, rgb(var(--paper-tint-rgb) / 0.38), transparent 52%),
+    rgb(var(--paper-shade-rgb) / 0.2);
 }
 
 .home-latest-feature .print-lead-copy::before {
@@ -234,7 +234,7 @@
   position: absolute;
   top: -0.9rem;
   right: 0.8rem;
-  color: rgba(139, 37, 0, 0.09);
+  color: rgb(var(--accent-rgb) / 0.09);
   font-family: Georgia, serif;
   font-size: clamp(6rem, 11vw, 10rem);
   line-height: 1;
@@ -323,7 +323,7 @@
 .home-latest-feature .print-lead-copy .print-read-more {
   margin-top: 0.75rem;
   padding-bottom: 0.28rem;
-  border-bottom: 1px solid rgba(139, 37, 0, 0.28);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.28);
 }
 
 @keyframes feature-seal-float {

@@ -119,6 +119,9 @@ export function useCatPet({ shouldIgnoreKey } = {}) {
     // 忽略特定修饰键
     if (["Shift", "Control", "Alt", "Meta", "Escape"].includes(e.key)) return;
     if (shouldIgnoreKey?.(e)) return;
+    // 只有「能打出字符」的键才算打字：Tab / 方向键 / 回车 / Home 之类
+    // 以前也会让猫敲一次 Bongo 并发出音效，键盘导航时听起来像在乱弹。
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
 
     resetInactivity();
 
@@ -173,8 +176,13 @@ export function useCatPet({ shouldIgnoreKey } = {}) {
     }
   }
 
-  // 全局鼠标跟踪
-  function handlePointerMove(e) {
+  // 全局鼠标跟踪。
+  // 原实现每次 pointermove 都 querySelector + getBoundingClientRect + 写两个 ref：
+  // 指针事件每秒可达上百次，而猫的视线最多每帧更新一次。这里合帧到 rAF。
+  let pointerFrame = 0;
+  let pendingPointerEvent = null;
+
+  function applyPointerGaze(e) {
     resetInactivity();
 
     // 计算鼠标与小猫相对视线
@@ -193,13 +201,34 @@ export function useCatPet({ shouldIgnoreKey } = {}) {
     }
   }
 
-  // 页面滚动监听
-  function handleScroll() {
+  function handlePointerMove(e) {
+    pendingPointerEvent = e;
+    if (pointerFrame) return;
+    pointerFrame = window.requestAnimationFrame(() => {
+      pointerFrame = 0;
+      const event = pendingPointerEvent;
+      pendingPointerEvent = null;
+      if (event) applyPointerGaze(event);
+    });
+  }
+
+  // 页面滚动监听：同样合帧，往上翻页时不必每个滚动事件都算一遍文档高度。
+  let catScrollFrame = 0;
+
+  function updateScrollState() {
     const y = window.scrollY || 0;
     scrollY.value = y;
     const doc = document.documentElement;
     const maxScroll = Math.max(doc.scrollHeight - window.innerHeight, 1);
     scrollProgress.value = Math.min(Math.max(y / maxScroll, 0), 1);
+  }
+
+  function handleScroll() {
+    if (catScrollFrame) return;
+    catScrollFrame = window.requestAnimationFrame(() => {
+      catScrollFrame = 0;
+      updateScrollState();
+    });
   }
 
   // 定时器轮询循环（随机动作 & 休眠判定）
@@ -299,6 +328,11 @@ export function useCatPet({ shouldIgnoreKey } = {}) {
     window.removeEventListener("pointermove", handlePointerMove);
     window.removeEventListener("keydown", handleGlobalKeyDown);
     window.removeEventListener("resize", handleViewportResize);
+    if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
+    if (catScrollFrame) window.cancelAnimationFrame(catScrollFrame);
+    pointerFrame = 0;
+    catScrollFrame = 0;
+    pendingPointerEvent = null;
     if (idleTimer) clearTimeout(idleTimer);
     if (sleepTimer) clearInterval(sleepTimer);
     if (actionTimeout) clearTimeout(actionTimeout);

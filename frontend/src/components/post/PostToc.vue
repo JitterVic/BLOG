@@ -126,6 +126,7 @@ onBeforeUnmount(() => {
 <template>
   <aside
     ref="hostRef"
+    id="article-toc-panel"
     class="article-toc"
     :class="{ 'is-collapsed': isCollapsed, 'is-parked': parked, 'is-pinned': pinned }"
   >
@@ -135,7 +136,7 @@ onBeforeUnmount(() => {
       class="article-toc__spine"
       type="button"
       aria-expanded="false"
-      aria-controls="article-toc-nav"
+      aria-controls="article-toc-panel"
       title="展开目录"
       @click="expand"
     >
@@ -152,7 +153,7 @@ onBeforeUnmount(() => {
           class="article-toc__toggle"
           type="button"
           aria-expanded="true"
-          aria-controls="article-toc-nav"
+          aria-controls="article-toc-panel"
           title="收起目录"
           @click="collapse"
         >

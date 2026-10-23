@@ -24,10 +24,8 @@
   gap: 0.85rem;
 }
 
-.home-latest-section,
-.home-hot-section {
-  background: rgba(244, 239, 230, 0.28);
-}
+/* 首页第 2/3 版的底色由 footer.css 的主题渐变接管（它在后面加载）。
+   这里曾有一份同选择器的 background，恒被覆盖——删掉以免误以为改它能生效。 */
 
 .home-latest-feature {
   align-items: stretch;
@@ -97,7 +95,7 @@
   /* 封面常为浅色图，压一道极细的框线，避免整块融进纸色 */
   outline: 1px solid var(--rule-light);
   outline-offset: -1px;
-  background: rgba(42, 36, 28, 0.05);
+  background: rgb(var(--rule-rgb) / 0.05);
 }
 
 .home-secondary-card__thumb.is-broken {
@@ -217,8 +215,9 @@
 }
 
 .home-secondary-card:focus-visible {
-  outline: 2px solid rgba(139, 37, 0, 0.35);
-  outline-offset: 3px;
+  /* 与全站统一：焦点环走 --ring-focus 令牌，而不是各写一档 outline */
+  outline: none;
+  box-shadow: var(--ring-focus);
 }
 
 .home-section-footer {
@@ -257,7 +256,7 @@
 
 .home-hot-row:hover,
 .home-hot-row:focus-visible {
-  background: rgba(42, 36, 28, 0.028);
+  background: rgb(var(--rule-rgb) / 0.028);
   outline: 0;
   transform: translateX(4px);
 }
@@ -354,14 +353,26 @@
    footer.css、compat.css 里各有一份互相覆盖的副本，层级真相分散在四处。 */
 
 .article-directory-meta button {
-  padding: 0;
+  padding: 0.3rem 0.55rem;
+  margin: -0.3rem -0.55rem;
   color: var(--accent);
   background: transparent;
   border: 0;
+  border-bottom: 1px solid transparent;
   cursor: pointer;
   font-size: 0.58rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  transition: color 0.22s var(--ease-quart), border-color 0.22s var(--ease-quart),
+    background 0.22s var(--ease-quart);
+}
+
+/* 「清除筛选」此前是个没有任何悬停/按下反馈的纯文字按钮：
+   同一行里的栏目胶囊都有反馈，只有它像一段静态说明。 */
+.article-directory-meta button:hover {
+  color: var(--ink);
+  background: rgb(var(--accent-rgb) / 0.06);
+  border-bottom-color: var(--accent);
 }
 .article-directory-meta {
   margin: 0 2.5rem clamp(0.4rem, 1.4svh, 1.6rem);
@@ -369,7 +380,7 @@
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  color: var(--ink-faded);
+  color: var(--ink-light);
   border-bottom: 1px solid var(--rule-light);
   font-size: 0.58rem;
   letter-spacing: 0.15em;
@@ -391,7 +402,7 @@
   padding: clamp(1.6rem, 4vw, 3rem);
   border-top: 3px double var(--rule);
   border-bottom: 1px solid var(--rule-light);
-  background: rgba(244, 239, 230, 0.38);
+  background: rgb(var(--paper-rgb) / 0.38);
 }
 
 .quiet-about-card h2,
@@ -439,7 +450,8 @@
 }
 
 .quiet-contact-list span {
-  color: var(--ink-faded);
+  /* 联系方式左侧标签是功能性信息（邮箱/社交平台名），不是装饰性小字 */
+  color: var(--ink-light);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -465,8 +477,9 @@
 }
 
 @media (max-width: 920px) {
+  /* 只对真正的网格容器生效：`.article-toolbox` 是 flex（posts.css），
+     此前混在这里写 grid-template-columns 是一条永不生效的死声明。 */
   .home-hot-row,
-  .article-toolbox,
   .quiet-about-layout {
     grid-template-columns: 1fr;
   }
@@ -501,7 +514,9 @@
   }
 
   .home-hot-row__rank {
-    font-size: 3rem;
+    /* 原先这里写死 3rem，反而比桌面档的上限 2.4rem 更大：
+       窄屏榜单序号成了整行最重的元素，和「标题才是主体」的层级相反。 */
+    font-size: clamp(1.35rem, 4.5vw, 1.8rem);
   }
 
 

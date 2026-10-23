@@ -97,7 +97,6 @@ onBeforeUnmount(() => {
   <div
     class="route-progress"
     :class="{ 'is-visible': visible, 'is-done': progress >= 100 }"
-    role="progressbar"
     aria-hidden="true"
   >
     <div class="route-progress__fill" :style="{ transform: `scaleX(${progress / 100})` }"></div>

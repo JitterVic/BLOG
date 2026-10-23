@@ -31,20 +31,33 @@ select {
    （--paper-mid、--ink-deep、--border、--shadow-sm 之类），既没有 var() 引用，
    也无法从中推断用途——设计令牌一旦不再被使用就该删掉，否则读者会以为改它能生效。 */
 :root {
+  /* 颜色分两套写法：hex 用于实色，`*-rgb` 通道令牌用于需要透明的场合。
+     以前各处直接手写 rgba(244,239,230,…)（一个连 --paper 都不是的旧纸色），
+     共 30 余处；改主题色时这些字面量不会跟随，前后台因此不是同一种纸。
+     现在只允许 `rgb(var(--paper-rgb) / α)` 这种写法。 */
   --paper: #f6f1e8;
+  --paper-rgb: 246 241 232;
   --paper-dark: #ded5c2;
+  --paper-dark-rgb: 222 213 194;
   --paper-tint: #fdfbf7;
-  --paper-card: rgba(246, 241, 232, 0.88);
+  --paper-tint-rgb: 253 251 247;
+  /* 纸面压深档：页脚/分区渐变里长期散落 235/238/232/239 四个近似值，现统一取一档。 */
+  --paper-shade-rgb: 235 229 216;
+  --paper-card: rgb(var(--paper-rgb) / 0.88);
   --ink: #1c1710;
+  --ink-rgb: 28 23 16;
   --ink-mid: #3b3328;
   --ink-light: #5e5548;
   --ink-faded: #8a7f6f;
   --accent: #8b2500;
+  --accent-rgb: 139 37 0;
   --accent-light: #b84a2a;
-  --accent-glow: rgba(184, 74, 42, 0.35);
+  --accent-light-rgb: 184 74 42;
+  --accent-glow: rgb(var(--accent-light-rgb) / 0.35);
   --rule: #2a241c;
-  --rule-light: rgba(42, 36, 28, 0.16);
-  --rule-subtle: rgba(42, 36, 28, 0.08);
+  --rule-rgb: 42 36 28;
+  --rule-light: rgb(var(--rule-rgb) / 0.16);
+  --rule-subtle: rgb(var(--rule-rgb) / 0.08);
   --code-bg: #221d18;
   --code-fg: #eae2d5;
   --code-bar: #1a1612;
@@ -93,6 +106,60 @@ body {
 ::selection {
   color: var(--paper);
   background: var(--accent);
+}
+
+/* 键盘用户的第一站：跳至正文。默认移出视口，Tab 聚焦时落回左上角。
+   此前全站没有这个入口，键盘用户每次切页都要重新 Tab 一遍整条导航。 */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 6000;
+  padding: 0.72rem 1.15rem;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translateY(-180%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.24s var(--ease-quart),
+    opacity 0.24s var(--ease-quart);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  box-shadow:
+    0 0 0 3px var(--paper),
+    0 0 0 5px var(--accent);
+}
+
+/* 仅供读屏的文本（视觉隐藏，仍参与可访问性树）。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* main 是程序化焦点落点（路由切换后移焦），不应画出焦点环。 */
+#main-content:focus,
+#main-content:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 :focus-visible {

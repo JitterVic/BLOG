@@ -121,7 +121,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-top: 2px solid var(--ink, #2a241c);
+  border-top: 2px solid var(--ink);
 }
 
 .article-toc nav {
@@ -141,9 +141,9 @@
   gap: 0.45rem;
   width: 100%;
   padding: 0.48rem 0.35rem 0.48rem 0;
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   border: 0;
-  border-left: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  border-left: 1px solid var(--rule-light);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -198,8 +198,8 @@
   gap: 0.6rem;
   margin-bottom: 0.9rem;
   padding-bottom: 0.6rem;
-  color: var(--ink-faded, #958b7b);
-  border-bottom: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  color: var(--ink-faded);
+  border-bottom: 1px solid var(--rule-light);
 }
 
 .article-toc__head {
@@ -228,9 +228,9 @@
   width: 1.55rem;
   height: 1.55rem;
   padding: 0;
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   background: transparent;
-  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  border: 1px solid var(--rule-light);
   border-radius: 50%;
   cursor: pointer;
   transition: color 0.24s ease, border-color 0.24s ease, background 0.24s ease;
@@ -253,7 +253,7 @@
 .article-toc__toggle:focus-visible,
 .article-rail__toggle:hover,
 .article-rail__toggle:focus-visible {
-  color: var(--paper, #f4efe6);
+  color: var(--paper);
   background: var(--accent, #8b2500);
   border-color: var(--accent, #8b2500);
   outline: 0;
@@ -361,7 +361,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-top: 2px solid var(--ink, #2a241c);
+  border-top: 2px solid var(--ink);
   animation: side-panel-in 0.5s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
@@ -464,9 +464,9 @@ html.motion-off .article-toc {
   max-height: calc(var(--panel-avail, 24rem) - 3.4rem);
   padding: 0.2rem 0;
   overflow-y: auto;
-  background: var(--paper, #f6f1e8);
-  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
-  box-shadow: 0 14px 28px rgba(42, 36, 28, 0.14);
+  background: var(--paper);
+  border: 1px solid var(--rule-light);
+  box-shadow: 0 14px 28px rgb(var(--rule-rgb) / 0.14);
 }
 
 .article-rail__scope-option {
@@ -475,7 +475,7 @@ html.motion-off .article-toc {
   gap: 0.45rem;
   width: 100%;
   padding: 0.42rem 0.6rem;
-  color: var(--ink-mid, #3b342a);
+  color: var(--ink-mid);
   border: 0;
   border-left: 2px solid transparent;
   background: transparent;
@@ -496,7 +496,7 @@ html.motion-off .article-toc {
 
 .article-rail__scope-option em {
   margin-left: auto;
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   font-size: 0.52rem;
   font-style: normal;
   font-variant-numeric: tabular-nums;
@@ -505,7 +505,7 @@ html.motion-off .article-toc {
 .article-rail__scope-option:hover,
 .article-rail__scope-option:focus-visible {
   color: var(--accent, #8b2500);
-  background: rgba(139, 37, 0, 0.06);
+  background: rgb(var(--accent-rgb) / 0.06);
   outline: 0;
 }
 
@@ -515,7 +515,7 @@ html.motion-off .article-toc {
 }
 
 .article-rail__head strong i {
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   font-size: 0.66rem;
   font-style: normal;
 }
@@ -531,7 +531,7 @@ html.motion-off .article-toc {
 .article-rail__year {
   margin: 1.1rem 0 0.45rem;
   padding-left: 0.75rem;
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   font-family: var(--f-display, serif);
   font-size: 0.95rem;
   letter-spacing: 0.14em;
@@ -547,7 +547,7 @@ html.motion-off .article-toc {
   gap: 0.55rem;
   padding: 0.55rem 0.5rem 0.55rem 0.75rem;
   color: var(--ink-light, #5e5548);
-  border-left: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  border-left: 1px solid var(--rule-light);
   text-decoration: none;
   /* 用衬线正文体而不是继承下来的等宽体：中文标题在等宽小字号下每个字都占满字身，
      既难扫读也显得挤；字号也从 0.62rem 提到 0.72rem。 */
@@ -559,12 +559,15 @@ html.motion-off .article-toc {
 
 /* 行之间留一道极淡的分隔：清单是一份列表，靠留白分隔在长列表里看不清边界 */
 .article-rail__row + .article-rail__row {
-  border-top: 1px solid rgba(42, 36, 28, 0.07);
+  border-top: 1px solid rgb(var(--rule-rgb) / 0.07);
 }
 
 .article-rail__date {
   padding-top: 0.1rem;
-  color: var(--rule-light, rgba(42, 36, 28, 0.38));
+  /* 此前写的是 var(--rule-light, …0.38)：令牌已定义为 0.16，回退永远不生效，
+     于是清单日期以 16% 的墨色渲染（对比度约 1.5:1），几乎读不出来。
+     日期是清单的锚点之一，改用 --ink-faded（约 3.5:1）并保留等宽小字。 */
+  color: var(--ink-faded);
   font-family: var(--f-mono, monospace);
   font-size: 0.56rem;
   letter-spacing: 0.02em;
@@ -582,7 +585,7 @@ html.motion-off .article-toc {
 .article-rail__row:focus-visible {
   color: var(--accent, #8b2500);
   border-left-color: var(--accent, #8b2500);
-  background: rgba(139, 37, 0, 0.04);
+  background: rgb(var(--accent-rgb) / 0.04);
   outline: 0;
 }
 
@@ -590,7 +593,7 @@ html.motion-off .article-toc {
   color: var(--ink, #1c1710);
   border-left: 2px solid var(--accent, #8b2500);
   padding-left: calc(0.75rem - 1px);
-  background: rgba(139, 37, 0, 0.06);
+  background: rgb(var(--accent-rgb) / 0.06);
   font-weight: 600;
 }
 
@@ -605,7 +608,7 @@ html.motion-off .article-toc {
   padding: 0.55rem;
   color: var(--ink-light, #5e5548);
   background: transparent;
-  border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+  border: 1px solid var(--rule-light);
   cursor: pointer;
   font-family: var(--f-mono, monospace);
   font-size: 0.58rem;
@@ -615,7 +618,7 @@ html.motion-off .article-toc {
 
 .article-rail__more:hover:not(:disabled),
 .article-rail__more:focus-visible:not(:disabled) {
-  color: var(--paper, #f4efe6);
+  color: var(--paper);
   background: var(--accent, #8b2500);
   border-color: var(--accent, #8b2500);
   outline: 0;
@@ -673,7 +676,7 @@ html.motion-off .article-toc {
 }
 
 .article-rail.is-collapsed .article-rail__spine {
-  border-right: 2px solid var(--ink, #2a241c);
+  border-right: 2px solid var(--ink);
 }
 
 .article-rail__spine,
@@ -687,7 +690,7 @@ html.motion-off .article-toc {
   padding: 1rem 0 0.8rem;
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  color: var(--ink-faded, #958b7b);
+  color: var(--ink-faded);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -723,14 +726,14 @@ html.motion-off .article-toc {
 .article-toc__spine:hover,
 .article-toc__spine:focus-visible {
   color: var(--accent, #8b2500);
-  background: rgba(139, 37, 0, 0.05);
+  background: rgb(var(--accent-rgb) / 0.05);
   outline: 0;
 }
 
 .article-toc.is-collapsed {
   width: 2rem;
   border-top: 0;
-  border-left: 2px solid var(--ink, #2a241c);
+  border-left: 2px solid var(--ink);
 }
 
 .post-reading-layout .print-markdown h2,
@@ -770,10 +773,10 @@ html.motion-off .article-toc {
     margin: 0 -1.35rem;
     padding: 0.65rem 1.35rem 0.75rem;
     justify-self: stretch;
-    border-top: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
-    border-bottom: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
-    background: var(--paper, #f4efe6);
-    box-shadow: 0 12px 24px rgba(42, 36, 28, 0.08);
+    border-top: 1px solid var(--rule-light);
+    border-bottom: 1px solid var(--rule-light);
+    background: var(--paper);
+    box-shadow: 0 12px 24px rgb(var(--rule-rgb) / 0.08);
   }
 
   .article-toc nav {
@@ -791,20 +794,23 @@ html.motion-off .article-toc {
     width: auto;
     max-width: 15rem;
     grid-template-columns: auto minmax(0, 1fr);
+    /* 触摸下限：横向胶囊原本约 24px 高，窄屏上几乎点不中 */
+    min-height: 40px;
+    align-items: center;
     padding: 0.42rem 0.7rem;
-    border: 1px solid var(--rule-light, rgba(42, 36, 28, 0.16));
+    border: 1px solid var(--rule-light);
     border-radius: 999px;
   }
 
   .article-toc nav button.active {
     padding-left: 0.7rem;
-    color: var(--paper, #f4efe6);
+    color: var(--paper);
     border-color: var(--accent, #8b2500);
     background: var(--accent, #8b2500);
   }
 
   .article-toc nav button.active span {
-    color: rgba(244, 239, 230, 0.68);
+    color: rgb(var(--paper-rgb) / 0.68);
   }
 
   .post-reading-layout .print-markdown h2,
@@ -844,8 +850,9 @@ html.motion-off .article-toc {
 }
 
 .print-markdown img[role="button"]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 0;
 }
 
 .article-lightbox {
@@ -888,10 +895,16 @@ html.motion-off .article-toc {
   position: absolute;
   top: 0.65rem;
   right: 0.8rem;
-  padding: 0.35rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 触摸下限：CLOSE 是灯箱唯一的出口，原先约 22px，手指很难点中 */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.35rem 0.7rem;
   color: var(--accent);
   background: transparent;
-  border: 1px solid rgba(139, 37, 0, 0.35);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
   cursor: pointer;
   font-family: var(--f-mono);
   font-size: 0.52rem;
@@ -918,7 +931,7 @@ html.motion-off .article-toc {
   background: var(--code-bg, #221d18);
   border: 1px solid rgba(232, 223, 208, 0.08);
   border-radius: var(--radius-sm, 4px);
-  box-shadow: 0 12px 32px rgba(28, 23, 16, 0.16);
+  box-shadow: 0 12px 32px rgb(var(--ink-rgb) / 0.16);
 }
 
 .code-toolbar {
@@ -973,7 +986,9 @@ html.motion-off .article-toc {
   font-family: var(--f-mono);
   font-size: 0.54rem;
   letter-spacing: 0.12em;
-  transition: all 0.25s var(--ease-quart);
+  transition: color 0.25s var(--ease-quart), background 0.25s var(--ease-quart),
+    border-color 0.25s var(--ease-quart), transform 0.25s var(--ease-quart),
+    box-shadow 0.25s var(--ease-quart);
   user-select: none;
 }
 
@@ -987,7 +1002,7 @@ html.motion-off .article-toc {
   background: var(--accent);
   border-color: var(--accent);
   transform: translate3d(0, -1px, 0);
-  box-shadow: 0 4px 12px rgba(139, 37, 0, 0.3);
+  box-shadow: 0 4px 12px rgb(var(--accent-rgb) / 0.3);
 }
 
 .code-copy-button:active {
@@ -1100,14 +1115,15 @@ html.motion-off .article-toc {
 .post-sequence-placeholder {
   min-height: 8rem;
   padding: 1.5rem 1.8rem;
-  background: var(--paper-card, rgba(246, 241, 232, 0.8));
+  background: var(--paper-card);
   border: 1px solid var(--rule-light);
-  transition: all 0.28s var(--ease-quart);
+  transition: color 0.28s var(--ease-quart), background 0.28s var(--ease-quart),
+    border-color 0.28s var(--ease-quart), transform 0.28s var(--ease-quart);
 }
 
 .post-sequence-link:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 30px rgba(42, 36, 28, 0.08);
+  box-shadow: 0 12px 30px rgb(var(--rule-rgb) / 0.08);
   border-color: var(--accent);
 }
 
@@ -1143,6 +1159,15 @@ html.motion-off .article-toc {
   color: var(--paper);
   background: var(--ink);
   outline: none;
+}
+
+/* 悬停反白后，子元素里的朱色标签（← Previous / Next →）会变成墨底上的暗红，
+   对比度只剩约 2:1——恰好在最需要读清的瞬间消失。整块一起转成纸色。 */
+.post-sequence-link:hover > span,
+.post-sequence-link:focus-visible > span,
+.post-sequence-link:hover > strong,
+.post-sequence-link:focus-visible > strong {
+  color: var(--paper);
 }
 
 @media (max-width: 760px) {
@@ -1190,8 +1215,8 @@ html.motion-off .article-toc {
   color: var(--ink, #1c1710);
   text-decoration: none;
   background-image: linear-gradient(
-    var(--accent-glow, rgba(184, 74, 42, 0.4)),
-    var(--accent-glow, rgba(184, 74, 42, 0.4))
+    var(--accent-glow),
+    var(--accent-glow)
   );
   background-repeat: no-repeat;
   background-position: 0 96%;

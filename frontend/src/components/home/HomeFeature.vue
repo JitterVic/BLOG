@@ -27,6 +27,9 @@ function cardElement() {
 function handlePointerMove(e) {
   const el = cardElement();
   if (!el || e.pointerType === "touch") return;
+  // 指针倾斜是纯装饰的视差效果：系统要求降低动效时直接不跟手，
+  // 与「入场动效默认开启」的版式决策无关，这里只关掉跟手位移。
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const rect = el.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
@@ -65,6 +68,7 @@ function handlePointerLeave() {
       :to="`/posts/${post.slug}`"
       class="mimg print-feature-image rv"
       :class="{ 'mimg--has-image': true }"
+      :aria-label="`阅读：${post.title}`"
       data-reveal-delay="40"
       @pointermove="handlePointerMove"
       @pointerleave="handlePointerLeave"

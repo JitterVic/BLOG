@@ -17,7 +17,7 @@ import { getPosts } from "../services/api";
 const LATEST_FETCH_LIMIT = 3;
 const HOT_FETCH_LIMIT = 5;
 
-const { ensureSite } = useSite();
+const { site, ensureSite } = useSite();
 const { refresh: refreshReveal, replayReveal } = useReveal({ reobserveOnRoute: false });
 const { isFlipActive, trackStyle, currentPage } = usePageFlip();
 const homeRootRef = ref(null);
@@ -161,6 +161,8 @@ onBeforeUnmount(() => postsController?.abort());
       <AsyncState
         v-if="postsError"
         :error="postsError"
+        compact
+        retry-label="重试加载"
         empty-message="请检查网络连接后重试。"
         @retry="loadHomePosts"
       />

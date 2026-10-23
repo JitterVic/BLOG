@@ -30,7 +30,7 @@ export async function request(path, { signal, timeoutMs = DEFAULT_TIMEOUT_MS } =
   try {
     const response = await fetch(`${API_ROOT}${path}`, { signal: controller.signal });
     if (!response.ok) {
-      throw new ApiError(`Request failed: ${response.status}`, {
+      throw new ApiError(`请求失败（HTTP ${response.status}）`, {
         status: response.status,
         code: response.status === 404 ? "NOT_FOUND" : "HTTP_ERROR",
       });

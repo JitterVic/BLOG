@@ -129,7 +129,7 @@
   max-width: none !important;
   margin: 0 !important;
   padding: 0 !important;
-  background: linear-gradient(180deg, rgba(244, 239, 230, 0.98) 55%, rgba(244, 239, 230, 0)) !important;
+  background: linear-gradient(180deg, rgb(var(--paper-rgb) / 0.98) 55%, rgb(var(--paper-rgb) / 0)) !important;
   backdrop-filter: none !important;
   box-sizing: border-box;
 }
@@ -263,6 +263,13 @@
   stroke-dashoffset: 0;
 }
 
+/* 按下时手绘圈收紧一点：nav-circle 的基准变换就写着 rotate(-2deg) scale(.96)，
+   若按下态沿用同一组值，手指按下去看不到任何变化。 */
+.print-nav__item:active .nav-circle {
+  opacity: 1;
+  transform: rotate(-1.2deg) scale(0.92);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:not(.app-ready) .nav-circle,
   html:not(.app-ready) .nav-circle__stroke {
@@ -317,17 +324,8 @@
   }
 }
 
-/* Stronger cursor trail canvas visibility */
-.cursor-effects {
-  opacity: 0.95 !important;
-  mix-blend-mode: multiply;
-}
-
-.cursor-effects[data-disabled="true"] {
-  display: none !important;
-}
-
-.cursor-effects.active {
-  opacity: 1 !important;
-}
+/* 光标墨迹的可见性由 effects.css 统一接管（那里把 canvas 改成整块位图淡出，
+   opacity 与混合模式的取值与这里的旧值相反）。此前这里还留着三条
+   `!important` 的 .cursor-effects 规则，全部被后加载的 effects.css 覆盖，
+   属于会误导后来者的死代码，已移除。 */
 

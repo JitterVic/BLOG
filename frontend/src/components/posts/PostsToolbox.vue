@@ -51,7 +51,12 @@ defineEmits(["set-category", "update:searchQuery", "clear-search"]);
           :aria-label="`搜索 ${total} 篇文章`"
           @input="$emit('update:searchQuery', $event.target.value)"
         >
-        <button v-if="searchQuery" type="button" @click="$emit('clear-search')">清除</button>
+        <button
+          v-if="searchQuery"
+          type="button"
+          aria-label="清除搜索关键词"
+          @click="$emit('clear-search')"
+        >清除</button>
       </span>
     </label>
   </div>

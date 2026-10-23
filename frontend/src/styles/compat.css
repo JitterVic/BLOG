@@ -8,12 +8,12 @@
   margin: 0 2.5rem 1.5rem;
   padding: 1.1rem 1.15rem;
   border: 1px solid var(--rule-light);
-  background: rgba(42, 36, 28, 0.03);
+  background: rgb(var(--rule-rgb) / 0.03);
 }
 
 .async-state--error {
-  border-color: rgba(139, 37, 0, 0.28);
-  background: rgba(139, 37, 0, 0.05);
+  border-color: rgb(var(--accent-rgb) / 0.28);
+  background: rgb(var(--accent-rgb) / 0.05);
 }
 
 .async-state--empty {
@@ -55,7 +55,7 @@
   min-height: clamp(180px, 34vw, 310px);
   aspect-ratio: 16 / 7;
   overflow: hidden;
-  background: rgba(42, 36, 28, 0.045);
+  background: rgb(var(--rule-rgb) / 0.045);
 }
 
 .post-cover img {
@@ -65,7 +65,7 @@
 
 .mimg.print-feature-image {
   min-height: clamp(220px, 42vw, 360px);
-  background: rgba(42, 36, 28, 0.05);
+  background: rgb(var(--rule-rgb) / 0.05);
 }
 
 
@@ -104,7 +104,7 @@
   display: block;
   max-width: 100%;
   height: auto;
-  background: rgba(42, 36, 28, 0.04);
+  background: rgb(var(--rule-rgb) / 0.04);
 }
 
 .print-markdown img.is-broken {

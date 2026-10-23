@@ -37,6 +37,9 @@ const props = defineProps({
 
 const emit = defineEmits(["more", "select-scope"]);
 
+const menuRef = ref(null);
+const scopeButtonRef = ref(null);
+
 // 展开态是默认：折起来虽然干净，但先折起来等于让人永远发现不了这一栏。
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-rail-collapsed");
 
@@ -107,21 +110,64 @@ const scopeOptions = computed(() => {
   return options;
 });
 
-function toggleMenu() {
-  menuOpen.value = !menuOpen.value;
+async function toggleMenu() {
+  if (menuOpen.value) {
+    closeMenu();
+    return;
+  }
+  menuOpen.value = true;
+  // 菜单声明了 role="menu"，就必须兑现键盘模型：打开即焦点落在当前项上，
+  // 之后方向键在选项间移动（见 handleKeydown）。此前只切换了 aria-expanded，
+  // 焦点仍留在触发器上，方向键毫无反应——承诺了却没实现。
+  await nextTick();
+  const target = menuRef.value?.querySelector('[role="menuitemradio"][aria-checked="true"]')
+    || menuRef.value?.querySelector('[role="menuitemradio"]');
+  target?.focus();
 }
 
-function closeMenu() {
+function closeMenu(options) {
+  // 这个函数也被 watch(() => props.currentSlug, closeMenu) 直接当回调用，
+  // 拿到的是 slug 字符串（可能是 null），不能按对象解构。
+  const restoreFocus = options === true || options?.restoreFocus === true;
   menuOpen.value = false;
+  if (restoreFocus) scopeButtonRef.value?.focus();
 }
 
 function chooseScope(option) {
   menuOpen.value = false;
+  scopeButtonRef.value?.focus();
   if (!option.active) emit("select-scope", option.key);
 }
 
 function handleKeydown(event) {
-  if (event.key === "Escape") closeMenu();
+  if (!menuOpen.value) return;
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeMenu({ restoreFocus: true });
+    return;
+  }
+
+  const buttons = Array.from(menuRef.value?.querySelectorAll('[role="menuitemradio"]') || []);
+  if (!buttons.length) return;
+  const index = buttons.indexOf(document.activeElement);
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    buttons[(index + 1 + buttons.length) % buttons.length]?.focus();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    buttons[index <= 0 ? buttons.length - 1 : index - 1]?.focus();
+  } else if (event.key === "Home") {
+    event.preventDefault();
+    buttons[0]?.focus();
+  } else if (event.key === "End") {
+    event.preventDefault();
+    buttons[buttons.length - 1]?.focus();
+  } else if (event.key === "Tab") {
+    // Tab 是「我要离开这个菜单」，把菜单收起但把焦点交给浏览器继续走。
+    closeMenu();
+  }
 }
 
 function handleOutside(event) {
@@ -208,6 +254,7 @@ onBeforeUnmount(() => {
 <template>
   <aside
     ref="hostRef"
+    id="article-rail-panel"
     class="article-rail"
     :class="{ 'is-collapsed': collapsed, 'is-parked': parked, 'is-pinned': pinned }"
     aria-label="文章清单"
@@ -218,6 +265,7 @@ onBeforeUnmount(() => {
       class="article-rail__spine"
       type="button"
       aria-expanded="false"
+      aria-controls="article-rail-panel"
       title="展开文章清单"
       @click="expand"
     >
@@ -228,6 +276,7 @@ onBeforeUnmount(() => {
     <div v-else class="article-rail__body">
       <div class="article-rail__head">
         <button
+          ref="scopeButtonRef"
           class="article-rail__scope"
           type="button"
           aria-haspopup="menu"
@@ -246,13 +295,20 @@ onBeforeUnmount(() => {
           class="article-rail__toggle"
           type="button"
           aria-expanded="true"
+          aria-controls="article-rail-panel"
           title="收起文章清单"
           @click="collapse"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
         </button>
 
-        <div v-if="menuOpen" class="article-rail__scopes" role="menu" aria-label="清单范围">
+        <div
+          v-if="menuOpen"
+          ref="menuRef"
+          class="article-rail__scopes"
+          role="menu"
+          aria-label="清单范围"
+        >
           <button
             v-for="option in scopeOptions"
             :key="option.key || 'follow'"

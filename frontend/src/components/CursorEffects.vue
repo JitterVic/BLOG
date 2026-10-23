@@ -228,6 +228,26 @@ function pointerSamples(event) {
   return samples?.length ? samples : [event];
 }
 
+// 光标位置只供 CSS 视差使用（--pointer-x/y），合成器每帧只能消费一次；
+// 指针事件每秒可达数百次，逐事件写根元素样式等于让整页重算样式树。
+let pointerVarFrame = 0;
+let pendingPointer = null;
+
+function flushPointerVars() {
+  pointerVarFrame = 0;
+  if (!pendingPointer) return;
+  const style = document.documentElement.style;
+  style.setProperty("--pointer-x", `${pendingPointer.x}px`);
+  style.setProperty("--pointer-y", `${pendingPointer.y}px`);
+  pendingPointer = null;
+}
+
+function queuePointerVars(x, y) {
+  pendingPointer = { x, y };
+  if (pointerVarFrame) return;
+  pointerVarFrame = window.requestAnimationFrame(flushPointerVars);
+}
+
 function handlePointerMove(event) {
   if (!effectEnabled || event.pointerType === "touch") return;
 
@@ -240,8 +260,7 @@ function handlePointerMove(event) {
     }) || hasNewInk;
   }
 
-  document.documentElement.style.setProperty("--pointer-x", `${event.clientX}px`);
-  document.documentElement.style.setProperty("--pointer-y", `${event.clientY}px`);
+  queuePointerVars(event.clientX, event.clientY);
   if (hasNewInk) scheduleFrame();
 }
 

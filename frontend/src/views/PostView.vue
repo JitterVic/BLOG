@@ -52,6 +52,7 @@ let cleanupEnhancements = null;
 const {
   post,
   error,
+  errorCode,
   loading,
   articleSections,
   hasFallbackSections,
@@ -60,6 +61,17 @@ const {
   nextPost,
   loadPost,
 } = usePost({ errorMessage: "这篇文章不存在，或仍是草稿未发布。" });
+
+// 只有服务端真的说「没有这篇文章」才报 404；超时/断网/5xx 一律按加载失败呈现，
+// 否则一次网络抖动就会告诉读者「文章不存在」，是很伤信任的误报。
+const isNotFound = computed(() => errorCode.value === "NOT_FOUND");
+const errorIssueNumber = computed(() => (isNotFound.value ? "404" : "ERR"));
+const errorHeadline = computed(() => (isNotFound.value ? "文章没有找到" : "文章加载受阻"));
+const errorHint = computed(() => (
+  isNotFound.value
+    ? "这篇文章可能已被移动或撤下，可以回到目录继续浏览。"
+    : "正文没有取回来，通常是网络或服务端临时故障，可以稍后重试。"
+));
 
 function updatePostMeta(currentPost = post.value) {
   if (!currentPost) return;
@@ -183,13 +195,14 @@ onBeforeUnmount(() => {
 
     <section v-else-if="error" class="print-page print-section post-empty-state">
       <div class="sec-hd rv">
-        <span class="sec-hd__n">404</span>
-        <h1 class="sec-hd__t">文章没有找到</h1>
+        <span class="sec-hd__n">{{ errorIssueNumber }}</span>
+        <h1 class="sec-hd__t">{{ errorHeadline }}</h1>
         <div class="sec-hd__line"></div>
       </div>
       <AsyncState
         :error="error"
-        empty-message="请返回文章目录，或稍后重试。"
+        :empty-message="isNotFound ? '请返回文章目录，或稍后重试。' : errorHint"
+        :retry-label="isNotFound ? '重新装订' : '重试加载'"
         @retry="retryPost"
       />
       <div class="print-cover__actions rv">

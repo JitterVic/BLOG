@@ -297,6 +297,8 @@ onBeforeUnmount(() => {
         <AsyncState
           v-else
           :error="loadMoreError"
+          compact
+          retry-label="重试加载"
           empty-message="请检查网络连接后重试。"
           @retry="loadMore"
         />

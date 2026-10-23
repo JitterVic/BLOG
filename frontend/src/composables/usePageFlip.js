@@ -52,10 +52,23 @@ function handleWheel(event) {
   flip(event.deltaY > 0 ? 1 : -1);
 }
 
+/** 焦点是否落在可交互控件上：这些元素自己消费 Space/方向键，翻页不能抢。 */
+function isInteractiveTarget(target) {
+  if (!target || typeof target.closest !== "function") return false;
+  return Boolean(
+    target.closest(
+      "a, button, input, textarea, select, summary, label, [contenteditable=''], [contenteditable='true'], [role='button'], [role='link'], [role='menuitem'], [role='menuitemradio'], [role='tab'], [role='switch']",
+    ),
+  );
+}
+
 function handleKeydown(event) {
   if (!active) return;
   const tag = event.target?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || event.target?.isContentEditable) return;
+  // 此前只排除输入框：焦点停在「开始阅读」等按钮上时按 Space，
+  // 这里 preventDefault 掉的是按钮的激活键，键盘用户被锁死在首页翻页里。
+  if (isInteractiveTarget(event.target)) return;
 
   if (["ArrowDown", "PageDown", " "].includes(event.key)) {
     event.preventDefault();

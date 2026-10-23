@@ -144,8 +144,11 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="journal-loader">
-    <div v-if="isVisible" ref="rootRef" class="journal-initial-loader" aria-hidden="true">
-      <div class="loader-content" :class="{ 'is-active': isMounted }">
+    <div v-if="isVisible" ref="rootRef" class="journal-initial-loader">
+      <!-- 视觉层是纯装饰，读屏只播报这一句加载状态；
+           此前整块 aria-hidden，读屏用户面对全屏遮罩得不到任何提示。 -->
+      <span class="sr-only" role="status">页面装订中，请稍候。</span>
+      <div class="loader-content" :class="{ 'is-active': isMounted }" aria-hidden="true">
         <div class="loader-masthead">
           <span>VOL. 03 · DIGITAL EDITION</span>
           <span class="loader-dot">·</span>
