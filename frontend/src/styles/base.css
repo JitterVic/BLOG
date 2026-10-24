@@ -1,198 +1,218 @@
-/* 基础层：reset、设计令牌、全局 body 样式。 */
+/* ============================================================
+   base.css — reset、设计令牌（DESIGN.md §3 权威源）、全局基础
+   颜色 / 字体 / 字阶 / 间距 / 形状 / 动效常量只允许在本文件定义；
+   十六进制字面量只允许出现在本文件；半透明一律 color-mix()。
+   ============================================================ */
+
+/* --- reset --- */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+* {
+  margin: 0;
+}
+
 html {
-  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  /* 中文排印开关（§3.2，渐进增强）：不支持时自然退化 */
+  text-autospace: normal;
+  line-break: strict;
+}
+
+body {
+  min-height: 100svh;
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 a {
   color: inherit;
-  text-decoration: none;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-#app {
-  min-height: 100vh;
-}
-/* ==========================================================================
-   报刊主题令牌（PRINT JOURNAL THEME）
-   ==========================================================================
-   只保留真正被引用的令牌。此前这里还躺着 17 个无人使用的别名/阴影/圆角变量
-   （--paper-mid、--ink-deep、--border、--shadow-sm 之类），既没有 var() 引用，
-   也无法从中推断用途——设计令牌一旦不再被使用就该删掉，否则读者会以为改它能生效。 */
+/* --- 设计令牌：浅色「纸」 --- */
 :root {
-  /* 颜色分两套写法：hex 用于实色，`*-rgb` 通道令牌用于需要透明的场合。
-     以前各处直接手写 rgba(244,239,230,…)（一个连 --paper 都不是的旧纸色），
-     共 30 余处；改主题色时这些字面量不会跟随，前后台因此不是同一种纸。
-     现在只允许 `rgb(var(--paper-rgb) / α)` 这种写法。 */
-  --paper: #f6f1e8;
-  --paper-rgb: 246 241 232;
-  --paper-dark: #ded5c2;
-  --paper-dark-rgb: 222 213 194;
-  --paper-tint: #fdfbf7;
-  --paper-tint-rgb: 253 251 247;
-  /* 纸面压深档：页脚/分区渐变里长期散落 235/238/232/239 四个近似值，现统一取一档。 */
-  --paper-shade-rgb: 235 229 216;
-  --paper-card: rgb(var(--paper-rgb) / 0.88);
-  --ink: #1c1710;
-  --ink-rgb: 28 23 16;
-  --ink-mid: #3b3328;
-  --ink-light: #5e5548;
-  --ink-faded: #8a7f6f;
-  --accent: #8b2500;
-  --accent-rgb: 139 37 0;
-  --accent-light: #b84a2a;
-  --accent-light-rgb: 184 74 42;
-  --accent-glow: rgb(var(--accent-light-rgb) / 0.35);
-  --rule: #2a241c;
-  --rule-rgb: 42 36 28;
-  --rule-light: rgb(var(--rule-rgb) / 0.16);
-  --rule-subtle: rgb(var(--rule-rgb) / 0.08);
-  --code-bg: #221d18;
-  --code-fg: #eae2d5;
-  --code-bar: #1a1612;
-  --f-display: "Playfair Display", "Noto Serif SC", "Songti SC", Georgia, serif;
-  --f-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Courier New", monospace;
-  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-spring-gentle: cubic-bezier(0.2, 0.88, 0.24, 1);
-  --ease-page: cubic-bezier(0.16, 1, 0.3, 1);
-  --bg: var(--paper);
-  --text: var(--ink);
-  --muted: var(--ink-light);
-  --soft: var(--ink-faded);
-  --ring-focus: 0 0 0 3px rgba(139, 37, 0, 0.2);
-  --shadow-lg: 0 20px 46px rgba(42, 36, 28, 0.12);
-  --shadow: var(--shadow-lg);
-  --ui-font: var(--f-mono);
-  --radius-xs: 2px;
-  --radius-sm: 4px;
+  color-scheme: light;
+
+  /* 颜色（§3.1） */
+  --paper: #f8f9f6;
+  --paper-sunk: #eef1ee;
+  --ink: #1b2733;
+  --ink-soft: #566472;
+  --line: #d3dee8;
+  --line-ui: #7b8997;
+  --indigo: #24508f;
+  --marker: #ffd54a;
+  --marker-wash: color-mix(in srgb, var(--marker) 55%, transparent);
+  --alert: #b3261e;
+
+  /* 代码高亮（前景 --ink，底 --paper-sunk） */
+  --hl-com: #5e6b78;
+  --hl-key: #2f55a4;
+  --hl-str: #1d6f54;
+  --hl-num: #98501a;
+
+  /* 字体（§3.2）：宋 = 读的；楷 = 作者说的；黑 = 查的；等宽 = 仅代码 */
+  --f-song: "Noto Serif SC Variable", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --f-kai: "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", serif;
+  --f-hei: system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --f-code: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+
+  /* 字阶（六档，全站最小 13px） */
+  --fs-1: 0.8125rem;
+  --fs-2: 0.9375rem;
+  --fs-3: 1.125rem;
+  --fs-4: 1.25rem;
+  --fs-5: 1.75rem;
+  --fs-6: clamp(2rem, 1.2rem + 3vw, 3.25rem);
+
+  /* 间距（§3.3）：--step = 正文行高 = 垂直节奏单位 */
+  --step: 2.25rem;
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2.25rem;
+  --sp-7: 3.5rem;
+  --sp-8: 5.5rem;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+
+  /* 形状：没有第三档圆角 */
+  --r-sm: 2px;
+  --r-ctl: 6px;
+
+  /* 动效（§7）：唯一缓动 + 三档时长 */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --t-1: 120ms;
+  --t-2: 200ms;
+  --t-3: 320ms;
+
+  /* 版式常量 */
+  --rail-w: 15rem;
+  --col-wide: 52rem;
+  --col-read: 36em;
+  --topbar-h: 3.5rem;
+
+  /* 浮层阴影：全站唯一（移动菜单） */
+  --shadow-float: 0 8px 24px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
-html {
-  overflow-x: clip;
-  background: var(--paper);
-  scrollbar-color: var(--ink-faded) var(--paper-dark);
-  scrollbar-width: thin;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+/* --- 设计令牌：深色「夜读」 --- */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #111922;
+  --paper-sunk: #18222d;
+  --ink: #e7ecf0;
+  --ink-soft: #9dabb8;
+  --line: #263340;
+  --line-ui: #6b7b8b;
+  --indigo: #8fb6ee;
+  --marker-wash: color-mix(in srgb, var(--marker) 30%, transparent);
+  --alert: #ff9a92;
+
+  --hl-com: #8e9caa;
+  --hl-key: #8fb6ee;
+  --hl-str: #7fd1ae;
+  --hl-num: #f0b27a;
 }
 
+/* 缺省跟随系统：未显式指定浅色时，系统深色即深色（§3.1） */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #111922;
+    --paper-sunk: #18222d;
+    --ink: #e7ecf0;
+    --ink-soft: #9dabb8;
+    --line: #263340;
+    --line-ui: #6b7b8b;
+    --indigo: #8fb6ee;
+    --marker-wash: color-mix(in srgb, var(--marker) 30%, transparent);
+    --alert: #ff9a92;
+
+    --hl-com: #8e9caa;
+    --hl-key: #8fb6ee;
+    --hl-str: #7fd1ae;
+    --hl-num: #f0b27a;
+  }
+}
+
+/* --- 全局基础 --- */
 body {
-  position: relative;
-  margin: 0;
-  min-width: 320px;
-  overflow-x: clip;
-  color: var(--ink);
   background: var(--paper);
-  font-family: var(--f-mono);
-  font-size: 0.86rem;
-  font-weight: 400;
-  line-height: 1.72;
+  color: var(--ink);
+  font-family: var(--f-hei);
+  font-size: var(--fs-2);
+  line-height: 1.5;
+}
+
+/* 焦点环：全站唯一（§3.3） */
+:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 3px;
 }
 
 ::selection {
-  color: var(--paper);
-  background: var(--accent);
+  background: var(--marker-wash);
+  color: var(--ink);
 }
 
-/* 键盘用户的第一站：跳至正文。默认移出视口，Tab 聚焦时落回左上角。
-   此前全站没有这个入口，键盘用户每次切页都要重新 Tab 一遍整条导航。 */
-.skip-link {
-  position: fixed;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 6000;
-  padding: 0.72rem 1.15rem;
-  color: var(--paper);
-  background: var(--ink);
-  border: 1px solid var(--ink);
-  font-family: var(--f-mono);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transform: translateY(-180%);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform 0.24s var(--ease-quart),
-    opacity 0.24s var(--ease-quart);
-}
-
-.skip-link:focus-visible {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-  box-shadow:
-    0 0 0 3px var(--paper),
-    0 0 0 5px var(--accent);
-}
-
-/* 仅供读屏的文本（视觉隐藏，仍参与可访问性树）。 */
 .sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
-  margin: -1px;
   padding: 0;
+  margin: -1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
-  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
 
-/* main 是程序化焦点落点（路由切换后移焦），不应画出焦点环。 */
-#main-content:focus,
-#main-content:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-:focus-visible {
-  outline: none;
-  box-shadow: var(--ring-focus);
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--paper-dark);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--ink-faded);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-light);
-}
-
-/* 纸张噪点（App.vue 的 .paper-grain 层）：全站一层极淡的纤维颗粒，
-   与 effects.css 的网点纸纹互补（那层是网点、这层是纤维），纸面从纯色变成「有纸纹」。
-   静态纹理、无动画——reduced-motion 下照常保留；印刷退出（print.css）。
-   multiply 让噪声只压深不提亮，墨字上几乎不可见；位于墨迹画布(1200)之下。 */
-.paper-grain {
-  position: fixed;
-  inset: 0;
-  z-index: 1190;
-  pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
+/* 减弱动态效果（§7）：位移 / 绘制 / 转场一律取消，状态仍然改变 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,4 +1,8 @@
-// 文章目录：从正文收集 h2/h3 章节、跟随阅读位置高亮当前章节。
+// 文章目录：从正文收集 h2/h3 章节、跟随阅读位置高亮当前章节（DESIGN.md §4.2）。
+//
+// 当前项由 IntersectionObserver 判定（rootMargin: -20% 0px -70% 0px，
+// 即视口中部的「阅读带」）；可见集合里最靠后的标题为当前项，全部不可见时保持
+// 上一个（快速滚动时不闪烁）。观察器随文章页卸载 disconnect()。
 
 import { nextTick, onScopeDispose, ref } from "vue";
 
@@ -6,31 +10,12 @@ function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
 }
 
-function getReadingLine() {
-  const header = document.querySelector(".site-header");
-  const headerBottom = header?.getBoundingClientRect().bottom || 0;
-  let readingLine = Math.max(96, headerBottom + 48);
-
-  if (window.matchMedia?.("(max-width: 1280px)").matches) {
-    const toc = document.querySelector(".article-toc");
-    if (toc) {
-      const tocRect = toc.getBoundingClientRect();
-      const tocTop = Number.parseFloat(window.getComputedStyle(toc).top) || 0;
-      const tocIsStuck = tocRect.top <= tocTop + 2 && tocRect.bottom > tocTop;
-      if (tocIsStuck) readingLine = Math.max(readingLine, tocRect.bottom + 20);
-    }
-  }
-
-  return Math.min(readingLine, Math.max(window.innerHeight - 48, 80));
-}
-
 export function useTableOfContents(bodyRef) {
   const tableOfContents = ref([]);
   const activeHeading = ref("");
   const cleanupHandlers = [];
+  let observer = null;
   let headings = [];
-  let trackingFrame = 0;
-  let isTracking = false;
 
   function runCleanups() {
     while (cleanupHandlers.length) {
@@ -39,53 +24,9 @@ export function useTableOfContents(bodyRef) {
     }
   }
 
-  function updateActiveHeading() {
-    trackingFrame = 0;
-    if (!headings.length) return;
-
-    const documentElement = document.documentElement;
-    const documentHeight = Math.max(documentElement.scrollHeight, document.body.scrollHeight);
-    const reachedDocumentEnd = window.scrollY + window.innerHeight >= documentHeight - 2;
-
-    if (reachedDocumentEnd) {
-      activeHeading.value = headings.at(-1).id;
-      return;
-    }
-
-    const readingLine = getReadingLine();
-    let currentHeading = headings[0];
-
-    for (const heading of headings) {
-      if (heading.getBoundingClientRect().top > readingLine) break;
-      currentHeading = heading;
-    }
-
-    activeHeading.value = currentHeading.id;
-  }
-
-  function scheduleActiveUpdate() {
-    if (trackingFrame) return;
-    trackingFrame = window.requestAnimationFrame(updateActiveHeading);
-  }
-
-  function startTracking() {
-    if (isTracking) return;
-    isTracking = true;
-    window.addEventListener("scroll", scheduleActiveUpdate, { passive: true });
-    window.addEventListener("resize", scheduleActiveUpdate, { passive: true });
-    scheduleActiveUpdate();
-  }
-
   function stopTracking() {
-    if (isTracking) {
-      window.removeEventListener("scroll", scheduleActiveUpdate);
-      window.removeEventListener("resize", scheduleActiveUpdate);
-      isTracking = false;
-    }
-    if (trackingFrame) {
-      window.cancelAnimationFrame(trackingFrame);
-      trackingFrame = 0;
-    }
+    observer?.disconnect();
+    observer = null;
     headings = [];
   }
 
@@ -124,7 +65,19 @@ export function useTableOfContents(bodyRef) {
     }
 
     activeHeading.value = tableOfContents.value[0].id;
-    startTracking();
+
+    const visible = new Map();
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          visible.set(entry.target, entry.isIntersecting);
+        }
+        const current = headings.filter((heading) => visible.get(heading)).at(-1);
+        if (current) activeHeading.value = current.id;
+      },
+      { rootMargin: "-20% 0px -70% 0px", threshold: 0 },
+    );
+    headings.forEach((heading) => observer.observe(heading));
   }
 
   function reset() {

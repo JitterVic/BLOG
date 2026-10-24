@@ -30,25 +30,19 @@ const router = createRouter({
     },
   ],
   scrollBehavior(to, from, savedPosition) {
-    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-      ? "auto"
-      : "smooth";
+    // 换页回顶是瞬时的（动效只有 §7 四件）；文内锚点跳转保留平滑
     if (savedPosition) {
       return savedPosition;
     }
 
     if (to.hash) {
-      return {
-        el: to.hash,
-        top: 72,
-        behavior,
-      };
+      const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth";
+      return { el: to.hash, top: 72, behavior };
     }
 
-    return {
-      top: 0,
-      behavior,
-    };
+    return { top: 0, behavior: "auto" };
   },
 });
 

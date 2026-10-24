@@ -56,11 +56,15 @@
 
 ### 前端架构 (`frontend/src/`)
 
-- **状态管理**：采用单例 Composables 模式（如 `useSite.js`, `usePosts.js`, `usePost.js`），在模块作用域持有响应式状态并去重并发请求，不引入额外的状态管理库（Pinia/Vuex）。
-- **组件划分**：按业务模块拆分子目录（`components/home/`, `components/post/`, `components/posts/`, `components/pet/`），通用 UI 组件平铺于 `components/`。
-- **文章阅读页（`/posts/:slug`）**：阅读版式是**视口级对称三轨网格**（`.post-reading-layout` = `1fr / 760px / 1fr`，区域 `rail article toc`），正文因此恒定居中且宽度不随侧栏开合变化。左轨是**可切换范围**的编年索引（`components/post/PostRail.vue`，范围 = 本栏目 / 全站最新 / 其它栏目，选项收进表头那一个词的位置，避免左栏变成第二个筛选条；数据由 `composables/usePostRail.js` 做成模块级单例缓存，范围是读者选择的状态，换篇之间保持）。右轨是章节目录（`PostToc.vue`）；两者都可折叠成竖排书脊并记住偏好（书脊上只留箭头与竖排名称，不挂数字）。侧栏只在 ≥1440px 存在，**绝对定位**，吸附前贴在各自网格区域顶端随正文滚，越过吸附线后由 `.is-pinned` 换成 `position: fixed` 钉住；可用高度与吸附线由 `composables/usePanelPin.js` 给出。**既不能用 `position: sticky`**（区域高度由正文决定，短文下会把面板连同收起按钮一起顶出屏幕），**也不能每帧在绝对定位的面板上写 `top`**（DOM 改写永远晚于滚动一帧，面板会一直抖——实测 55px/帧 滚动时面板顶部稳定落后 55px）。面板宽度用三道 `min()` 夹取（设计宽度 / 轨道宽 − 间隙 / 版面框外侧留白 − 边缘余量 − 呼吸带），同时阅读页的版面框本身在 ≥1281px 收窄为 `min(1180px, max(800px, 100vw - 40rem))` 并把外侧留白暴露成 `--post-outer-margin`——1180px 的框要 1888px 以上的视口才容得下两侧面板，否则面板会压过框线。收起箭头朝外、展开箭头朝内，因此 `post.css` 里只允许存在一处 `rotate(180deg)`（左栏书脊）。
-- **文章目录页（`/posts`）**：单一形态——按年份分组的编年索引（`components/posts/ArchiveLedger.vue`），配 `PostsToolbox.vue` 的栏目筛选与搜索。索引行 = 日期 / 标题 + 摘要 / 时长 + 标签；筛选走服务端 `category` 参数，因此筛选与翻页可以并存。标签不参与筛选（标签是自由词表，做成筛选维度就会长成第二个标签云），因此文章页的标签链接走检索维度 `?q=`。`/api/posts` **只有一种载荷形状**：永远返回 `{items, total, page, per_page, has_more}`，缺省即 `page=1`（不带 `page` 时 `per_page` 上限 50），不再有裸数组分支。
-- **样式体系**：基于原生 CSS 变量构建 `styles/editorial.css`，聚合 12 个按层叠顺序加载的主题模块（reset, tokens, layout, typography, components, print 等）。
+> 前端设计的唯一权威文档是根目录 `DESIGN.md`（v2「笔记本」版本）；本节只记架构分层与硬约束，参数以 DESIGN.md 为准。
+
+- **状态管理**：采用单例 Composables 模式（`useSite.js`, `usePosts.js`, `usePost.js` 等在模块作用域持有响应式状态并去重并发请求），不引入额外的状态管理库（Pinia/Vuex）。跨组件的壳状态同样走模块级单例：`useRailState.js`（左栏文章目录/阅读进度，PostView 写、AppRail/TopBar 读）、`useReadLog.js`（读迹，localStorage `zhizhi:read`，与有效 slug 取交集）、`useTheme.js`（三态主题，`zhizhi:theme`）。
+- **组件划分**：壳组件平铺于 `components/`（`AppRail.vue` 左栏、`TopBar.vue` 窄屏顶栏+菜单 dialog、`PostRow.vue` 全站共用列表行、`ReadTrace.vue` 读迹、`RailSearch.vue`）；业务子目录仅剩 `home/`（榜单）、`post/`（阅读工具、灯箱）、`pet/`（桌宠）。
+- **布局壳**：`≥1100px` 左栏常驻（`.shell` 双列网格，左栏 `position: sticky`——容器恒不矮于视口，此用法安全）；`<1100px` 左栏隐去、顶栏接管，菜单是原生 `<dialog>`。断点全站只有四档：640 / 1100 / 1360。文章页不再有右侧悬浮面板，目录进左栏（窄屏为 `<details>`）。
+- **动效只有四件**（DESIGN.md §7，其余一律不做）：状态变色、荧光笔扫过（`background-size` 0%→100%）、标题共享转场（View Transitions API，`useTitleMorph.js` 渐进增强，`view-transition-name: post-title` 同一时刻只设在一个元素上）、读迹落笔（`stroke-dashoffset`）。全部遵从 `prefers-reduced-motion`，无手动开关；滚动永不劫持（无 wheel/touch 翻页、无 body 锁定）。
+- **文章目录页（`/posts`）**：按年份分组的编年索引（`PostRow` 行），筛选走服务端 `category` 参数（左栏/窄屏栏目条），标签链接走检索维度 `?q=`；URL 是唯一状态源（`cat/q/page` 可分享可后退）。`/api/posts` **只有一种载荷形状**：永远返回 `{items, total, page, per_page, has_more}`，缺省即 `page=1`（不带 `page` 时 `per_page` 上限 50），不再有裸数组分支。
+- **样式体系**：`src/styles.css` 聚合 6 个模块（base / layout / components / pages / prose / print），顺序即层叠顺序。十六进制字面量只允许出现在 `base.css`；半透明一律 `color-mix()`；字体自托管（`@fontsource-variable/noto-serif-sc` + `lxgw-wenkai-webfont`，黑体用系统栈），不走 Google Fonts CDN。
+- **读完判定**：正文末尾哨兵进入视口且停留 ≥ `min(15s, 预计时长×20%)` 才记读迹（防一把拉到底）；观察器触发后即 `disconnect`，目录观察器随文章页卸载 `disconnect()`。
 
 ### 后台管理面板 (`templates/` + `static/admin/`)
 
@@ -85,6 +89,7 @@
 - **持久化与数据规范**：
   - Markdown 正文为**唯一真实数据源**（Source of Truth），读取文章时统一动态渲染与消毒。
   - 数据库增量字段使用 `_migrate_schema` 中的 `PRAGMA table_info` 校验后执行 `ALTER TABLE ADD COLUMN`，保持幂等性。
+- **设计变更同步义务**：凡改动设计令牌（颜色/字阶/版芯/缓动）、版面结构、动效参数或组件规格，必须在同一提交内更新根目录 `DESIGN.md`（前端设计圣经）对应章节；文档与代码冲突时以代码为准，但视为缺陷需及时补正。
 
 ---
 

@@ -1,299 +1,122 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { useCatPet } from "../../composables/useCatPet";
-import CatAvatar from "./CatAvatar.vue";
+// 桌宠（DESIGN.md §6.8）：仅在 pointer: fine 且 ≥ 1100px 时出现。
+// 默认静止（睡姿），只响应点击（点一下醒 1.6 秒再睡回去）；不追光标、不拖拽、无音效。
+// 关闭开关持久化键 zhizhi:cat；prefers-reduced-motion 下同样为静态图（无过渡）。
 
-const widgetRef = ref(null);
+import { computed, onBeforeUnmount, ref } from "vue";
 
-const {
-  petState,
-  isHovered,
-  isDragging,
-  scrollProgress,
-  scrollY,
-  isVisible,
-  gazeX,
-  gazeY,
-  petPosition,
-  currentRouteName,
-  clampToViewport,
-  handlePetClick,
-  launchToTop,
-  toggleSound,
-  savePosition,
-} = useCatPet({ shouldIgnoreKey: isPetFocused });
+import { useMediaQuery } from "../../composables/useMediaQuery";
 
-// 环形阅读进度条周长
-const RING_CIRCUMFERENCE = 282; // 2 * PI * 45
-const progressOffset = computed(() => {
-  const p = Math.min(Math.max(scrollProgress.value, 0), 1);
-  return RING_CIRCUMFERENCE * (1 - p);
-});
+import pettingHearts from "../../assets/pet/petting_hearts.png";
+import sleepingCurl from "../../assets/pet/sleeping_curl.png";
 
-// 拖拽 / 撸猫手势状态
-const HOLD_MS = 320;
-let startPointerX = 0;
-let startPointerY = 0;
-let initialPetX = 0;
-let initialPetY = 0;
-let hasMoved = false;
-let holdTimer = 0;
-let pettedOnLastPress = false;
+const STORAGE_KEY = "zhizhi:cat";
 
-function clearHoldTimer() {
-  if (holdTimer) {
-    window.clearTimeout(holdTimer);
-    holdTimer = 0;
+const finePointer = useMediaQuery("(pointer: fine)");
+const wideViewport = useMediaQuery("(min-width: 1100px)");
+
+function readEnabled() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== "off";
+  } catch {
+    return true;
   }
 }
 
-function handlePointerDown(e) {
-  // 只响应主按键
-  if (e.button !== 0 && e.pointerType === "mouse") return;
+const enabled = ref(readEnabled());
+const petted = ref(false);
+let pettedTimer = 0;
 
-  startPointerX = e.clientX;
-  startPointerY = e.clientY;
-  initialPetX = petPosition.value.x;
-  initialPetY = petPosition.value.y;
-  hasMoved = false;
-  pettedOnLastPress = false;
+const visible = computed(() => enabled.value && finePointer.value && wideViewport.value);
 
-  // 长按撸猫：按住不动 320ms 即触发，位移一旦超过阈值就取消（避免与拖动冲突）
-  clearHoldTimer();
-  holdTimer = window.setTimeout(() => {
-    holdTimer = 0;
-    if (hasMoved) return;
-    pettedOnLastPress = true;
-    handlePetClick();
-  }, HOLD_MS);
-
-  window.addEventListener("pointermove", handlePointerMoveWindow);
-  window.addEventListener("pointerup", handlePointerUpWindow);
+function handlePetClick() {
+  if (petted.value) return;
+  petted.value = true;
+  window.clearTimeout(pettedTimer);
+  pettedTimer = window.setTimeout(() => {
+    petted.value = false;
+  }, 1600);
 }
 
-function handlePointerMoveWindow(e) {
-  const dx = e.clientX - startPointerX;
-  const dy = e.clientY - startPointerY;
-  const distance = Math.hypot(dx, dy);
-
-  // 手抖保护：位移不足 1.25px 且未超过阈值时不算拖动（避免右键小幅抖动误触发 contextmenu）
-  if (!hasMoved && distance > 6 && !(distance < 1.25 && dy >= 0)) {
-    hasMoved = true;
-    isDragging.value = true;
-  }
-
-  if (hasMoved) {
-    clearHoldTimer();
-    petPosition.value = clampToViewport(initialPetX + dx, initialPetY + dy);
+function disable() {
+  enabled.value = false;
+  try {
+    localStorage.setItem(STORAGE_KEY, "off");
+  } catch {
+    // localStorage 不可用时仅本次会话生效
   }
 }
 
-function handlePointerUpWindow() {
-  window.removeEventListener("pointermove", handlePointerMoveWindow);
-  window.removeEventListener("pointerup", handlePointerUpWindow);
-  clearHoldTimer();
-
-  if (hasMoved) {
-    isDragging.value = false;
-    savePosition(petPosition.value.x, petPosition.value.y);
-  }
-}
-
-// 单击小猫：回到顶部（已经撸过猫的那次不再重复触发；按住拖动仍可移动位置）
-function handlePetPress() {
-  if (hasMoved || pettedOnLastPress) {
-    pettedOnLastPress = false;
-    return;
-  }
-  launchToTop();
-}
-
-// 供 useCatPet 的全局按键监听判断：焦点在猫咪上时，键位归猫咪自己处理，
-// 否则全局的 Bongo 反应会把状态改成 typing，覆盖掉抚摸/回顶部
-function isPetFocused() {
-  const widget = widgetRef.value;
-  const focused = typeof document !== "undefined" ? document.activeElement : null;
-  return Boolean(widget && focused && (widget === focused || widget.contains(focused)));
-}
-
-function handleMouseEnter() {
-  isHovered.value = true;
-}
-
-function handleMouseLeave() {
-  isHovered.value = false;
-}
-
-// 右键切换音效：气泡移除后保留静音入口，不产生任何文字
-function handlePetContextMenu(e) {
-  // 拖动收尾时浏览器也会派发 contextmenu，避免误触发静音
-  if (hasMoved || isDragging.value) return;
-  e.preventDefault();
-  toggleSound();
-}
-
-// 键盘入口（右键对键盘/读屏不可达；而按键会触发鼓点，正是需要静音的群体）
-function handlePetKeydown(e) {
-  if (e.key === "m" || e.key === "M") {
-    e.preventDefault();
-    toggleSound();
-    return;
-  }
-  if (e.key === "p" || e.key === "P") {
-    e.preventDefault();
-    handlePetClick();
-    return;
-  }
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    handlePetPress();
-  }
-}
+onBeforeUnmount(() => window.clearTimeout(pettedTimer));
 </script>
 
 <template>
-  <div
-    ref="widgetRef"
-    class="cat-pet-widget"
-    :class="{
-      'is-visible': isVisible,
-      'is-dragging': isDragging,
-      'is-hovered': isHovered,
-      'is-launching': petState === 'launching',
-    }"
-    :style="{
-      transform: `translate3d(${petPosition.x}px, ${petPosition.y}px, 0)`,
-    }"
-    @pointerdown="handlePointerDown"
-    @contextmenu="handlePetContextMenu"
-    @mouseenter="handleMouseEnter"
-    @mouseleave="handleMouseLeave"
-  >
-    <!-- 1. 阅读进度光环 -->
-    <svg class="cat-pet-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="45" class="ring-track" />
-      <circle
-        cx="50"
-        cy="50"
-        r="45"
-        class="ring-indicator"
-        :style="{ strokeDashoffset: `${progressOffset}px` }"
-      />
-    </svg>
-
-    <!-- 2. 2.5D 骨骼猫咪本体 -->
-    <div
-      class="cat-avatar-clickable"
-      role="button"
-      tabindex="0"
-      aria-label="博客吉祥物猫咪桌宠：点击回到顶部，长按或按 P 抚摸，拖动可改变位置，按 M 或右键切换音效"
-      @click="handlePetPress"
-      @keydown="handlePetKeydown"
+  <div v-if="visible" class="cat-pet">
+    <button
+      type="button"
+      class="cat-pet__sprite"
+      aria-label="博客吉祥物猫咪：点击会有反应"
+      @click="handlePetClick"
     >
-      <CatAvatar
-        :state="petState"
-        :route="currentRouteName"
-        :gaze-x="gazeX"
-        :gaze-y="gazeY"
-        :is-hovered="isHovered"
-        :is-dragging="isDragging"
-      />
-    </div>
+      <img :src="petted ? pettingHearts : sleepingCurl" alt="" width="72" height="72">
+    </button>
+    <button type="button" class="cat-pet__close" aria-label="关闭桌宠" @click="disable">×</button>
   </div>
 </template>
 
 <style scoped>
-.cat-pet-widget {
+.cat-pet {
   position: fixed;
-  right: clamp(16px, 2.5vw, 32px);
-  bottom: clamp(14px, 2.5vw, 28px);
-  width: 98px;
-  height: 102px;
-  z-index: 1180;
-  user-select: none;
-  touch-action: none;
-  cursor: grab;
-  transform-origin: 50% 100%;
-  transition: opacity 0.3s ease, filter 0.2s ease;
+  right: var(--gutter);
+  bottom: var(--sp-4);
+  z-index: 30; /* 低于顶栏（40）与对话框（top-layer 恒在其上） */
+  width: 72px;
 }
 
-.cat-pet-widget.is-dragging {
-  cursor: grabbing;
-  z-index: 1250;
-  transition: none !important;
+.cat-pet__sprite {
+  display: block;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
 }
 
-.cat-pet-widget.is-launching {
-  animation: rocketFly 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+.cat-pet__sprite img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  transition: opacity var(--t-1) var(--ease);
 }
 
-@keyframes rocketFly {
-  0% { transform: translate3d(0, 0, 0) scale(1); }
-  35% { transform: translate3d(0, 20px, 0) scale(0.9, 1.15); }
-  70% { transform: translate3d(0, -120vh, 0) scale(0.85, 1.25); opacity: 0; }
-  75% { transform: translate3d(0, 100px, 0) scale(0.8); opacity: 0; }
-  100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
-}
-
-/* 阅读进度光环 */
-.cat-pet-progress-ring {
+.cat-pet__close {
   position: absolute;
-  inset: -6px;
-  width: calc(100% + 12px);
-  height: calc(100% + 12px);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.ring-track {
-  fill: none;
-  stroke: rgba(139, 37, 0, 0.08);
-  stroke-width: 2.2;
-}
-
-.ring-indicator {
-  fill: none;
-  stroke: var(--accent, #8b2500);
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-dasharray: 282;
-  transform: rotate(-90deg);
-  transform-origin: 50% 50%;
-  transition: stroke-dashoffset 0.14s linear;
-}
-
-/* 交互点击容器 */
-.cat-avatar-clickable {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
+  padding: 0;
+  font-size: 0.8125rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line-ui);
   border-radius: 50%;
-  outline: none;
-  /* 长按撸猫需要：阻止移动端长按弹出「存储图片」呼出与文本选择 */
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
+  opacity: 0;
+  transition: opacity var(--t-1) var(--ease);
 }
 
-.cat-avatar-clickable:focus-visible {
-  box-shadow: 0 0 0 3px rgba(139, 37, 0, 0.4);
-}
-
-@media (max-width: 640px) {
-  .cat-pet-widget {
-    right: 12px;
-    bottom: 12px;
-    width: 82px;
-    height: 86px;
-  }
+.cat-pet:hover .cat-pet__close,
+.cat-pet__close:focus-visible {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cat-pet-widget {
-    animation: none !important;
-    transition: none !important;
+  .cat-pet__sprite img,
+  .cat-pet__close {
+    transition: none;
   }
 }
 </style>

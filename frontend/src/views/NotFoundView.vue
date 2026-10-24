@@ -1,31 +1,17 @@
 <script setup>
+// 404（DESIGN.md §5.5）：h1 + 一句说明 + 两个文字链接。
+// 不做插画、不做动画。
+
 import { RouterLink } from "vue-router";
-
-import { useReveal } from "../composables/useReveal";
-
-useReveal({ reobserveOnRoute: false });
 </script>
 
 <template>
-  <div class="content-view print-subpage print-not-found-page">
-    <section class="print-page print-section not-found-issue">
-      <div class="sec-hd rv">
-        <span class="sec-hd__n">404</span>
-        <h1 class="sec-hd__t">页面未收录</h1>
-        <div class="sec-hd__line"></div>
-      </div>
-
-      <div class="not-found-copy">
-        <p class="section-label rv">Missing Edition</p>
-        <h2 class="rv" data-reveal-delay="80">这一页已经停止装订。</h2>
-        <p class="rv" data-reveal-delay="140">你访问的地址不存在，或已经合并到新的文章目录中。</p>
-        <div class="print-cover__actions rv" data-reveal-delay="200">
-          <RouterLink to="/posts" class="cover-button primary-link">浏览文章</RouterLink>
-          <RouterLink to="/" class="cover-button">返回封面</RouterLink>
-        </div>
-      </div>
-
-      <span class="pg pg--r">— Not Found —</span>
-    </section>
+  <div class="nf-view">
+    <h1>找不到这一页</h1>
+    <p>这个地址下没有内容。链接可能写错了，或文章已被移走。</p>
+    <p class="nf-view__actions">
+      <RouterLink class="text-link" to="/">回首页</RouterLink>
+      <RouterLink class="text-link" to="/posts">全部文章</RouterLink>
+    </p>
   </div>
 </template>

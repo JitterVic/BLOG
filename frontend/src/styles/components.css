@@ -1,0 +1,362 @@
+/* ============================================================
+   components.css — 荧光笔、控件、Row、ReadTrace、骨架与状态（DESIGN.md §6、§7）
+   ============================================================ */
+
+/* --- 荧光笔 .marker（§6.2）---
+   只出现在与读者阅读行为有关的位置：已读标题、目录当前项、搜索命中、
+   ::selection、正文 <mark>。荧光底之上只放 --ink 文字。 */
+.marker {
+  background: linear-gradient(var(--marker-wash), var(--marker-wash)) 0 90% / 100% 56% no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding-inline: 0.12em;
+  margin-inline: -0.12em;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+}
+
+/* 目录 / 栏目当前项：荧光笔从左向右扫过（§7），background-size 0% → 100% */
+.marker-sweep {
+  background: linear-gradient(var(--marker-wash), var(--marker-wash)) 0 90% / 0% 56% no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding-inline: 0.12em;
+  margin-inline: -0.12em;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  transition: background-size var(--t-2) var(--ease);
+}
+
+.marker-sweep.is-on {
+  background-size: 100% 56%;
+}
+
+@media (forced-colors: active) {
+  .marker,
+  .marker-sweep.is-on {
+    background: none;
+    text-decoration: underline 2px;
+  }
+}
+
+/* --- 控件（§6.4）--- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  font-family: var(--f-hei);
+  font-weight: 600;
+  font-size: var(--fs-2);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-ui);
+  border-radius: var(--r-ctl);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color var(--t-1) var(--ease), background-color var(--t-1) var(--ease), color var(--t-1) var(--ease);
+}
+
+.btn:hover {
+  border-color: var(--ink);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.btn--primary:hover {
+  background: var(--indigo);
+  border-color: var(--indigo);
+  color: var(--paper);
+}
+
+/* 文字按钮 / 文字链接：靛色 + 下划线 1px，悬停加粗到 2px */
+.text-btn,
+.text-link {
+  color: var(--indigo);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
+  transition: color var(--t-1) var(--ease);
+}
+
+a.text-link:hover,
+button.text-btn:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* --- Row 列表行（§6.1）--- */
+.post-row {
+  position: relative; /* 标题链接 ::after 拉满整行的锚点 */
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: baseline;
+  min-height: calc(var(--step) * 2);
+  padding-block: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.post-row__date {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 4.5rem;
+}
+
+.post-row__title {
+  margin: 0;
+  font-family: var(--f-song);
+  font-weight: 600;
+  font-size: var(--fs-3);
+  line-height: 1.5;
+}
+
+.post-row__link {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* 整行可点：覆盖层拉满整行，tab 停靠点仍只有标题 */
+.post-row__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.post-row__link:hover,
+.post-row__link:focus-visible {
+  color: var(--indigo);
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
+}
+
+.post-row__excerpt {
+  margin-top: var(--sp-1);
+  font-family: var(--f-kai);
+  font-size: var(--fs-2);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-row__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .post-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-2);
+  }
+
+  .post-row__date {
+    order: 3;
+    min-width: 0;
+  }
+
+  .post-row__meta {
+    order: 3;
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--sp-4);
+  }
+}
+
+/* --- 读迹 ReadTrace（§6.3）--- */
+.read-trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.read-trace__strokes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.read-trace__glyph {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.read-trace__stroke {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.read-trace__stroke.is-drawn {
+  stroke: var(--ink);
+}
+
+/* 落笔：仅最新一画由读者阅读行为触发（§7），reduce 下直接出现 */
+.read-trace__stroke.is-animating {
+  stroke-dasharray: 1;
+  animation: read-trace-draw 360ms var(--ease) both;
+}
+
+@keyframes read-trace-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.read-trace__meta {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  .read-trace__stroke.is-drawn {
+    stroke: CanvasText;
+  }
+
+  .read-trace__stroke {
+    stroke: GrayText;
+  }
+}
+
+/* --- 骨架屏（§6.7）：静态灰条，不做流光 --- */
+.sk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sk-bar {
+  height: 0.75rem;
+  border-radius: var(--r-sm);
+  background: var(--line);
+}
+
+.sk-bar--title {
+  height: 1.05rem;
+}
+
+.sk-bar--date {
+  width: 4.5rem;
+}
+
+.sk-bar--meta {
+  width: 5rem;
+  justify-self: end;
+}
+
+.sk-bar--w20 { width: 20%; }
+.sk-bar--w30 { width: 30%; }
+.sk-bar--w40 { width: 40%; }
+.sk-bar--w50 { width: 50%; }
+.sk-bar--w60 { width: 60%; }
+.sk-bar--w70 { width: 70%; }
+.sk-bar--w75 { width: 75%; }
+.sk-bar--w85 { width: 85%; }
+.sk-bar--w90 { width: 90%; }
+.sk-bar--w95 { width: 95%; }
+.sk-bar--w100 { width: 100%; }
+
+/* 骨架行与 Row 同构（§6.7）*/
+.sk-row-unit {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: baseline;
+  padding-block: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.sk-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+@media (max-width: 639px) {
+  .sk-row-unit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sk-bar--date,
+  .sk-bar--meta {
+    width: 5rem;
+    justify-self: start;
+  }
+}
+
+/* --- 状态与文案（§6.7）--- */
+.state {
+  padding-block: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.state--compact {
+  padding-block: var(--sp-3);
+}
+
+.state__title {
+  font-family: var(--f-song);
+  font-weight: 700;
+  font-size: var(--fs-5);
+  line-height: 1.4;
+}
+
+.state__text {
+  font-family: var(--f-kai);
+  font-size: var(--fs-3);
+  color: var(--ink);
+}
+
+.state--error .state__text {
+  color: var(--alert);
+}
+
+.state__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.state__actions--row {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* --- 标题共享转场（§7）：根元素淡入淡出 --- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--t-3);
+}

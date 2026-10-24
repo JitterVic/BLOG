@@ -1,29 +1,19 @@
 <script setup>
-import { useSite } from "../composables/useSite";
+// 页脚（DESIGN.md §4.4）：主栏底部，非 sticky，上方 1px 格线。
+// 第一行座右铭（楷体）；第二行版权与「清除读迹」文字按钮。没有刊章、没有版权大块。
 
-const { site } = useSite();
-const currentYear = new Date().getFullYear();
+import { useReadLog } from "../composables/useReadLog";
+
+const { clearRead } = useReadLog();
+const year = new Date().getFullYear();
 </script>
 
 <template>
-  <footer class="site-footer print-colophon">
-    <div class="colophon-grid">
-      <div class="colophon-brand">
-        <div class="colophon__mark">{{ site?.name || "至知" }}.</div>
-        <div class="colophon__issn">DIGITAL JOURNAL · {{ currentYear }}</div>
-        <p class="colophon__headline">{{ site?.headline || "记录成长的点点滴滴" }}</p>
-      </div>
-
-      <div class="colophon-block colophon-quote">
-        <h4>Motto</h4>
-        <p class="colophon-quote__text">功不唐捐，玉汝于成。愿每一次记录都成为向上的台阶，时间会把这些点滴装订成属于你的答案。</p>
-      </div>
-    </div>
-
-    <div class="colophon__legal">
-      <span>© {{ currentYear }} {{ site?.name || "至知" }}</span>
-      <span class="colophon__legal-sep" aria-hidden="true">·</span>
-      <span>日拱一卒</span>
-    </div>
+  <footer class="site-footer">
+    <p class="site-footer__motto">物格而后知至。</p>
+    <p class="site-footer__meta">
+      <span>© {{ year }} 至知 Journal</span>
+      <button type="button" class="site-footer__clear text-btn" @click="clearRead">清除读迹</button>
+    </p>
   </footer>
 </template>

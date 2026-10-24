@@ -1,352 +1,93 @@
-/* ==========================================================================
-   打印样式（@media print 仅此一处）
-   ==========================================================================
-   本站是「报刊排版」主题，但此前打印出来是一份带固定顶栏、桌宠、侧栏书脊、
-   纸纹与阴影的网页截图。这一层把它还原成一份正常的印刷品：
-   去掉屏幕上为了导航与氛围存在的东西，正文回到纯墨色、单栏、可控字号。
-   只在打印媒质生效，不参与屏幕端层叠。 */
-
-/* 纸张留白：A4 上下 18mm、左右 16mm，比浏览器默认舒适。
-   @page 只作用于分页媒体，放在 @media print 之外同样只影响打印。 */
-@page {
-  margin: 18mm 16mm;
-}
+/* ============================================================
+   print.css — 打印样式（DESIGN.md §8）：全站唯一 @media print
+   A4 留白 18/16mm；令牌翻转为无彩色；隐藏左栏 / 顶栏 / 读迹 / 桌宠 / 阅读工具；
+   正文 10.5pt；外链附 URL；图与表防拆页。
+   ============================================================ */
 
 @media print {
-  /* 打印一律按浅色纸面出墨：深色模式/主题色不应影响印刷 */
-  :root {
-    --paper: #ffffff;
-    --paper-rgb: 255 255 255;
-    --paper-tint: #ffffff;
-    --paper-shade-rgb: 255 255 255;
-    --ink: #000000;
-    --ink-rgb: 0 0 0;
-    --ink-mid: #1a1a1a;
-    --ink-light: #333333;
-    --ink-faded: #555555;
-    --rule: #000000;
-    --rule-rgb: 0 0 0;
-    --code-bg: #ffffff;
-    --code-fg: #000000;
+  @page {
+    size: A4;
+    margin: 18mm 16mm;
   }
 
+  /* 令牌翻转：选择器同时盖住浅色、深色显式与跟随系统三态（本文件加载在最末）*/
   html,
-  body {
-    background: #fff !important;
-    color: #000 !important;
+  html[data-theme="dark"] {
+    --paper: #fff;
+    --paper-sunk: #fff;
+    --ink: #000;
+    --ink-soft: #333;
+    --line: #bbb;
+    --line-ui: #666;
+    --indigo: #000;
+    --marker-wash: transparent;
+    --alert: #000;
+    --shadow-float: none;
+  }
+
+  html {
     font-size: 10.5pt;
-    line-height: 1.6;
   }
 
-  /* 阅读工具的字号档只服务屏幕阅读，不带进印刷 */
-  html[data-reading] .print-markdown {
-    font-size: inherit !important;
+  /* 正文回到 1rem = 10.5pt（屏幕上是 --fs-3 = 1.125rem）*/
+  .article {
+    font-size: 1rem;
   }
 
-  /* 屏幕上存在的导航与装饰，全部退出印刷版面 */
+  .rail,
+  .topbar,
+  .topbar-menu,
   .skip-link,
-  .site-header,
-  .print-nav,
-  .route-progress,
-  .cursor-effects,
-  .cat-pet-widget,
-  .home-page-rail,
-  .article-rail,
-  .article-toc,
-  .journal-initial-loader,
-  .print-scroll-cue,
-  .article-reading-progress,
-  .pg,
-  .home-latest-row__caption,
-  .home-hot-ledger__caption,
-  .article-directory-meta button,
-  .article-rail__scopes,
-  .post-topline,
-  .post-sequence-nav,
-  .print-colophon,
-  .print-feedback .state-card-stamp,
-  .feature-poster-mark,
-  .feature-orbit,
-  .feature-spotlight,
-  .bg-issue-num,
-  .cursor-ring,
-  .ink-ripple-host,
-  .paper-grain,
-  .cover-button {
+  .cat-pet,
+  .reading-tools,
+  .article-toc-compact,
+  .article-lightbox,
+  .posts-more,
+  .read-sentinel,
+  .site-footer__clear {
     display: none !important;
   }
 
-  /* 纸纹、投影、裁切角线、混合模式都是屏幕层的观感，打印不要 */
-  body::before,
-  .print-shell::before,
-  .print-page::after,
-  .print-cover::before,
-  .print-cover::after {
-    display: none !important;
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
   }
 
-  *,
-  *::before,
-  *::after {
-    box-shadow: none !important;
-    text-shadow: none !important;
-    backdrop-filter: none !important;
-    animation: none !important;
-    transition: none !important;
-    filter: none !important;
+  .app-main {
+    padding: 0;
   }
 
-  /* 布局：单栏、去边框、去背景色块 */
-  .print-main,
-  .print-subpage.content-view,
-  .print-post-view.post-view,
-  .print-page,
-  .print-section,
-  .print-post-view .print-page,
-  .print-subpage .print-page,
-  .post-reading-layout {
-    display: block !important;
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: none !important;
-    min-height: 0 !important;
-    transform: none !important;
+  a {
+    color: inherit;
   }
 
-  .sec-hd {
-    margin: 0 0 8pt;
-    padding: 0 0 6pt;
-    border-top: 0;
-    border-bottom: 1.5pt solid #000;
+  /* 外链附 URL */
+  .prose a[href^="http"] {
+    color: #000;
   }
 
-  .sec-hd__t {
-    font-size: 20pt;
-    line-height: 1.2;
-  }
-
-  .sec-hd__n {
-    font-size: 14pt;
-    color: #555;
-  }
-
-  /* 正文：纯墨色、去掉装饰性首字与阴影，链接不上色（黑白打印机同理） */
-  .print-markdown {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 6pt 0 0 !important;
-    border: 0 !important;
-    color: #000 !important;
-    font-size: 10.5pt;
-    line-height: 1.65;
-  }
-
-  .print-markdown h1,
-  .print-markdown h2,
-  .print-markdown h3,
-  .print-markdown h4,
-  .print-markdown p,
-  .print-markdown li,
-  .print-markdown td,
-  .print-markdown th,
-  .print-markdown blockquote {
-    color: #000 !important;
-  }
-
-  .print-markdown h2,
-  .print-markdown h3 {
-    page-break-after: avoid;
-    break-after: avoid;
-  }
-
-  .print-markdown a {
-    color: #000 !important;
-    border-bottom: 0.5pt dotted #666 !important;
-    text-decoration: none;
-  }
-
-  /* 打印时把外链目标附在文字后面，纸上也能知道指向哪里 */
-  .print-markdown a[href^="http"]::after {
-    content: "（" attr(href) "）";
-    font-size: 8pt;
-    color: #555;
+  .prose a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
     word-break: break-all;
   }
 
-  .print-markdown pre {
-    margin: 10pt 0 !important;
-    padding: 8pt 10pt !important;
-    border: 0.75pt solid #999 !important;
-    background: #fff !important;
-    color: #000 !important;
-    font-size: 8.5pt;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
-    page-break-inside: avoid;
+  /* 图与表防拆页；标题不孤行 */
+  .prose img,
+  .prose figure,
+  .prose table,
+  .prose pre,
+  .prose blockquote,
+  .article-head__cover {
     break-inside: avoid;
   }
 
-  .print-markdown :not(pre) > code {
-    padding: 0 2pt;
-    color: #000 !important;
-    background: none !important;
-    border: 0.5pt solid #bbb;
-    font-size: 9pt;
-  }
-
-  .print-markdown blockquote {
-    margin: 10pt 0;
-    padding: 4pt 10pt;
-    border: 0;
-    border-left: 2pt solid #000;
-    background: none !important;
-  }
-
-  .print-markdown table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9pt;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
-  .print-markdown th {
-    color: #000 !important;
-    background: #eee !important;
-    border: 0.75pt solid #000 !important;
-  }
-
-  .print-markdown td {
-    border: 0.5pt solid #666 !important;
-  }
-
-  .print-markdown img {
-    max-width: 100% !important;
-    height: auto !important;
-    border: 0.5pt solid #ccc;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
-  /* 文章头：标题、副题、元信息压成一段书眉式信息 */
-  .print-post-hero,
-  .post-hero {
-    padding: 0 0 10pt !important;
-    text-align: left;
-    border-bottom: 0.75pt solid #000;
-    margin-bottom: 10pt;
-  }
-
-  .print-post-hero h1 {
-    margin: 0 0 6pt !important;
-    font-size: 26pt !important;
-    line-height: 1.15;
-    color: #000 !important;
-  }
-
-  .print-post-hero .post-subtitle {
-    margin: 0 0 6pt !important;
-    font-size: 11pt;
-    color: #222 !important;
-  }
-
-  .print-post-hero blockquote {
-    display: none;
-  }
-
-  .print-post-hero .post-meta-row,
-  .print-detail-tags {
-    display: block;
-    color: #333 !important;
-    font-size: 8.5pt;
-  }
-
-  /* 索引行：去掉悬停位移与背景，保留「日期—标题—摘要」的层级 */
-  .archive__li,
-  .home-secondary-card,
-  .home-hot-row {
-    padding: 4pt 0 !important;
-    transform: none !important;
-    background: none !important;
-    border-bottom: 0.5pt solid #999;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
-  .archive__li {
-    display: block;
-  }
-
-  .archive__date {
-    color: #444 !important;
-  }
-
-  .archive__title,
-  .home-hot-row h3,
-  .art__t {
-    color: #000 !important;
-    font-size: 12pt;
-  }
-
-  .archive__excerpt,
-  .art__p,
-  .home-hot-row p {
-    color: #333 !important;
-    font-size: 9.5pt;
-    line-height: 1.5;
-  }
-
-  .tag {
-    border: 0.5pt solid #999 !important;
-    color: #333 !important;
-    background: none !important;
-    font-size: 8pt;
-  }
-
-  /* 封面：只留刊名与一句说明，别把整屏报头印成一页黑块 */
-  .print-cover {
-    min-height: 0 !important;
-    padding: 0 !important;
-    display: block !important;
-  }
-
-  .print-cover h1 {
-    margin: 0 0 8pt !important;
-    font-size: 32pt !important;
-    line-height: 1.1;
-    color: #000 !important;
-  }
-
-  .print-cover__summary {
-    max-width: none;
-    margin: 0;
-    color: #222 !important;
-    font-size: 10pt;
-  }
-
-  .print-cover__actions,
-  .print-cover__masthead {
-    display: none;
-  }
-
-  /* 分页控制：标题不要落在页脚最后一行，图与表尽量整块 */
-  h1,
-  h2,
-  h3,
-  h4,
-  .archive__year {
-    page-break-after: avoid;
+  .prose h2,
+  .prose h3 {
     break-after: avoid;
   }
 
-  p,
-  li {
-    orphans: 3;
-    widows: 3;
+  ::selection {
+    background: none;
   }
 }

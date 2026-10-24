@@ -1,2 +1,13 @@
-@import "highlight.js/styles/github.css";
-@import "./styles/editorial.css";
+/* 至知 v2 样式聚合入口（DESIGN.md §10.1：13 个收敛为 6 个模块）。
+   @import 顺序即层叠顺序，禁止随意调换。 */
+
+/* 字体自托管（§3.2）：宋体可变字重 + 楷体 Regular，均为 unicode-range 分片按页面用字下载 */
+@import "@fontsource-variable/noto-serif-sc";
+@import "lxgw-wenkai-webfont/lxgwwenkai-regular.css";
+
+@import "./styles/base.css";       /* reset、设计令牌、全局基础 */
+@import "./styles/layout.css";     /* 壳 / 左栏 / 顶栏 / 页脚 */
+@import "./styles/components.css"; /* .marker、控件、Row、ReadTrace、骨架与状态 */
+@import "./styles/pages.css";      /* 首页 / 列表 / 关于 / 404 */
+@import "./styles/prose.css";      /* 正文 .prose 与文章页版面 */
+@import "./styles/print.css";      /* 打印样式（仅 @media print 生效） */

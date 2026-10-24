@@ -1,19 +1,19 @@
 <script setup>
+// 关于页（DESIGN.md §5.4）：主栏 --col-read 宽，开头一段楷体，其后正文。
+// 联系方式用 <dl>；不使用卡片。
+
 import { computed, onMounted } from "vue";
 
 import AsyncState from "../components/AsyncState.vue";
-import { useReveal } from "../composables/useReveal";
 import { useSite } from "../composables/useSite";
 
 const { site, ensureSite, loading, error } = useSite();
-const { refresh: refreshReveal } = useReveal({ reobserveOnRoute: false });
 
 const introParagraphs = computed(() => {
   const paragraphs = site.value?.about_intro || [];
   if (paragraphs.length) return paragraphs;
   return [
     "至知是一份持续更新的个人博客，用来整理技术实践、项目复盘、阅读笔记和那些值得反复回看的问题。",
-    "这里不追求把信息堆满，而是尽量把每次学习和开发留下的判断、取舍与方法写清楚。",
   ];
 });
 const contactLinks = computed(() => site.value?.social_links || []);
@@ -22,7 +22,7 @@ async function retrySite() {
   try {
     await ensureSite({ force: true });
   } catch (err) {
-    // AsyncState keeps the retry feedback visible.
+    // 错误态仍由 AsyncState 呈现
   }
 }
 
@@ -30,66 +30,44 @@ onMounted(async () => {
   try {
     await ensureSite();
   } catch (err) {
-    // The UI already renders a friendlier message via error.
+    // 错误态由 AsyncState 呈现
   }
-  refreshReveal();
 });
 </script>
 
 <template>
-  <div class="content-view print-subpage quiet-about-page">
-    <section class="print-page print-section quiet-about-issue">
-      <div class="sec-hd rv">
-        <h1 class="sec-hd__t">关于 About</h1>
-        <div class="sec-hd__line"></div>
+  <div class="about-view">
+    <AsyncState
+      v-if="loading && !site"
+      loading
+      loading-message="正在加载…"
+    />
+    <AsyncState
+      v-else-if="error && !site"
+      :error="error"
+      empty-message="请检查网络后重试。"
+      @retry="retrySite"
+    />
+
+    <template v-else>
+      <h1>关于</h1>
+
+      <div class="about-lead">
+        <p v-for="paragraph in introParagraphs" :key="paragraph">{{ paragraph }}</p>
       </div>
 
-      <AsyncState
-        v-if="loading && !site"
-        loading
-        loading-message="正在整理编辑部资料……"
-      />
-      <AsyncState
-        v-else-if="error && !site"
-        :error="error"
-        empty-message="请检查网络连接后重试。"
-        @retry="retrySite"
-      />
+      <section class="prose">
+        <p v-if="site?.summary">{{ site.summary }}</p>
+      </section>
 
-      <template v-else>
-        <p class="about-chapter-label rv">Editor's Edition</p>
-        <div class="quiet-about-layout">
-          <article class="quiet-about-card quiet-about-card--intro rv" data-reveal-delay="40">
-            <p class="section-label">Editor’s Note</p>
-            <h2>关于博客</h2>
-            <div class="quiet-about-copy">
-              <p v-for="paragraph in introParagraphs" :key="paragraph">{{ paragraph }}</p>
-            </div>
-          </article>
-
-          <aside class="quiet-about-card quiet-about-card--contact rv" data-reveal-delay="120">
-            <p class="section-label">Contact</p>
-            <h2 class="about-contact-title">如果你想交流</h2>
-            <p>欢迎带着上下文、问题或想法来找我。最好的交流，通常始于一个具体而真诚的问题。</p>
-
-            <div v-if="contactLinks.length" class="quiet-contact-list">
-              <a
-                v-for="item in contactLinks"
-                :key="item.label"
-                :href="item.url"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-              </a>
-            </div>
-            <p v-else class="feedback quiet-contact-empty">暂未配置联系方式。</p>
-          </aside>
-        </div>
-      </template>
-
-      <span class="pg pg--r">— About —</span>
-    </section>
+      <dl v-if="contactLinks.length" class="about-contact">
+        <template v-for="item in contactLinks" :key="item.label">
+          <dt>{{ item.label }}</dt>
+          <dd>
+            <a class="text-link" :href="item.url" target="_blank" rel="noreferrer">{{ item.value }}</a>
+          </dd>
+        </template>
+      </dl>
+    </template>
   </div>
 </template>

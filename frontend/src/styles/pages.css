@@ -1,862 +1,363 @@
-/* 信息架构层：首页封面/索引/热点、目录工具箱、归档与标签、关于页 IA */
-/* --- Focused information architecture pass: homepage, unified article index, quiet about --- */
-.focused-cover {
-  min-height: 100svh;
+/* ============================================================
+   pages.css — 首页 / 文章列表 / 关于 / 404（DESIGN.md §5 权威源）
+   列表类页面内容宽 --col-wide；文章阅读宽 --col-read（prose.css）。
+   线的两级制：1px var(--line) 是行分隔；1px var(--ink) 只用于区块起始。
+   ============================================================ */
+
+/* ---------- 首页（§5.1）---------- */
+.home-view {
+  max-width: var(--col-wide);
 }
 
-.focused-cover__body {
-  min-height: 0;
+.home-intro {
+  font-family: var(--f-kai);
+  font-size: var(--fs-4);
+  line-height: 1.8;
+  color: var(--ink);
+  max-width: 24em;
+  margin-bottom: var(--sp-6);
+}
+
+.feature {
   display: grid;
-  place-items: center;
-  align-content: center;
-  gap: clamp(1.6rem, 4vw, 2.8rem);
-  text-align: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: start;
+  margin-bottom: var(--sp-7);
 }
 
-.focused-cover__body .print-accent-rule {
-  margin: 0 auto;
+.feature--cover {
+  grid-template-columns: minmax(0, 1fr) 16rem;
+  gap: var(--sp-6);
 }
 
-.focused-cover__actions {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.85rem;
+.feature__title {
+  font-family: var(--f-song);
+  font-weight: 700;
+  font-size: var(--fs-6);
+  line-height: 1.3;
+  margin-bottom: var(--sp-4);
 }
 
-/* 首页第 2/3 版的底色由 footer.css 的主题渐变接管（它在后面加载）。
-   这里曾有一份同选择器的 background，恒被覆盖——删掉以免误以为改它能生效。 */
-
-.home-latest-feature {
-  align-items: stretch;
+.feature__link {
+  color: var(--ink);
+  text-decoration: none;
 }
 
-/* --- 第 2 版次要稿件行（Also In This Issue） ---
-   与头条同一套版式（分类行 / 标题 / 摘要 / 元信息），只整体缩小一档：
-   标题 1.05→1.5rem、摘要一行、去掉标签行，靠一条双线与其上的头条分隔。
-   两篇并排，中间用竖线分开，读起来是「头版头条 + 两条次要稿」的主从关系。 */
-.home-latest-row {
-  margin: clamp(0.9rem, 2.2vh, 1.6rem) 2.5rem 0;
-  border-top: 3px double var(--rule);
+.feature__link:hover,
+.feature__link:focus-visible {
+  color: var(--indigo);
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
 }
 
-.home-latest-row__caption {
-  margin: 0;
-  padding: 0.6rem 0.45rem 0;
-  color: var(--ink-faded);
-  font-family: var(--f-mono);
-  font-size: 0.55rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.home-latest-row__grid {
-  display: grid;
-  /* 列数按实际稿件数收缩（只有 1 篇次要稿时不留空列） */
-  grid-template-columns: repeat(var(--row-cols, 2), minmax(0, 1fr));
-  /* 两篇并排时留出中缝，卡片自身不再单独画竖线（会与缩略图贴边） */
-  column-gap: clamp(1.2rem, 2.6vw, 2.4rem);
-}
-
-.home-secondary-card {
-  display: flex;
-  gap: clamp(0.9rem, 2vw, 1.4rem);
-  padding: clamp(0.8rem, 2vh, 1.3rem) 0;
-  transition: color 0.24s ease;
-}
-
-/* 两条简讯之间原本靠 border-right 分隔，会把竖线贴在缩略图上；
-   改为用一条居中的分隔条，并让它随行高居中。 */
-.home-latest-row__grid:not(.is-single) .home-secondary-card + .home-secondary-card {
-  position: relative;
-  padding-left: clamp(1.2rem, 2.6vw, 2.4rem);
-}
-
-.home-latest-row__grid:not(.is-single) .home-secondary-card + .home-secondary-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(clamp(1.2rem, 2.6vw, 2.4rem) / -2);
-  width: 1px;
-  background: var(--rule-light);
-}
-
-/* 缩略图按 4:3 出图：只定高、由宽高比反推宽度。
-   若写成「固定 112px 宽 + 撑满行高」，矮屏下会得到 112×52 的信箱式裁切，
-   封面被截成一条横带，认不出画面。 */
-.home-secondary-card__thumb {
-  flex: 0 0 auto;
-  width: auto;
-  height: clamp(58px, 8.2svh, 96px);
-  aspect-ratio: 4 / 3;
-  margin: 0;
+.feature__excerpt {
+  font-family: var(--f-kai);
+  font-size: var(--fs-4);
+  line-height: 1.8;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   overflow: hidden;
-  /* 封面常为浅色图，压一道极细的框线，避免整块融进纸色 */
-  outline: 1px solid var(--rule-light);
-  outline-offset: -1px;
-  background: rgb(var(--rule-rgb) / 0.05);
+  margin-bottom: var(--sp-4);
 }
 
-.home-secondary-card__thumb.is-broken {
-  display: none;
-  outline: 0;
+.feature__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-5);
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
 }
 
-.home-secondary-card__thumb img {
+.feature__meta-link {
+  color: var(--ink-soft);
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
+}
+
+.feature__meta-link:hover {
+  color: var(--indigo);
+}
+
+.feature__cover {
   display: block;
+}
+
+.feature__cover img {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
-  filter: sepia(0.15) contrast(1.03);
+  border-radius: var(--r-sm);
 }
 
-.home-secondary-card__body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
+.feature__cover--stacked {
+  margin-top: var(--sp-4);
 }
 
-/* 标题 + 摘要作为一组，便于单卡整行时与编号、元信息横向排布 */
-.home-secondary-card__copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
+@media (max-width: 899px) {
+  .feature--cover {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.home-secondary-card__topline {
+/* 区块标题行：上方 1px 墨线（区块起始线的唯一用途）*/
+.section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.8rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--rule-light);
-  color: var(--ink-faded);
-  font-family: var(--f-mono);
-  font-size: 0.52rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  gap: var(--sp-4);
+  border-top: 1px solid var(--ink);
+  padding-top: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 
-.home-secondary-card__num {
-  color: var(--accent);
-  font-family: var(--f-display);
-  font-size: 1.05rem;
-  font-weight: 900;
-  letter-spacing: 0;
+.section-head h2 {
+  font-family: var(--f-hei);
+  font-weight: 700;
+  font-size: var(--fs-2);
 }
 
-/* 尺度：标题与摘要各比头条小一档，摘要限一行，保证整行高度可控 */
-.home-secondary-card .art__t {
-  max-width: 24ch;
-  font-size: clamp(1rem, 1.8vw, 1.42rem);
-  line-height: 1.24;
+.home-section {
+  margin-bottom: var(--sp-7);
 }
 
-.home-secondary-card .art__p {
-  max-width: 40ch;
+.home-section__empty {
+  font-family: var(--f-kai);
+  font-size: var(--fs-3);
+  color: var(--ink-soft);
+  padding-block: var(--sp-4);
+}
+
+/* 读得最多（§5.1）：名次是真实的顺序 */
+.top-list {
+  list-style: none;
+  padding: 0;
   margin: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  font-size: 0.68rem;
-  line-height: 1.6;
 }
 
-/* 只有一篇次要稿时整行归它：横向排成一条「简讯」——
-   左起缩略图 / 编号+日期 / 标题+摘要 / 元信息四段铺满整行。
-   编号列用 auto 贴合内容：若按 fr 比例分栏，365px 的栏里只放得下 60px 的字，
-   标题要到 44% 处才开始，中间出现一大片空白。 */
-.home-latest-row__grid.is-single .home-secondary-card {
-  align-items: center;
-}
-
-.home-latest-row__grid.is-single .home-secondary-card__body {
+.top-row {
+  position: relative; /* 整行可点：标题 ::after 拉满行 */
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: clamp(1.4rem, 3.2vw, 3.2rem);
-  width: 100%;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: baseline;
+  min-height: calc(var(--step) * 2);
+  padding-block: var(--sp-3);
+  border-bottom: 1px solid var(--line);
 }
 
-.home-latest-row__grid.is-single .home-secondary-card__topline {
-  justify-content: flex-start;
-  gap: 0.7rem;
-  border-bottom: 0;
-  padding-bottom: 0;
+.top-row__rank {
+  font-family: var(--f-hei);
+  font-size: var(--fs-2);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.5em;
 }
 
-.home-latest-row__grid.is-single .home-secondary-card__copy .art__t {
-  max-width: none;
+.top-row__title {
+  font-family: var(--f-song);
+  font-weight: 600;
+  font-size: var(--fs-3);
+  line-height: 1.5;
+  color: var(--ink);
+  text-decoration: none;
 }
 
-/* 单卡整行时摘要按列宽收一行，避免 1000px 宽的单行长句读起来发散 */
-.home-latest-row__grid.is-single .home-secondary-card__copy .art__p {
-  max-width: 68ch;
-  -webkit-line-clamp: 1;
+.top-row__title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
-.home-latest-row__grid.is-single .art__meta {
-  margin-top: 0;
+.top-row__title:hover,
+.top-row__title:focus-visible {
+  color: var(--indigo);
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
+}
+
+.top-row__clicks {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.home-secondary-card .art__meta {
-  margin-top: auto;
-  font-size: 0.54rem;
+.top-list__empty {
+  font-family: var(--f-kai);
+  font-size: var(--fs-3);
+  color: var(--ink-soft);
+  padding-block: var(--sp-4);
 }
 
-.home-secondary-card:hover .art__t,
-.home-secondary-card:focus-visible .art__t {
-  color: var(--accent);
+@media (max-width: 639px) {
+  .top-row {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .top-row__clicks {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
-.home-secondary-card:focus-visible {
-  /* 与全站统一：焦点环走 --ring-focus 令牌，而不是各写一档 outline */
-  outline: none;
-  box-shadow: var(--ring-focus);
+/* ---------- 文章列表（§5.2）---------- */
+.posts-view {
+  max-width: var(--col-wide);
 }
 
-.home-section-footer {
-  padding: 0 2.5rem 4.5rem;
+.posts-head {
+  margin-bottom: var(--sp-5);
+}
+
+.posts-head h1 {
+  font-family: var(--f-song);
+  font-weight: 700;
+  font-size: var(--fs-6);
+  line-height: 1.3;
+  margin-bottom: var(--sp-2);
+}
+
+.posts-head__sub {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 窄屏栏目条：横向滚动，「全部」+ 六栏目；不用胶囊底色（≥1100px 左栏在场，此条隐去）*/
+.cat-strip {
+  display: none;
+}
+
+@media (max-width: 1099px) {
+  .cat-strip {
+    display: flex;
+    gap: var(--sp-5);
+    overflow-x: auto;
+    margin-block: var(--sp-4);
+    scrollbar-width: thin;
+  }
+
+  .cat-strip__link {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    min-height: 44px;
+    font-size: var(--fs-2);
+    color: var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .cat-strip__link:hover {
+    color: var(--indigo);
+  }
+}
+
+/* 年份行（§5.2）：1px 墨线 = 区块起始 */
+.year-group + .year-group {
+  margin-top: var(--sp-7);
+}
+
+.year-group__head {
+  font-family: var(--f-hei);
+  font-weight: 700;
+  font-size: var(--fs-3);
+  border-top: 1px solid var(--ink);
+  padding-top: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.posts-more {
+  margin-top: var(--sp-6);
   display: flex;
   justify-content: center;
 }
 
-.home-hot-ledger {
-  margin: 0 2.5rem 2.2rem;
-  border-top: 3px double var(--rule);
-}
-
-.home-hot-ledger__caption {
-  margin: 0;
-  padding: 0.7rem 0.45rem;
-  color: var(--ink-faded);
-  border-bottom: 1px solid var(--rule-light);
-  font-family: var(--f-mono);
-  font-size: 0.55rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-/* 榜单行：压缩到与内容相称的高度（原 252px 里 83% 是空气），
-   并把阅读量用点线牵到标题行尾，消除横跨整行的视线跳转。 */
-.home-hot-row {
-  padding: clamp(0.75rem, 1.7vh, 1.15rem) 0.45rem;
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: clamp(0.9rem, 2vw, 1.6rem);
-  align-items: baseline;
-  border-bottom: 1px solid var(--rule-light);
-  transition: background 0.24s ease, transform 0.24s var(--ease-quart);
-}
-
-.home-hot-row:hover,
-.home-hot-row:focus-visible {
-  background: rgb(var(--rule-rgb) / 0.028);
-  outline: 0;
-  transform: translateX(4px);
-}
-
-.home-hot-row__rank {
-  color: var(--rule-light);
-  font-family: var(--f-display);
-  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 榜首用朱红点名，形成层级而非一律浅灰 */
-.home-hot-row:first-of-type .home-hot-row__rank {
-  color: var(--accent);
-}
-
-.home-hot-row__copy {
-  min-width: 0;
-}
-
-.home-hot-row__titleline {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-}
-
-.home-hot-row h3 {
-  margin: 0;
-  color: var(--ink);
-  font-family: var(--f-display);
-  font-size: clamp(1.05rem, 1.6vw, 1.5rem);
-  line-height: 1.24;
-  /* 限宽到约 30 字/行，避免标题被拉到 928px 长行 */
-  max-width: 32ch;
-}
-
-.home-hot-row:hover h3 {
-  color: var(--accent);
-}
-
-/* 点线 leader：从标题尾部一直连到阅读量 */
-.home-hot-row__leader {
-  flex: 1 1 auto;
-  min-width: 1.5rem;
-  align-self: center;
-  height: 1px;
-  background-image: radial-gradient(circle, var(--ink-faded) 0.6px, transparent 0.7px);
-  background-size: 5px 1px;
-  background-repeat: repeat-x;
-  opacity: 0.5;
-}
-
-.home-hot-row__clicks {
-  flex: 0 0 auto;
-  color: var(--accent);
-  font-family: var(--f-mono);
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-hot-row p {
-  max-width: 46ch;
-  margin: 0.32rem 0 0;
-  color: var(--ink-light);
-  font-size: 0.72rem;
-  line-height: 1.7;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.home-hot-row__foot {
-  margin-top: 0.42rem;
-  display: flex;
-  gap: 0.9rem;
-  color: var(--ink-faded);
-  font-family: var(--f-mono);
-  font-size: 0.55rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.home-hot-row__cat {
-  color: var(--accent);
-}
-
-/* `.article-toolbox` / `.article-search` / `.article-directory-meta` 的完整外观
-   由 posts.css 负责（文章目录是它们唯一的宿主）——此前这三者在 pages.css、
-   footer.css、compat.css 里各有一份互相覆盖的副本，层级真相分散在四处。 */
-
-.article-directory-meta button {
-  padding: 0.3rem 0.55rem;
-  margin: -0.3rem -0.55rem;
-  color: var(--accent);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  cursor: pointer;
-  font-size: 0.58rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transition: color 0.22s var(--ease-quart), border-color 0.22s var(--ease-quart),
-    background 0.22s var(--ease-quart);
-}
-
-/* 「清除筛选」此前是个没有任何悬停/按下反馈的纯文字按钮：
-   同一行里的栏目胶囊都有反馈，只有它像一段静态说明。 */
-.article-directory-meta button:hover {
-  color: var(--ink);
-  background: rgb(var(--accent-rgb) / 0.06);
-  border-bottom-color: var(--accent);
-}
-.article-directory-meta {
-  margin: 0 2.5rem clamp(0.4rem, 1.4svh, 1.6rem);
-  padding-bottom: clamp(0.35rem, 1svh, 0.8rem);
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  color: var(--ink-light);
-  border-bottom: 1px solid var(--rule-light);
-  font-size: 0.58rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
-
-.posts-index {
-  padding-bottom: clamp(0.4rem, 1.6svh, 1.4rem);
-}
-
-.quiet-about-layout {
-  padding: 0 2.5rem 5rem;
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
-  gap: 2rem;
-}
-
-.quiet-about-card {
-  padding: clamp(1.6rem, 4vw, 3rem);
-  border-top: 3px double var(--rule);
-  border-bottom: 1px solid var(--rule-light);
-  background: rgb(var(--paper-rgb) / 0.38);
-}
-
-.quiet-about-card h2,
-.not-found-copy h2 {
-  margin: 0.6rem 0 1rem;
-  color: var(--ink);
-  font-family: var(--f-display);
-  font-size: clamp(2rem, 4.6vw, 4.2rem);
-  line-height: 1.02;
-  letter-spacing: -0.045em;
-}
-
-.quiet-about-copy {
-  display: grid;
-  gap: 1rem;
-}
-
-.quiet-about-copy p,
-.quiet-about-card--contact > p:not(.section-label),
-.not-found-copy p:not(.section-label) {
-  margin: 0;
-  color: var(--ink-light);
-  font-size: 0.76rem;
-  line-height: 1.95;
-}
-
-.quiet-contact-list {
-  margin-top: 1.7rem;
-  display: grid;
-  border-top: 1px solid var(--rule-light);
-}
-
-.quiet-contact-list a {
-  padding: 0.9rem 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  color: var(--ink-light);
-  border-bottom: 1px solid var(--rule-light);
-  font-size: 0.68rem;
-}
-
-.quiet-contact-list a:hover {
-  color: var(--accent);
-}
-
-.quiet-contact-list span {
-  /* 联系方式左侧标签是功能性信息（邮箱/社交平台名），不是装饰性小字 */
-  color: var(--ink-light);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.quiet-contact-list strong {
-  font-weight: 500;
-  text-align: right;
-}
-
-.quiet-contact-empty {
-  margin-top: 1.4rem;
-}
-
-.not-found-copy {
-  width: min(720px, calc(100% - 5rem));
-  margin: 0 auto;
-  padding: clamp(2rem, 6vw, 5rem) 0 6rem;
+.posts-end {
+  margin-top: var(--sp-6);
   text-align: center;
+  font-family: var(--f-kai);
+  font-size: var(--fs-3);
+  color: var(--ink-soft);
 }
 
-.not-found-copy .print-cover__actions {
-  justify-content: center;
+/* ---------- 关于（§5.4）---------- */
+.about-view {
+  max-width: var(--col-read);
 }
 
-@media (max-width: 920px) {
-  /* 只对真正的网格容器生效：`.article-toolbox` 是 flex（posts.css），
-     此前混在这里写 grid-template-columns 是一条永不生效的死声明。 */
-  .home-hot-row,
-  .quiet-about-layout {
-    grid-template-columns: 1fr;
-  }
+.about-view h1 {
+  font-family: var(--f-song);
+  font-weight: 700;
+  font-size: var(--fs-6);
+  line-height: 1.3;
+  margin-bottom: var(--sp-5);
 }
 
-@media (max-width: 760px) {
-  .focused-cover__body {
-    min-height: 58svh;
-  }
-
-  .focused-cover__actions {
-    width: 100%;
-  }
-
-  .focused-cover__actions .cover-button {
-    flex: 1 1 150px;
-  }
-
-  .home-hot-ledger,
-  .article-toolbox,
-  .article-directory-meta {
-    margin-right: 1.35rem;
-    margin-left: 1.35rem;
-  }
-
-  .home-section-footer {
-    padding: 0 1.35rem 3.5rem;
-  }
-
-  .home-hot-row {
-    gap: 1rem;
-  }
-
-  .home-hot-row__rank {
-    /* 原先这里写死 3rem，反而比桌面档的上限 2.4rem 更大：
-       窄屏榜单序号成了整行最重的元素，和「标题才是主体」的层级相反。 */
-    font-size: clamp(1.35rem, 4.5vw, 1.8rem);
-  }
-
-
-
-
-
-
-
-  .article-directory-meta {
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-
-  .quiet-about-layout {
-    padding: 0 1.35rem 4rem;
-  }
-
-  .quiet-contact-list a {
-    display: grid;
-  }
-
-  .quiet-contact-list strong {
-    text-align: left;
-  }
-
-  .not-found-copy {
-    width: calc(100% - 2.7rem);
-  }
-}
-
-
-/* ==========================================================================
-   COVER FIT PASS — 首页封面一屏内完整呈现（报头/标题/入口/页脚提示）
-   覆写 layout.css 中的封面尺寸，保证 100svh 内容纳全部视觉层级。
-   ========================================================================== */
-
-@media (min-width: 761px) {
-.print-cover {
-  padding: 4.6rem 2.5rem 2.6rem;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-/* 标题收敛到一屏可读的尺度（原 clamp 上限 10rem 会撑破视口） */
-.print-cover h1 {
-  margin-top: 0.7rem;
-  font-size: clamp(3.1rem, 7.6vw, 6.4rem);
-  line-height: 0.92;
-  letter-spacing: -0.04em;
-}
-
-/* 垂直间距改用 vh 驱动的 clamp：矮视口自动压缩 */
-.focused-cover__body {
-  gap: clamp(1rem, 2.6vh, 1.9rem);
-}
-
-.print-accent-rule {
-  margin-top: clamp(0.8rem, 2vh, 1.4rem);
-}
-
-.print-cover__summary {
-  margin-top: clamp(0.7rem, 1.8vh, 1.15rem);
+.about-lead {
+  font-family: var(--f-kai);
+  font-size: var(--fs-4);
   line-height: 1.8;
+  color: var(--ink);
+  margin-bottom: var(--sp-6);
 }
 
-.print-cover__actions,
-.focused-cover__actions {
-  margin-top: clamp(0.6rem, 1.6vh, 1.1rem);
+.about-contact {
+  margin-top: var(--sp-7);
+  border-top: 1px solid var(--ink);
+  padding-top: var(--sp-3);
 }
 
-.print-scroll-cue {
-  padding: 0.3rem 0 0.7rem;
+.about-contact dt {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  margin-bottom: var(--sp-1);
 }
 
-.pg {
-  bottom: 1.2rem;
-}
-}
-
-/* 矮视口（如 1366x768 笔记本、分屏窗口）进一步收敛 */
-@media (min-width: 761px) and (max-height: 560px) {
-  .print-cover {
-    padding-top: 4.2rem;
-    padding-bottom: 2.2rem;
-  }
-
-  .print-cover h1 {
-    font-size: clamp(2.6rem, 8.6vh, 4.8rem);
-  }
-
-  .cover-kicker {
-    margin: 0;
-  }
-
-  .print-cover__summary {
-    max-width: 560px;
-    line-height: 1.65;
-  }
+.about-contact dd {
+  margin: 0 0 var(--sp-4);
 }
 
-
-/* ==========================================================================
-   PAGE FLIP PASS — 首页三版整屏翻页
-   每次滚轮/滑动恰好翻动一页：封面 001 → 最近更新 002 → 热点文章 003。
-  所有视口统一启用；页面内容按各自响应式规则压缩到单屏内。
-   ========================================================================== */
-
-/* 翻页模式下文档完全不可滚动：整页切换由 .flip-track 的 transform 完成 */
-html.home-paging,
-html.home-paging body {
-  height: 100%;
-  overflow: hidden;
+.about-contact a {
+  font-size: var(--fs-2);
 }
 
-html.home-paging .home-view.flip-mode {
-  height: 100svh;
-  overflow: hidden;
+/* ---------- 404（§5.5）---------- */
+.nf-view {
+  max-width: var(--col-read);
 }
 
-html.home-paging .flip-track {
-  will-change: transform;
-  transition: transform 0.78s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1));
+.nf-view h1 {
+  font-family: var(--f-song);
+  font-weight: 700;
+  font-size: var(--fs-6);
+  line-height: 1.3;
+  margin-bottom: var(--sp-4);
 }
 
-/* 背景版次号：超大轮廓字垫在每版右下；版内大标题同理滞后半拍。
-   翻页期间 --flip 由 HomeView 逐帧写入，各层按 (版序 - --flip) 反向补偿位移——
-   正文随轨道走、背景与标题慢半拍，纸张因此有了厚度。
-   视差只在整屏翻页模式下生效：滚动模式下 --flip 停在最后一次的值，
-   这些层必须回到自然位置，否则会被永久错位。--i 挂在各版 section 上。 */
-.bg-issue-num {
-  position: absolute;
-  right: clamp(0.5rem, 3vw, 2.5rem);
-  bottom: -5svh;
-  z-index: 0;
-  color: transparent;
-  -webkit-text-stroke: 1.5px rgb(var(--rule-rgb) / 0.14);
-  font-family: var(--f-display);
-  font-size: clamp(13rem, 34vw, 26rem);
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 0.8;
-  pointer-events: none;
-  user-select: none;
+.nf-view p {
+  font-family: var(--f-kai);
+  font-size: var(--fs-4);
+  line-height: 1.8;
+  color: var(--ink-soft);
+  margin-bottom: var(--sp-5);
 }
 
-html.home-paging .home-view.flip-mode .bg-issue-num {
-  transform: translateY(calc((var(--i, 0) - var(--flip, 0)) * -10svh));
+.nf-view__actions {
+  display: flex;
+  gap: var(--sp-5);
+  font-size: var(--fs-2);
 }
-
-/* 标题用独立 translate（不动 transform——reveal 入场与卡片倾斜都占着它） */
-html.home-paging .home-view.flip-mode .sec-hd__t,
-html.home-paging .home-view.flip-mode .print-cover h1 {
-  translate: 0 calc((var(--i, 0) - var(--flip, 0)) * -4.5svh);
-}
-
-@media (max-width: 760px) {
-  .bg-issue-num {
-    right: 0.5rem;
-    bottom: -3svh;
-    font-size: clamp(9rem, 44vw, 16rem);
-  }
-}
-
-html.motion-off .home-view .bg-issue-num {
-  transform: none;
-}
-
-html.motion-off .home-view .sec-hd__t,
-html.motion-off .home-view .print-cover h1 {
-  translate: none;
-}
-
-  html.home-paging .print-page {
-    height: 100svh;
-    min-height: 100svh;
-    overflow: hidden;
-  }
-
-  html.home-paging .print-section {
-    padding-bottom: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* 版块报头压缩，让位给正文区 */
-  html.home-paging .sec-hd {
-    flex: 0 0 auto;
-    margin-bottom: clamp(0.9rem, 2.6vh, 1.8rem);
-    padding: clamp(2.9rem, 6vh, 4rem) 2.5rem clamp(1rem, 2.4vh, 1.6rem);
-  }
-
-  /* 最近更新：焦点卡吸收剩余高度，随行压缩 */
-  html.home-paging .home-latest-feature {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  /* 次要稿件行按内容定高（不参与拉伸），让头条吃掉剩余空间：
-     这样即使只有 1 篇次要稿、或某篇标题特别长，也不会把整版顶出屏幕。 */
-  html.home-paging .home-latest-row {
-    flex: 0 0 auto;
-    margin: clamp(0.7rem, 1.8vh, 1.3rem) 2.5rem 0;
-  }
-
-  html.home-paging .home-latest-row__caption {
-    padding-top: clamp(0.35rem, 1vh, 0.6rem);
-  }
-
-  html.home-paging .home-secondary-card {
-    padding: clamp(0.55rem, 1.4vh, 1rem) 0.45rem;
-  }
-
-  html.home-paging .home-secondary-card .art__t {
-    font-size: clamp(0.92rem, 1.7vw, 1.3rem);
-  }
-
-  html.home-paging .home-secondary-card__thumb {
-    height: clamp(54px, 7.6svh, 88px);
-  }
-
-  html.home-paging .home-latest-feature .print-feature-image {
-    min-height: 0;
-  }
-
-  html.home-paging .home-latest-feature .print-lead-copy {
-    min-height: 0;
-    overflow: hidden;
-    padding: clamp(1.2rem, 3vh, 2.4rem) clamp(1.4rem, 3vw, 2.8rem);
-  }
-
-
-  /* 纯文字头条（无封面图）在翻页模式下按屏高定容：
-     标题字号、间距、摘要行数全部受 vh 约束，确保 meta 与「阅读全文」不被裁掉。
-     基线的 vw 驱动字号在 768 屏高下会撑成 3 行 250px，把下方内容顶出容器。 */
-  html.home-paging .home-latest-feature--text .print-lead-copy {
-    min-height: 0;
-    padding: clamp(0.9rem, 2.4vh, 1.8rem) clamp(1.4rem, 3vw, 3rem);
-  }
-
-  html.home-paging .home-latest-feature--text .print-lead-copy .art__t {
-    max-width: 24ch;
-    font-size: clamp(1.6rem, 5.6vh, 3.1rem);
-    line-height: 1.12;
-  }
-
-  html.home-paging .home-latest-feature--text .print-lead-copy .art__p {
-    font-size: clamp(0.72rem, 1.5vh, 0.85rem);
-    line-height: 1.7;
-    -webkit-line-clamp: 2;
-  }
-
-  html.home-paging .home-latest-feature--text .print-lead-copy__inner {
-    gap: clamp(0.35rem, 1vh, 0.8rem);
-  }
-
-  html.home-paging .home-latest-feature--text .lead-issue-line {
-    padding-bottom: clamp(0.3rem, 0.9vh, 0.7rem);
-  }
-
-  html.home-paging .home-latest-feature--text .print-read-more {
-    margin-top: clamp(0.2rem, 0.8vh, 0.7rem);
-  }
-
-  /* 热点榜：五行账页均分剩余版面，恰好铺满一页 */
-  html.home-paging .home-hot-ledger {
-    flex: 1 1 auto;
-    min-height: 0;
-    margin: 0 2.5rem;
-    display: flex;
-    flex-direction: column;
-    /* 条目按内容定高，整组在剩余版面里垂直居中；
-       不再让每行等分整页高度（那是「内容被撑散」的根因）。 */
-    justify-content: center;
-    overflow: hidden;
-  }
-
-  html.home-paging .home-hot-ledger__caption {
-    flex: 0 0 auto;
-  }
-
-  html.home-paging .home-hot-row {
-    flex: 0 1 auto;
-    min-height: 0;
-    padding: clamp(0.5rem, 1.6vh, 1.1rem) 0.45rem;
-  }
-
-  html.home-paging .home-hot-row__copy {
-    min-width: 0;
-  }
-
-  html.home-paging .home-hot-row__rank {
-    font-size: clamp(1.9rem, 5.4vh, 3.2rem);
-  }
-
-  html.home-paging .home-hot-row h3 {
-    margin-bottom: 0.3rem;
-    font-size: clamp(1.15rem, 2.7vh, 1.7rem);
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  html.home-paging .home-hot-row p {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  /* 底部入口按钮：锚定版面下缘 */
-  html.home-paging .home-section-footer {
-    flex: 0 0 auto;
-    margin-top: auto;
-    padding: clamp(0.7rem, 2vh, 1.2rem) 2.5rem clamp(1.6rem, 4.4vh, 3rem);
-  }
-/* 整屏翻页模式下隐去“当前位置/整体进度”：顶栏阅读进度条与页面滚动条 */
-html.home-paging {
-  scrollbar-width: none;
-}
-
-html.home-paging::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
-html.home-paging .print-nav__progress {
-  display: none;
-}
-
-/* --- 版次轨道（HomePageRail）的安全边 ---
-   轨道固定贴右缘，宽度恒定约 84px（26px 刻度盒 + 编号 + 内距），按钮左缘落在
-   视口宽 - 108px 附近；而榜单与索引行的右侧内容会一路延伸到页面 2.5rem 的页边距处，
-   两者在垂直方向必然相遇：实测 1101/1366/1600 三种宽度下榜单行尾的「N 次阅读」
-   都会被轨道压住。这里在轨道出现的最小宽度以上（901px，与其隐藏断点一致）
-   给正文让出右侧安全边，宽度 = 轨道右偏移 + 轨道宽 + 余量。
-   注意：必须放在文件末尾，并且带上 html.home-paging 前缀——上方
-   `html.home-paging .home-hot-ledger` 的同属性规则优先级更高。 */
-@media (min-width: 901px) {
-  .home-hot-ledger,
-  html.home-paging .home-hot-ledger {
-    margin-right: calc(clamp(0.75rem, 1.8vw, 1.5rem) + 6.4rem);
-  }
-}
-
