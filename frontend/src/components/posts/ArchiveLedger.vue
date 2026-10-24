@@ -39,7 +39,7 @@ defineProps({
         >
           <span class="archive__date">{{ shortDate(post.published_at) }}</span>
           <div class="archive__copy">
-            <RouterLink :to="`/posts/${post.slug}`" class="archive__title">
+            <RouterLink :to="`/posts/${post.slug}`" class="archive__title" data-cursor="阅读">
               <span v-if="post.slug === latestSlug" class="archive__badge">最新</span>
               {{ post.title }}
             </RouterLink>
@@ -50,6 +50,7 @@ defineProps({
             <span class="archive__tags">
               <span v-for="tag in post.tags?.slice(0, 2)" :key="tag" class="tag tag--code">{{ tag }}</span>
             </span>
+            <span class="archive__go" aria-hidden="true">→</span>
           </div>
         </li>
       </ul>

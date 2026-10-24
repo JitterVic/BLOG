@@ -55,6 +55,36 @@ watch([currentPage, isFlipActive], async ([page, active], previous) => {
   await replayReveal(sections[page]);
 });
 
+// 翻页视差：轨道 translateY 过渡期间用 rAF 读取实时位移，换算成浮点页码
+// 写进 --flip；各版背景版次号按 (版序 - --flip) 反向漂移，形成「纸张厚度」。
+let flipFrame = 0;
+
+function stepFlipProgress() {
+  flipFrame = 0;
+  const root = homeRootRef.value;
+  const track = root?.querySelector(".flip-track");
+  if (!root || !track) return;
+  const matrix = new DOMMatrixReadOnly(getComputedStyle(track).transform);
+  const progress = Math.min(Math.max(-matrix.m42 / window.innerHeight, 0), 2);
+  root.style.setProperty("--flip", progress.toFixed(3));
+  flipFrame = window.requestAnimationFrame(stepFlipProgress);
+}
+
+function handleTrackTransitionStart(event) {
+  if (event.propertyName !== "transform") return;
+  if (flipFrame) window.cancelAnimationFrame(flipFrame);
+  flipFrame = window.requestAnimationFrame(stepFlipProgress);
+}
+
+function handleTrackTransitionEnd(event) {
+  if (event.propertyName !== "transform") return;
+  if (flipFrame) {
+    window.cancelAnimationFrame(flipFrame);
+    flipFrame = 0;
+  }
+  homeRootRef.value?.style.setProperty("--flip", String(currentPage.value));
+}
+
 async function loadHomePosts() {
   const requestId = ++postsRequestSequence;
   postsController?.abort();
@@ -99,10 +129,17 @@ onBeforeUnmount(() => postsController?.abort());
 <template>
   <div ref="homeRootRef" class="home-view print-home focused-home" :class="{ 'flip-mode': isFlipActive }">
     <HomePageRail />
-    <div class="flip-track" :style="trackStyle">
-    <HomeCover />
+    <div
+      class="flip-track"
+      :style="trackStyle"
+      @transitionstart="handleTrackTransitionStart"
+      @transitionend="handleTrackTransitionEnd"
+      @transitioncancel="handleTrackTransitionEnd"
+    >
+    <HomeCover :posts="latestPosts" />
 
-    <section id="latest" class="print-page print-section home-latest-section" aria-label="最近更新">
+    <section id="latest" class="print-page print-section home-latest-section" style="--i: 1" aria-label="最近更新">
+      <span class="bg-issue-num" aria-hidden="true">002</span>
       <div class="sec-hd rv rv--left">
         <h2 class="sec-hd__t">最近更新 Latest</h2>
         <div class="sec-hd__line"></div>
@@ -152,7 +189,8 @@ onBeforeUnmount(() => postsController?.abort());
       <span class="pg pg--l">— 002 —</span>
     </section>
 
-    <section id="hot" class="print-page print-section home-hot-section" aria-label="热点文章">
+    <section id="hot" class="print-page print-section home-hot-section" style="--i: 2" aria-label="热点文章">
+      <span class="bg-issue-num" aria-hidden="true">003</span>
       <div class="sec-hd rv rv--left">
         <h2 class="sec-hd__t">热点文章 Most Read</h2>
         <div class="sec-hd__line"></div>

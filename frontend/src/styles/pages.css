@@ -640,6 +640,54 @@ html.home-paging .flip-track {
   transition: transform 0.78s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
+/* 背景版次号：超大轮廓字垫在每版右下；版内大标题同理滞后半拍。
+   翻页期间 --flip 由 HomeView 逐帧写入，各层按 (版序 - --flip) 反向补偿位移——
+   正文随轨道走、背景与标题慢半拍，纸张因此有了厚度。
+   视差只在整屏翻页模式下生效：滚动模式下 --flip 停在最后一次的值，
+   这些层必须回到自然位置，否则会被永久错位。--i 挂在各版 section 上。 */
+.bg-issue-num {
+  position: absolute;
+  right: clamp(0.5rem, 3vw, 2.5rem);
+  bottom: -5svh;
+  z-index: 0;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgb(var(--rule-rgb) / 0.14);
+  font-family: var(--f-display);
+  font-size: clamp(13rem, 34vw, 26rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.8;
+  pointer-events: none;
+  user-select: none;
+}
+
+html.home-paging .home-view.flip-mode .bg-issue-num {
+  transform: translateY(calc((var(--i, 0) - var(--flip, 0)) * -10svh));
+}
+
+/* 标题用独立 translate（不动 transform——reveal 入场与卡片倾斜都占着它） */
+html.home-paging .home-view.flip-mode .sec-hd__t,
+html.home-paging .home-view.flip-mode .print-cover h1 {
+  translate: 0 calc((var(--i, 0) - var(--flip, 0)) * -4.5svh);
+}
+
+@media (max-width: 760px) {
+  .bg-issue-num {
+    right: 0.5rem;
+    bottom: -3svh;
+    font-size: clamp(9rem, 44vw, 16rem);
+  }
+}
+
+html.motion-off .home-view .bg-issue-num {
+  transform: none;
+}
+
+html.motion-off .home-view .sec-hd__t,
+html.motion-off .home-view .print-cover h1 {
+  translate: none;
+}
+
   html.home-paging .print-page {
     height: 100svh;
     min-height: 100svh;

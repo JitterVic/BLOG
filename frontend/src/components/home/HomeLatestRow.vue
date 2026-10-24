@@ -27,6 +27,7 @@ defineProps({
         :key="post.slug"
         :to="`/posts/${post.slug}`"
         class="art home-secondary-card rv"
+        data-cursor="阅读"
         :data-reveal-delay="160 + index * 70"
       >
         <figure v-if="post.cover_image" class="home-secondary-card__thumb">

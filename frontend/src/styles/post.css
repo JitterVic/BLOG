@@ -125,6 +125,7 @@
 }
 
 .article-toc nav {
+  position: relative;
   min-height: 0;
   flex: 1 1 auto;
   display: grid;
@@ -132,6 +133,33 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+
+/* 当前章节指示条：位置由 PostToc 写入 --toc-ind-y/h，滑动而不是逐条闪色 */
+.toc-indicator {
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 2px;
+  height: var(--toc-ind-h, 0);
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(var(--toc-ind-y, 0));
+  transition:
+    transform 0.32s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)),
+    height 0.32s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)),
+    opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.toc-indicator.is-on {
+  opacity: 1;
+}
+
+@media (max-width: 1280px) {
+  .toc-indicator {
+    display: none;
+  }
 }
 
 .article-toc nav button {
@@ -1235,6 +1263,114 @@ html.motion-off .article-toc {
 @media (prefers-reduced-motion: reduce) {
   .print-markdown a:not(:has(img)) {
     transition: none;
+  }
+}
+
+/* ==========================================================================
+   阅读工具条（ReadingTools.vue）+ 正文字号档
+   ========================================================================== */
+
+/* 顶栏是大写等宽小字，工具条自带字号体系，不被顶栏的 uppercase 传染 */
+.reading-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.reading-tools__group {
+  display: inline-flex;
+  border: 1px solid var(--rule-light);
+}
+
+.reading-tools__btn {
+  min-width: 34px;
+  min-height: 30px;
+  padding: 0 0.5rem;
+  color: var(--ink-light);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.reading-tools__btn + .reading-tools__btn {
+  border-left: 1px solid var(--rule-light);
+}
+
+.reading-tools__btn:hover {
+  color: var(--accent);
+  background: rgb(var(--accent-rgb) / 0.06);
+}
+
+.reading-tools__btn.active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.reading-tools__copy {
+  min-height: 30px;
+  padding: 0 0.7rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.reading-tools__copy:hover {
+  color: var(--paper);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 复制成功态与代码复制按钮（.code-copy-button.copied）同色同义 */
+.reading-tools__copy.is-copied,
+.reading-tools__copy.is-copied:hover {
+  color: #fff;
+  background: #2e682a;
+  border-color: #2e682a;
+}
+
+/* 字号档：只缩正文容器（标题等用固定 rem 的元素不动，保持版面骨架稳定） */
+html[data-reading="sm"] .print-markdown {
+  font-size: 0.78rem;
+}
+
+html[data-reading="lg"] .print-markdown {
+  font-size: 0.96rem;
+}
+
+/* 正文图片：悬停轻推 + 投影加深，提示可点开灯箱 */
+.print-markdown img[role="button"] {
+  transition: transform 0.3s var(--ease-quart), box-shadow 0.3s ease;
+}
+
+.print-markdown img[role="button"]:hover {
+  transform: scale(1.015);
+  box-shadow: 0 10px 30px rgb(var(--ink-rgb) / 0.14);
+}
+
+/* 灯箱打开：从中心放大浮现，而不是凭空出现 */
+.article-lightbox[open] {
+  animation: lightbox-zoom-in 0.32s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+@keyframes lightbox-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

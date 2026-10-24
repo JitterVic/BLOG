@@ -3,29 +3,33 @@
    MOTION + LAYOUT POLISH — reveal, route transitions, interactive depth
    ========================================================================== */
 
-/* Route page transition — GPU accelerated ink-lift */
+/* 路由过渡——「纸张翻页」：当前页从版心被轻轻掀起（上移 + 微旋转 + 淡出），
+   新页从下方浮入。旋转角控制在 1° 内，纸张底色一致，边缘不会穿帮。
+   注意 transform 与位移全在合成器属性上，effects.css 仍会剥掉 will-change。 */
 .page-fade-enter-active {
   transition:
-    opacity 0.32s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
-    transform 0.38s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1));
+    opacity 0.34s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
+    transform 0.44s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1));
   will-change: opacity, transform;
 }
 
 .page-fade-leave-active {
   transition:
-    opacity 0.22s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
-    transform 0.26s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+    opacity 0.24s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1)),
+    transform 0.3s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
   will-change: opacity, transform;
 }
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: translate3d(0, 26px, 0) scale(0.992);
+  transform: translate3d(0, 34px, 0) rotate(0.5deg) scale(0.992);
+  transform-origin: 50% 0;
 }
 
 .page-fade-leave-to {
   opacity: 0;
-  transform: translate3d(0, -14px, 0) scale(0.997);
+  transform: translate3d(0, -26px, 0) rotate(-0.7deg) scale(0.996);
+  transform-origin: 18% 0;
 }
 
 .page-fade-enter-to,
@@ -1042,6 +1046,65 @@ html.motion-off .rv.vis {
   animation: spin-seal-rotate 26s linear infinite;
 }
 
+/* 印章盖下：第 2 版文字头条的心印随 reveal 从高处「砸」到位，
+   带两次回弹与微旋转——像一枚真实的章落在纸上，而不是淡入的贴图。 */
+@keyframes seal-stamp-in {
+  0% {
+    transform: scale(1.8) rotate(-14deg);
+    opacity: 0;
+  }
+
+  55% {
+    transform: scale(0.93) rotate(2deg);
+    opacity: 1;
+  }
+
+  78% {
+    transform: scale(1.05) rotate(-0.8deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.print-lead-copy.vis .lead-seal {
+  animation: seal-stamp-in 0.55s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) 0.12s both;
+}
+
+html.motion-off .print-lead-copy.vis .lead-seal {
+  animation: none;
+}
+
+/* 落章瞬间的朱色晕染：章砸到位（0.55s × 55% + 0.12s 延迟 ≈ 0.42s）后，
+   一圈淡朱色从章缘漾开散尽。母元素自身有 0.5 透明度，环色相应加深半档。 */
+.print-lead-copy.vis .lead-seal::after {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border: 1px solid rgb(var(--accent-rgb) / 0.7);
+  border-radius: 50%;
+  animation: seal-halo 0.75s ease-out 0.42s both;
+  pointer-events: none;
+}
+
+@keyframes seal-halo {
+  from {
+    transform: scale(0.55);
+    opacity: 0.85;
+  }
+
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+html.motion-off .print-lead-copy.vis .lead-seal::after {
+  display: none;
+}
+
 .spin-seal__text {
   font-family: var(--f-mono, monospace);
   font-size: 7.2px;
@@ -1136,6 +1199,23 @@ html.motion-off .route-progress__fill {
 }
 
 /* 导航项按下的手绘圈反馈定义在 header.css（那里拥有 .nav-circle 的基准变换）。 */
+
+/* .is-pressing 由 CursorEffects 在 pointerdown 时写入（160ms 窗口）：
+   覆盖 :active 管不到的场景——纯文本链接没有按下态，松手后 :active 立即
+   消失而墨迹涟漪还在扩散，这一下收边把两段视觉缝起来。
+   用独立 scale / filter，不与 :active 的 transform、磁吸的 translate 相互覆盖。 */
+.is-pressing {
+  scale: 0.98;
+  filter: brightness(0.97);
+}
+
+/* 卡片被「抽走」（useDeparture 在按下卡片时写入，700ms 后摘除）：
+   先下沉让位，路由翻页动效随即接管——「这一张被抽走了」。 */
+.is-departing {
+  translate: 0 4px;
+  scale: 0.982;
+  filter: brightness(0.965) saturate(0.97);
+}
 
 /* ==========================================================================
    目录页骨架：形状必须与 ArchiveLedger 的编年索引一致

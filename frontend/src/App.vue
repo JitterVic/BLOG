@@ -4,10 +4,13 @@ import { useRoute } from "vue-router";
 
 import CatPet from "./components/pet/CatPet.vue";
 import CursorEffects from "./components/CursorEffects.vue";
+import CursorRing from "./components/CursorRing.vue";
 import InitialLoader from "./components/InitialLoader.vue";
 import RouteProgress from "./components/RouteProgress.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 import SiteHeader from "./components/SiteHeader.vue";
+import { initDeparture } from "./composables/useDeparture";
+import { initMagnetic } from "./composables/useMagnetic";
 import { usePageFlip } from "./composables/usePageFlip";
 import { usePageMeta } from "./composables/usePageMeta";
 import { useReveal } from "./composables/useReveal";
@@ -125,6 +128,8 @@ watch(
 
 onMounted(async () => {
   if (!loaderDone.value) setBootLock(true);
+  initMagnetic();
+  initDeparture();
   try {
     await ensureSite();
   } catch (err) {
@@ -144,6 +149,8 @@ onBeforeUnmount(() => {
     <InitialLoader @ready="onLoaderReady" />
     <RouteProgress />
     <CursorEffects />
+    <CursorRing />
+    <div class="paper-grain" aria-hidden="true"></div>
     <CatPet />
     <SiteHeader />
 

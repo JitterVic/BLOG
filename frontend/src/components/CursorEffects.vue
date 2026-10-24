@@ -18,8 +18,8 @@ const INTERACTIVE_SELECTOR = [
 const MAX_DEVICE_SCALE = 1.25;
 const TRAIL_FADE_MS = 1050;
 const MAX_PENDING_SEGMENTS = 72;
-const MIN_WIDTH = 1.6;
-const MAX_WIDTH = 3;
+const MIN_WIDTH = 1.2;
+const MAX_WIDTH = 4.4;
 const GRAPHITE = "rgba(42, 37, 32, 0.9)";
 const GRAPHITE_TEXTURE = "rgba(84, 75, 64, 0.42)";
 const PAPER_EDGE = "rgba(248, 244, 235, 0.52)";
@@ -103,9 +103,10 @@ function scheduleFrame() {
 }
 
 function segmentWidth(distance, elapsed) {
+  // 走笔越快墨越宽（笔锋带出的墨随速度释放），收势或停驻时笔画自然收细成点。
   const speed = distance / Math.max(elapsed, 1);
-  const pressure = 1 - clamp(speed / 2.1, 0, 1) * 0.58;
-  return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * pressure;
+  const flow = clamp(speed / 2.2, 0, 1);
+  return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * flow * flow;
 }
 
 function queuePoint(point) {

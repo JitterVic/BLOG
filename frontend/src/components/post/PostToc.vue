@@ -29,6 +29,22 @@ const isDesktop = useMediaQuery("(min-width: 1281px)");
 const { collapsed, collapse, expand } = usePersistedCollapse("zhizhi-article-toc-collapsed");
 const isCollapsed = computed(() => isDesktop.value && collapsed.value);
 
+// 当前章节指示条：一条朱色小标记在条目之间「滑动」，而不是各条目各自闪色。
+// 位置 = 激活按钮相对 nav 的 offsetTop/offsetHeight（与滚动无关，nav 自己滚也不影响）。
+const indicatorOn = ref(false);
+
+function updateIndicator() {
+  const navigation = navigationRef.value;
+  const activeItem = navigation?.querySelector('[aria-current="location"]');
+  if (!navigation || !activeItem || isCollapsed.value || !isDesktop.value) {
+    indicatorOn.value = false;
+    return;
+  }
+  navigation.style.setProperty("--toc-ind-y", `${activeItem.offsetTop}px`);
+  navigation.style.setProperty("--toc-ind-h", `${activeItem.offsetHeight}px`);
+  indicatorOn.value = true;
+}
+
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
 }
@@ -93,6 +109,7 @@ async function scheduleAlignment() {
   if (isCollapsed.value) return;
   await nextTick();
   queueAlignment(prefersReducedMotion() ? "auto" : "smooth", true);
+  updateIndicator();
 }
 
 async function handleResize() {
@@ -161,6 +178,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <nav id="article-toc-nav" ref="navigationRef" aria-label="文章目录">
+        <span class="toc-indicator" :class="{ 'is-on': indicatorOn }" aria-hidden="true"></span>
         <button
           v-for="(item, index) in items"
           :key="item.id"

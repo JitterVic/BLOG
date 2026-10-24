@@ -22,6 +22,7 @@
 
 /* 栏目胶囊：栏目数被编辑层面约束在少数几个，所以这里不需要滚动或折叠 */
 .cat-filter-button {
+  position: relative;
   display: inline-flex;
   align-items: baseline;
   gap: 0.32rem;
@@ -35,8 +36,24 @@
   font-size: 0.6rem;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  isolation: isolate;
+  overflow: hidden;
   transition: color 0.22s var(--ease-quart), background 0.22s var(--ease-quart),
     border-color 0.22s var(--ease-quart);
+}
+
+/* 墨色从胶囊底部「印刷」上来、文字反白——与 cover-button 同一套语言；
+   选中态是实底朱色，墨层被压在背景之下，互不打架。 */
+.cat-filter-button::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  background: var(--ink);
+  border-radius: inherit;
+  transform: scaleY(0);
+  transform-origin: 50% 100%;
+  transition: transform 0.28s var(--ease-quart);
 }
 
 .cat-filter-button__count {
@@ -47,10 +64,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cat-filter-button:hover {
-  color: var(--ink);
-  background: rgb(var(--accent-rgb) / 0.06);
-  border-color: var(--accent);
+.cat-filter-button:hover,
+.cat-filter-button:focus-visible {
+  color: var(--paper);
+  background: transparent;
+  border-color: var(--ink);
+}
+
+.cat-filter-button:hover::before,
+.cat-filter-button:focus-visible::before {
+  transform: scaleY(1);
+}
+
+.cat-filter-button:hover .cat-filter-button__count,
+.cat-filter-button:focus-visible .cat-filter-button__count {
+  color: rgb(var(--paper-rgb) / 0.78);
 }
 
 .cat-filter-button.active {
@@ -171,6 +199,65 @@
 
 .posts-index .archive__li:hover {
   background: rgb(var(--rule-rgb) / 0.035);
+}
+
+/* 悬停升出朱色竖条：行是索引里的最小单位，竖条给出「当前行」的锚点
+   （与 is-latest 常驻的左侧标尺同一位置、同一颜色，视觉语言一致） */
+.posts-index .archive__li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 3px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: 50% 0;
+  transition: transform 0.3s var(--ease-quart);
+}
+
+.posts-index .archive__li:hover::before,
+.posts-index .archive__li:focus-within::before {
+  transform: scaleY(1);
+}
+
+/* 标题字距微扩：铅字被「拨松」的感觉，配合变色但不动位置（不引起版面抖动） */
+.posts-index .archive__title {
+  transition: color 0.25s ease, letter-spacing 0.35s var(--ease-quart);
+}
+
+.posts-index .archive__li:hover .archive__title,
+.posts-index .archive__li:focus-within .archive__title {
+  letter-spacing: 0.02em;
+}
+
+/* 行尾「→」滑入：与竖条、变色同拍，给出「这一行可以走」的方向。
+   槽位常驻（不引起行高跳动），只动透明度与位移。 */
+.posts-index .archive__go {
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.85rem;
+  line-height: 1;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition:
+    opacity 0.3s var(--ease-quart),
+    transform 0.3s var(--ease-quart);
+}
+
+.posts-index .archive__li:hover .archive__go,
+.posts-index .archive__li:focus-within .archive__go {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .posts-index .archive__go {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* 按下比悬停再深一档：行内可点区域是整行，按下时要有「落版」的确认感 */

@@ -13,6 +13,7 @@ defineProps({
       v-if="previousPost"
       :to="`/posts/${previousPost.slug}`"
       class="post-sequence-link post-sequence-link--previous"
+      data-cursor="上一篇"
     >
       <span>← Previous</span>
       <strong>{{ previousPost.title }}</strong>
@@ -22,6 +23,7 @@ defineProps({
       v-if="nextPost"
       :to="`/posts/${nextPost.slug}`"
       class="post-sequence-link post-sequence-link--next"
+      data-cursor="下一篇"
     >
       <span>Next →</span>
       <strong>{{ nextPost.title }}</strong>

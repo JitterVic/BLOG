@@ -24,12 +24,16 @@ function cardElement() {
   return target?.$el || target;
 }
 
-function handlePointerMove(e) {
+/**
+ * 指针倾斜 + 光斑跟随：每次 pointermove 只记事件，真正写 CSS 变量合到 rAF。
+ * 指针事件每秒可达上百次，而合成器每帧只消费一次。
+ */
+let tiltFrame = 0;
+let pendingTiltEvent = null;
+
+function applyTilt(e) {
   const el = cardElement();
-  if (!el || e.pointerType === "touch") return;
-  // 指针倾斜是纯装饰的视差效果：系统要求降低动效时直接不跟手，
-  // 与「入场动效默认开启」的版式决策无关，这里只关掉跟手位移。
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  if (!el) return;
   const rect = el.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
@@ -44,7 +48,27 @@ function handlePointerMove(e) {
   el.style.setProperty("--feature-y", `${((y / rect.height) * 100).toFixed(1)}%`);
 }
 
+function handlePointerMove(e) {
+  if (!cardElement() || e.pointerType === "touch") return;
+  // 指针倾斜是纯装饰的视差效果：系统要求降低动效时直接不跟手，
+  // 与「入场动效默认开启」的版式决策无关，这里只关掉跟手位移。
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  pendingTiltEvent = e;
+  if (tiltFrame) return;
+  tiltFrame = window.requestAnimationFrame(() => {
+    tiltFrame = 0;
+    const ev = pendingTiltEvent;
+    pendingTiltEvent = null;
+    if (ev) applyTilt(ev);
+  });
+}
+
 function handlePointerLeave() {
+  if (tiltFrame) {
+    window.cancelAnimationFrame(tiltFrame);
+    tiltFrame = 0;
+  }
+  pendingTiltEvent = null;
   const el = cardElement();
   if (!el) return;
   el.style.setProperty("--feature-tilt-x", "0deg");
@@ -69,6 +93,7 @@ function handlePointerLeave() {
       class="mimg print-feature-image rv"
       :class="{ 'mimg--has-image': true }"
       :aria-label="`阅读：${post.title}`"
+      data-cursor="阅读"
       data-reveal-delay="40"
       @pointermove="handlePointerMove"
       @pointerleave="handlePointerLeave"
@@ -129,7 +154,7 @@ function handlePointerLeave() {
           <span>{{ post.read_time }}</span>
           <span>{{ displayDate(post.published_at) }}</span>
         </div>
-        <RouterLink :to="`/posts/${post.slug}`" class="text-link print-read-more">
+        <RouterLink :to="`/posts/${post.slug}`" class="text-link print-read-more" data-cursor="阅读">
           阅读全文 →
         </RouterLink>
       </div>

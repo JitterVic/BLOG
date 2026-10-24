@@ -38,6 +38,11 @@
     line-height: 1.6;
   }
 
+  /* 阅读工具的字号档只服务屏幕阅读，不带进印刷 */
+  html[data-reading] .print-markdown {
+    font-size: inherit !important;
+  }
+
   /* 屏幕上存在的导航与装饰，全部退出印刷版面 */
   .skip-link,
   .site-header,
@@ -63,6 +68,10 @@
   .feature-poster-mark,
   .feature-orbit,
   .feature-spotlight,
+  .bg-issue-num,
+  .cursor-ring,
+  .ink-ripple-host,
+  .paper-grain,
   .cover-button {
     display: none !important;
   }

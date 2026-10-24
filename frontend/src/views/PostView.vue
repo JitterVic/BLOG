@@ -8,6 +8,7 @@ import PostHero from "../components/post/PostHero.vue";
 import PostRail from "../components/post/PostRail.vue";
 import PostSequenceNav from "../components/post/PostSequenceNav.vue";
 import PostToc from "../components/post/PostToc.vue";
+import ReadingTools from "../components/post/ReadingTools.vue";
 import RelatedPostsGrid from "../components/post/RelatedPostsGrid.vue";
 import { useMediaQuery } from "../composables/useMediaQuery";
 import { setPageMeta } from "../composables/usePageMeta";
@@ -215,6 +216,7 @@ onBeforeUnmount(() => {
       <div class="post-topline print-post-topline rv">
         <RouterLink to="/posts">← 返回文章</RouterLink>
         <span>{{ site?.name || "Personal Blog" }} · Digital Edition</span>
+        <ReadingTools />
       </div>
 
       <PostHero :post="post" :site-name="site?.name || 'Personal Blog'" />

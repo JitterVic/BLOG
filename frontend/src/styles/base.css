@@ -181,3 +181,18 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-light);
 }
+
+/* 纸张噪点（App.vue 的 .paper-grain 层）：全站一层极淡的纤维颗粒，
+   与 effects.css 的网点纸纹互补（那层是网点、这层是纤维），纸面从纯色变成「有纸纹」。
+   静态纹理、无动画——reduced-motion 下照常保留；印刷退出（print.css）。
+   multiply 让噪声只压深不提亮，墨字上几乎不可见；位于墨迹画布(1200)之下。 */
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1190;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}

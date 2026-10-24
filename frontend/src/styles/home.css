@@ -387,3 +387,115 @@
   }
 }
 
+/* ==========================================================================
+   本期要目（封面内嵌的三条最新文章）+ 刊头绘制
+   ========================================================================== */
+
+/* 刊头不再随整行平移浮现，而是从右往左被「裁开」——像制版时划下的第一刀。 */
+.print-cover__masthead.rv {
+  transform: none;
+  clip-path: inset(-3px 100% -3px 0);
+  transition:
+    clip-path 0.9s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)),
+    opacity 0.45s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+.print-cover__masthead.rv.vis {
+  clip-path: inset(-3px 0 -3px 0);
+}
+
+.cover-toc {
+  margin-top: clamp(1.6rem, 3.4svh, 2.6rem);
+  padding-top: 0.85rem;
+  border-top: 3px double var(--rule);
+}
+
+.cover-toc__label {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: var(--ink-faded);
+  font-family: var(--f-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.cover-toc__list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* 列数跟随实际条数（最多 3）：库存不足时收拢，不留空列 */
+  grid-template-columns: repeat(var(--toc-cols, 3), minmax(0, 1fr));
+  gap: clamp(1rem, 2.4vw, 2rem);
+  list-style: none;
+}
+
+.cover-toc__list a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid var(--rule-light);
+  transition: background 0.22s ease;
+}
+
+.cover-toc__list a:hover {
+  background: rgb(var(--rule-rgb) / 0.04);
+}
+
+.cover-toc__no {
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+}
+
+/* 标题下划线从左画到右：与正文链接同一套墨迹语言 */
+.cover-toc__title {
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--f-display);
+  font-size: clamp(0.92rem, 1.5vw, 1.12rem);
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: 0 96%;
+  background-size: 0 1px;
+  transition:
+    color 0.25s ease,
+    background-size 0.35s var(--ease-quart, cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+.cover-toc__list a:hover .cover-toc__title,
+.cover-toc__list a:focus-visible .cover-toc__title {
+  color: var(--accent);
+  background-size: 100% 1px;
+}
+
+.cover-toc__cat {
+  grid-column: 2;
+  color: var(--ink-faded);
+  font-family: var(--f-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 920px) {
+  .cover-toc__list {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+/* 竖屏高度紧张时让要目让位给标题与按钮（首屏优先级最低的一块） */
+@media (max-height: 720px) {
+  .cover-toc {
+    display: none;
+  }
+}
+

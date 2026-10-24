@@ -43,20 +43,47 @@ body::before {
   backdrop-filter: none;
 }
 
+/* 图卡的指针倾斜与跟随光斑恢复生效（home.css 的 rotateX/rotateY + 径向光斑），
+   只保留「不挂常驻合成层」一条：倾斜本身只在指针划过卡片时发生，
+   而位移/旋转/阴影全是合成器属性，无需 will-change 预热。
+   这里曾用 transform: none 把它们整体关掉——那是性能收口期的过度切除。 */
 .home-latest-feature .print-feature-image {
   will-change: auto;
-  transform: none;
 }
 
-.home-latest-feature .print-feature-image:hover,
-.home-latest-feature .print-feature-image:focus-visible {
-  transform: translateY(-4px);
-}
-
+/* 光斑跟随指针：radial 中心由 --feature-x/y 驱动（HomeFeature 已做 rAF 合帧）。
+   额外叠一道斜向高光，悬停时整体提亮一档。 */
 .feature-spotlight {
   background:
-    radial-gradient(circle at 28% 24%, rgba(255, 238, 191, 0.15), transparent 34%),
-    linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.04) 48%, transparent 62%);
+    radial-gradient(circle 260px at var(--feature-x) var(--feature-y), rgba(255, 238, 191, 0.22), transparent 65%),
+    linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.05) 50%, transparent 62%);
+  mix-blend-mode: screen;
+}
+
+/* 进卡那一瞬，一道斜向高光贴着卡面从左划到右（一次性；重新悬停会重播）。
+   .mimg 自带 overflow:hidden，扫光不会溢出卡缘。 */
+.feature-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(108deg, transparent 42%, rgba(255, 246, 214, 0.16) 50%, transparent 58%);
+  transform: translateX(-135%);
+}
+
+.print-feature-image:hover .feature-spotlight::after {
+  animation: feature-sheen 0.8s var(--ease-page, cubic-bezier(0.16, 1, 0.3, 1)) 0.06s;
+}
+
+@keyframes feature-sheen {
+  to {
+    transform: translateX(135%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-feature-image:hover .feature-spotlight::after {
+    animation: none;
+  }
 }
 
 /* Replace per-card turbulence with a small repeating texture. */
@@ -101,6 +128,111 @@ body::before {
 @media (pointer: coarse), (prefers-reduced-motion: reduce) {
   .cursor-effects {
     display: none !important;
+  }
+}
+
+/* ==========================================================================
+   光标光环 + 点击墨滴（CursorRing.vue）
+   ==========================================================================
+   光环只做增强：原生光标全程保留。位置由 JS 写 transform（lerp 跟随），
+   尺寸/颜色变化走独立 `scale` 属性与 transition，两者互不干扰。 */
+
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border: 1px solid rgb(var(--rule-rgb) / 0.38);
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+  scale: 1;
+  transition:
+    width 0.28s var(--ease-quart),
+    height 0.28s var(--ease-quart),
+    margin 0.28s var(--ease-quart),
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    scale 0.2s var(--ease-spring-gentle, cubic-bezier(0.2, 0.88, 0.24, 1));
+}
+
+.cursor-ring.is-hovering {
+  scale: 1.45;
+  border-color: var(--accent);
+}
+
+.cursor-ring.is-down {
+  scale: 0.78;
+}
+
+/* 情境标签态：扩成一枚纸面小圆，浮现「阅读 / 翻阅」等字样 */
+.cursor-ring.has-label {
+  width: 58px;
+  height: 58px;
+  margin: -29px 0 0 -29px;
+  scale: 1;
+  background: rgb(var(--paper-tint-rgb) / 0.92);
+  border-color: var(--accent);
+}
+
+.cursor-ring__label {
+  color: var(--accent);
+  font-family: var(--f-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cursor-ring.has-label .cursor-ring__label {
+  opacity: 1;
+}
+
+@media (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .cursor-ring {
+    display: none !important;
+  }
+}
+
+/* 点击墨滴：在点击坐标晕开一圈朱色涟漪，动画结束自行移除（JS 监听 animationend）。
+   触摸设备同样生效——触屏没有 hover，这一圈扩散就是它的按下确认。 */
+.ink-ripple-host {
+  position: fixed;
+  inset: 0;
+  z-index: 1390;
+  pointer-events: none;
+}
+
+.ink-ripple {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1.5px solid rgb(var(--accent-rgb) / 0.55);
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb) / 0.14);
+  animation: ink-ripple-spread 0.5s var(--ease-quart) forwards;
+}
+
+.ink-ripple--strong {
+  border-color: rgb(var(--accent-rgb) / 0.85);
+  background: rgb(var(--accent-rgb) / 0.22);
+}
+
+@keyframes ink-ripple-spread {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.95;
+  }
+
+  100% {
+    transform: scale(7);
+    opacity: 0;
   }
 }
 
