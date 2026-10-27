@@ -40,6 +40,7 @@
         </div>
         <div class="topbar-actions">
           <a href="{{ url_for('admin_write') }}" class="ghost-link">新建文章</a>
+          <a href="{{ url_for('admin_notes') }}" class="ghost-link">新建余笺</a>
           <a href="/" class="ghost-link" target="_blank" rel="noreferrer">查看前台</a>
           <button type="button" class="ghost-link help-toggle" id="help-toggle" aria-haspopup="dialog">使用指南</button>
           <form method="post" action="{{ url_for('admin_logout') }}" class="logout-form" data-loading-form>
@@ -56,6 +57,7 @@
         <a href="{{ url_for('admin_write') }}" class="{% if admin_page == 'write' %}active{% endif %}" {% if admin_page == 'write' %}aria-current="page"{% endif %}><span>02 / Write</span><strong>文章写作</strong></a>
         <a href="{{ url_for('admin_profile_page') }}" class="{% if admin_page == 'profile' %}active{% endif %}" {% if admin_page == 'profile' %}aria-current="page"{% endif %}><span>03 / Profile</span><strong>封面资料</strong></a>
         <a href="{{ url_for('admin_media') }}" class="{% if admin_page == 'media' %}active{% endif %}" {% if admin_page == 'media' %}aria-current="page"{% endif %}><span>04 / Media</span><strong>媒体资源</strong></a>
+        <a href="{{ url_for('admin_notes') }}" class="{% if admin_page == 'notes' %}active{% endif %}" {% if admin_page == 'notes' %}aria-current="page"{% endif %}><span>05 / Notes</span><strong>余笺记录</strong></a>
         <div class="issue-strip__stat"><small>Published / Draft / Trash</small><strong>{{ stats.published_count }} / {{ stats.draft_count }} / {{ stats.trashed_count }}</strong></div>
       </nav>
 

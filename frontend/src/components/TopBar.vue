@@ -8,6 +8,7 @@ import { useRoute, RouterLink } from "vue-router";
 
 import RailSearch from "./RailSearch.vue";
 import ReadTrace from "./ReadTrace.vue";
+import { NOTE_TYPES } from "../composables/useNotes";
 import { useRailState } from "../composables/useRailState";
 import { useSite } from "../composables/useSite";
 import { useTheme } from "../composables/useTheme";
@@ -21,10 +22,12 @@ const menuRef = ref(null);
 const searchInputRef = ref(null);
 
 const isPost = computed(() => route.name === "post");
+const isNotesSection = computed(() => route.name === "notes" || route.name === "note");
 
 const NAV_ITEMS = [
   { name: "home", label: "首页", to: "/" },
   { name: "posts", label: "文章", to: "/posts" },
+  { name: "notes", label: "余笺", to: "/notes" },
   { name: "about", label: "关于", to: "/about" },
 ];
 
@@ -44,11 +47,18 @@ const categories = computed(() => {
 
 function isNavActive(name) {
   if (name === "home") return route.name === "home";
+  if (name === "notes") return route.name === "notes" || route.name === "note";
   return route.name === name || (name === "posts" && route.name === "post");
 }
 
 function isCategoryActive(name) {
   return route.name === "posts" && route.query.cat === name;
+}
+
+function isNoteTypeActive(typeValue) {
+  if (route.name !== "notes") return false;
+  const raw = typeof route.query.type === "string" ? route.query.type : "";
+  return raw === typeValue;
 }
 
 function openMenu({ focusSearch = false } = {}) {
@@ -131,7 +141,22 @@ onBeforeUnmount(() => {
           </RouterLink>
         </nav>
 
-        <div class="topbar-menu__section">
+        <div v-if="isNotesSection" class="topbar-menu__section">
+          <p class="rail-mid__label">余笺类型</p>
+          <nav class="topbar-menu__cats" aria-label="余笺类型">
+            <RouterLink
+              v-for="item in NOTE_TYPES"
+              :key="item.value || 'all'"
+              class="topbar-menu__link"
+              :to="{ name: 'notes', query: item.value ? { type: item.value } : {} }"
+              :aria-current="isNoteTypeActive(item.value) ? 'page' : undefined"
+            >
+              <span class="marker-sweep" :class="{ 'is-on': isNoteTypeActive(item.value) }">{{ item.label }}</span>
+            </RouterLink>
+          </nav>
+        </div>
+
+        <div v-else class="topbar-menu__section">
           <p class="rail-mid__label">栏目</p>
           <nav class="topbar-menu__cats" aria-label="栏目">
             <RouterLink

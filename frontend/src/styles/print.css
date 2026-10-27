@@ -1,6 +1,6 @@
 /* ============================================================
    print.css — 打印样式（DESIGN.md §8）：全站唯一 @media print
-   A4 留白 18/16mm；令牌翻转为无彩色；隐藏左栏 / 顶栏 / 读迹 / 桌宠 / 阅读工具；
+  A4 留白 18/16mm；令牌翻转为无彩色；隐藏左栏 / 顶栏 / 读迹 / 阅读工具；
    正文 10.5pt；外链附 URL；图与表防拆页。
    ============================================================ */
 
@@ -38,13 +38,20 @@
   .topbar,
   .topbar-menu,
   .skip-link,
-  .cat-pet,
   .reading-tools,
   .article-toc-compact,
+  .article-sidenotes,
+  .footnote-inline,
   .article-lightbox,
+  .article-side,
+  .back-to-top,
+  .rail-spine,
+  .side-spine,
+  .page-grid__side,
   .posts-more,
   .read-sentinel,
-  .site-footer__clear {
+  .site-footer__clear,
+  .site-footer__confirm {
     display: none !important;
   }
 
@@ -53,8 +60,33 @@
     max-width: none;
   }
 
+  /* 品牌封面印刷呈现落墨完成态（不播书写过程；落款直接可见） */
+  .brand-stroke {
+    display: none;
+  }
+
+  .brand-fill {
+    animation: none;
+    opacity: 1;
+  }
+
+  .brand-cover__colophon {
+    animation: none;
+    opacity: 1;
+  }
+
   .app-main {
     padding: 0;
+  }
+
+  /* 文章恢复单卷流式：批注栏已隐藏，正文占满版心 */
+  .article {
+    display: block;
+    max-width: none;
+  }
+
+  .page-grid {
+    display: block;
   }
 
   a {

@@ -10,22 +10,188 @@
   margin-inline: auto;
 }
 
-/* ≥1360px 预留边注列（§5.3 第二阶段：脚注侧排；第一阶段只保证文末脚注可用）*/
-@media (min-width: 1360px) {
+/* 右侧批注栏（≥1100px 常驻）：<1100px 整栏退出布局 */
+.article-side {
+  display: none;
+}
+
+/* 本文目录（§5.4，右栏批注栏）：左缘 1px 格线，h3 缩进；工具行放「↑开头 / 收起」 */
+.article-toc__tools {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.article-toc__top {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.article-toc__top:hover {
+  color: var(--indigo);
+  text-decoration: underline 1px;
+  text-underline-offset: 0.2em;
+}
+
+.article-toc {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+}
+
+.article-toc__link {
+  display: block;
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-4);
+  font-size: var(--fs-2);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.article-toc__link:hover {
+  color: var(--indigo);
+}
+
+.article-toc__link--sub {
+  padding-left: var(--sp-6);
+}
+
+.article-toc__progress {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 批注栏收起后的书脊：竖排「目录」页签贴右缘，点开即重新展开（与左栏书脊同款） */
+.side-spine {
+  position: fixed;
+  right: 0;
+  top: var(--sp-6);
+  z-index: 30;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.25em;
+  padding: var(--sp-3) var(--sp-2);
+  font-family: var(--f-kai);
+  font-size: var(--fs-2);
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: var(--r-ctl) 0 0 var(--r-ctl);
+  cursor: pointer;
+  transition: color var(--t-1) var(--ease);
+}
+
+.side-spine:hover {
+  color: var(--ink);
+}
+
+/* 边注列默认隐藏（<1100px 走段后就地展开 .footnote-inline） */
+.article-sidenotes {
+  display: none;
+}
+
+/* ≥1100px：三栏书案——正文 36em 卷 + 17rem 批注栏（题记 / 边注 / 标签与延伸） */
+@media (min-width: 1100px) {
   .article {
     display: grid;
-    grid-template-columns: minmax(0, 36em) 17rem;
-    justify-content: center;
+    grid-auto-flow: row dense;
+    grid-template-columns: minmax(0, var(--col-read)) 17rem;
+    justify-content: space-between;
     column-gap: var(--sp-7);
-    /* 单栏时的 36em 上限会让两列互相挤压，网格宽度交给列定义 */
     max-width: none;
   }
 
-  .article-head,
-  .article-body,
-  .article-foot,
-  .read-sentinel {
+  .article .article-head,
+  .article .article-body,
+  .article .read-sentinel,
+  .article .article-foot,
+  .article .note-media,
+  .article .note-ext-bar {
     grid-column: 1;
+  }
+
+  /* 批注栏粘性跟随（§5.4）：从 row 1 起纵向跨过各行——sticky 盒子被限制在
+     网格区域内，区域必须含文章头那一行才能上提到摘要线；
+     初始落点由 PostView 实测摘要行写入 --side-offset（正外边距，区域内下推）；
+     内容高于视口时面板内部自滚（长目录不出屏）；
+     overscroll-behavior 把滚轮锁在面板内——滚到边界不再链动正文 */
+  .article-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    min-width: 0;
+    margin-top: var(--side-offset, 0px);
+    position: sticky;
+    top: var(--sp-6);
+    max-height: calc(100svh - var(--sp-6) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  /* 桌面端标签与相关推荐移入右栏；窄屏仍走文末 */
+  .article-foot__tags,
+  .article-foot__related {
+    display: none;
+  }
+
+  /* 批注栏收起（§5.4）：只隐藏栏体，右轨 17rem 原样保留——正文位置不动；
+     文末标签与相关推荐顶上补位 */
+  .article--side-collapsed .article-side,
+  .article--side-collapsed .article-sidenotes {
+    display: none;
+  }
+
+  .article--side-collapsed .article-foot__tags,
+  .article--side-collapsed .article-foot__related {
+    display: block;
+  }
+
+  .article-sidenotes {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+    position: relative;
+  }
+
+  .sidenote {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--sp-2);
+    align-items: baseline;
+    font-family: var(--f-kai);
+    font-size: var(--fs-2);
+    line-height: 1.75;
+    color: var(--ink-soft);
+    transition: color var(--t-1) var(--ease);
+  }
+
+  .sidenote.is-active {
+    color: var(--ink);
+  }
+
+  .sidenote__num {
+    font-family: var(--f-hei);
+    font-size: var(--fs-1);
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sidenote__body p {
+    margin: 0;
   }
 }
 
@@ -60,7 +226,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
+  padding-bottom: var(--sp-4);
   margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
 }
 
 .article-head__meta-info {
@@ -201,7 +369,13 @@
 }
 
 .prose mark {
-  background: none;
+  background: linear-gradient(var(--marker-wash), var(--marker-wash)) 0 90% / 100% 56% no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding-inline: 0.12em;
+  margin-inline: -0.12em;
+  border-radius: var(--r-sm);
+  color: var(--ink);
 }
 
 .prose blockquote {
@@ -239,6 +413,7 @@
 .prose img {
   width: 100%;
   border-radius: var(--r-sm);
+  cursor: zoom-in;
 }
 
 .prose figcaption {
@@ -390,10 +565,44 @@
   opacity: 1;
 }
 
-/* 文末脚注（§6.5）：楷体，回跳可键盘访问 */
+/* 文末脚注与窄屏段后批注（§5.4、§6.5）：楷体，回跳可键盘访问 */
 .prose .footnote-ref {
   font-family: var(--f-hei);
   font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  vertical-align: super;
+  line-height: 0;
+  margin-inline: 0.1em;
+}
+
+.footnote-inline {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-2);
+  align-items: baseline;
+  font-family: var(--f-kai);
+  font-size: var(--fs-2);
+  line-height: 1.75;
+  color: var(--ink);
+  background: var(--paper-sunk);
+  border-left: 2px solid var(--indigo);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-block: calc(var(--step) * -0.25) calc(var(--step) * 0.5);
+}
+
+.footnote-inline__num {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--indigo);
+  font-variant-numeric: tabular-nums;
+}
+
+.footnote-inline__body p {
+  margin: 0;
+  font-family: var(--f-kai);
+  font-size: var(--fs-2);
+  line-height: 1.75;
 }
 
 .prose .footnotes,
@@ -408,51 +617,11 @@
   padding-top: var(--sp-3);
 }
 
-/* 阅读字号三档（§5.3）：只作用于 .prose，行高保持 2 */
-html[data-reading="sm"] .prose {
-  font-size: 1rem;
-}
-
-html[data-reading="lg"] .prose {
-  font-size: 1.25rem;
-}
-
-/* --- 阅读工具（§5.3）--- */
+/* --- 文章操作（§5.4）--- */
 .reading-tools {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-}
-
-.reading-tools__group {
-  display: inline-flex;
-}
-
-.reading-tools__btn {
-  min-width: 2rem;
-  height: 44px;
-  font-family: var(--f-hei);
-  font-size: var(--fs-1);
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--line-ui);
-  border-radius: var(--r-ctl);
-}
-
-.reading-tools__btn + .reading-tools__btn {
-  margin-left: -1px;
-}
-
-.reading-tools__btn:first-child {
-  border-radius: var(--r-ctl) 0 0 var(--r-ctl);
-}
-
-.reading-tools__btn:last-child {
-  border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
-}
-
-.reading-tools__btn.is-active {
-  background: var(--paper-sunk);
+  gap: var(--sp-4);
 }
 
 .reading-tools__copy {
@@ -542,8 +711,40 @@ html[data-reading="lg"] .prose {
   }
 }
 
-/* --- 图片灯箱（§5.3）：沿用实现，遮罩换纸色 --- */
-.article-lightbox {
+/* 余笺外部链接信息条（§5.3）：上下 1px 格线 + 凹纸底，无阴影纯横线分栏 */
+.note-ext-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--paper-sunk);
+  border-block: 1px solid var(--line);
+}
+
+.note-ext-bar__info {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.note-ext-bar__label {
+  font-family: var(--f-hei);
+  font-size: var(--fs-1);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.note-ext-bar__host {
+  font-family: var(--f-song);
+  font-size: var(--fs-2);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* --- 图片灯箱（§5.3）：沿用实现，遮罩换纸色 --- */.article-lightbox {
   width: min(90vw, 72rem);
   padding: 0;
   background: transparent;

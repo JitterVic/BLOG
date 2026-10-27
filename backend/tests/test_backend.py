@@ -540,272 +540,29 @@ def test_write_page_exposes_publish_status_chrome(client):
 
 def test_css_contains_no_toc_rule():
     admin_css = Path("backend/src/blog/static/admin/css/write.css").read_text(encoding="utf-8")
-    front_css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
+    front_css = Path("frontend/src/styles/prose.css").read_text(encoding="utf-8")
     assert "write-status-badge" in admin_css
-    assert ("post-reading-layout--no-toc" in front_css) or ("--no-toc" in front_css) or ("post-reading-layout--no-toc" in admin_css)
+    # v2 没有「无目录文章」特殊版式：prose.css 不应残留 v1 的 no-toc 钩子
+    assert "post-reading-layout" not in front_css
+    assert "--no-toc" not in front_css
 
 
-def test_toc_scroll_offset_variables_are_in_scope():
-    """标题落点用的自定义属性必须声明在目录与正文的共同祖先上。
+def test_prose_heading_scroll_margin_is_set():
+    """标题落点留白：正文 h2/h3 与列表页年份行都要有 scroll-margin-top。
 
-    自定义属性不向上查找。若把 `--toc-strip-height` 声明在 `.article-toc` 上，
-    兄弟节点里的标题读不到它，`calc()` 会在计算值阶段把整条声明判为无效并退化成
-    `scroll-margin-top: 0`——目录点击后标题正好顶到目录条下面，且没有任何报错。
+    没有它时，锚点/目录点击会把标题顶到视口边缘（或吸顶元素底下），
+    且不报任何错。v2 的统一值是 var(--sp-6)。
     """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    assert "scroll-margin-top: calc(var(--toc-sticky-top) + var(--toc-strip-height)" in css
+    prose = Path("frontend/src/styles/prose.css").read_text(encoding="utf-8")
+    rule = re.search(r"\.prose h2,\s*\n\.prose h3 \{([^}]*)\}", prose)
+    assert rule is not None, "找不到 .prose h2/h3 规则"
+    assert "scroll-margin-top: var(--sp-6)" in rule.group(1)
 
-    # 窄屏分支：两个变量都要落在 .post-reading-layout 上（目录与正文的共同祖先）
-    narrow = css.split("@media (max-width: 1280px)", 1)
-    assert len(narrow) == 2, "找不到窄屏媒体查询"
-    narrow_body = narrow[1]
-    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", narrow_body, re.S)
-    assert layout_blocks, "窄屏分支里找不到 .post-reading-layout 规则块"
-    declared = "\n".join(layout_blocks)
-    assert "--toc-sticky-top" in declared
-    assert "--toc-strip-height" in declared
-
-    # 目录自身只能「使用」这两个变量，不能「声明」它们（声明会让标题读不到，
-    # 这正是修掉的那个 bug）。用 `变量名:` 判断声明而非引用。
-    for toc_body in re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S):
-        assert "--toc-strip-height:" not in toc_body, (
-            "目录高度变量必须声明在 .post-reading-layout 上，否则正文标题读不到"
-        )
-        assert "--toc-sticky-top:" not in toc_body, (
-            "吸附位置变量必须声明在 .post-reading-layout 上，否则正文标题读不到"
-        )
-
-
-def test_article_rail_width_tokens_are_in_scope():
-    """左侧清单的宽度与间隙变量必须声明在 `.post-reading-layout` 上。
-
-    与目录的吸附变量同理：面板是这份网格的并列子元素，自定义属性既不向上查找、也不
-    横向传递。若把 `--post-rail-width` 声明在 `.article-rail` 上，`min()` 会在计算值
-    阶段被整条判为无效并退化成 auto 宽度，清单就会压到正文轨道上，而且不报错。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
-    assert layout_blocks, "找不到 .post-reading-layout 规则块"
-    declared = "\n".join(layout_blocks)
-    assert "--post-rail-width" in declared
-    assert "--post-rail-gap" in declared
-
-    rail_blocks = re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
-    assert rail_blocks, "找不到 .article-rail 规则块"
-    for body in rail_blocks:
-        assert "--post-rail-width:" not in body, (
-            "清单宽度变量必须声明在 .post-reading-layout 上，否则 min() 夹不住宽度"
-        )
-        assert "--post-rail-gap:" not in body, (
-            "清单间隙变量必须声明在 .post-reading-layout 上，否则 min() 夹不住宽度"
-        )
-
-
-def test_side_panels_cannot_reach_the_reading_column():
-    """左右面板都不能挤动正文轨道，也不能压到版面框上。
-
-    正文能恒定居中、宽度不变，靠的是「三条轨道宽度固定 + 面板只决定自己那一格里的
-    位置」：面板宽度用 min() 夹在自己那格的轨道宽以内，左右各自贴向本侧（left: 0 /
-    right: 0）。面板是绝对定位的网格子元素，包含块就是它自己那一格，所以这里的
-    百分比仍是轨道宽度——一旦有轨道改成 auto，或把面板宽度改成 auto 内容撑开，
-    面板就会压到正文轨道上。
-
-    但「不挤正文」不等于「好看」：正文列只有 760px，1fr 轨道在窄一点的视口上比
-    面板宽不了多少，于是面板会越过版面框的框线（实测 1440 下框左边缘在 x=125，
-    而清单宽 312）。所以宽度还必须夹上第三项——版面框外侧的留白。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    layout_blocks = re.findall(r"\.post-reading-layout\s*\{([^}]*)\}", css, re.S)
-    columns = "\n".join(
-        declaration
-        for body in layout_blocks
-        for declaration in re.findall(r"grid-template-columns\s*:([^;]*);", body)
-    )
-    assert columns, "找不到 .post-reading-layout 的轨道定义"
-    assert "auto" not in columns, "轨道不能由内容撑开，否则面板会挤动正文"
-    assert "var(--post-article-width)" in columns
-
-    rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
-    for term in (
-        "var(--post-rail-width)",
-        "calc(100% - var(--post-rail-gap))",
-        "var(--post-outer-margin",
-    ):
-        assert term in rail, f"清单宽度缺少夹取项 {term}"
-    assert "left: 0" in rail
-    assert "var(--post-rail-margin)" in rail, "清单的边缘余量必须与宽度上限同源"
-
-    toc_blocks = re.findall(r"\.article-toc\s*\{([^}]*)\}", css, re.S)
-    assert toc_blocks
-    toc = "\n".join(toc_blocks)
-    for term in (
-        "var(--post-toc-width)",
-        "calc(100% - var(--post-toc-gap))",
-        "var(--post-outer-margin",
-    ):
-        assert term in toc, f"目录宽度缺少夹取项 {term}"
-    assert "right: 0" in toc, "右侧目录必须贴本格右边缘"
-    assert "var(--post-toc-margin)" in toc, "目录的边缘余量必须与宽度上限同源"
-
-
-def test_reading_frame_narrows_to_make_room_for_the_side_panels():
-    """阅读页的版面框必须随视口收窄，把两侧栏位让出来。
-
-    1888px 以内宽度的视口放不下「1180px 的框 + 312px 清单 + 240px 目录」，
-    框不收窄，面板只会越过框线。框宽与外侧留白必须来自同一个变量：
-    --post-outer-margin 既是面板宽度上限的减项，也是面板与框线之间距离的来源，
-    两边各算一遍迟早会漂移。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-
-    root = re.search(r"\.print-post-view\s*\{([^}]*)\}", css, re.S)
-    assert root is not None, "找不到 .print-post-view 的变量声明块"
-    assert "--post-frame-width" in root.group(1), "框宽必须声明在框与面板的共同祖先上"
-    assert "--post-outer-margin" in root.group(1), "外侧留白必须由框宽推导"
-    assert "var(--post-frame-width)" in root.group(1)
-
-    widen = re.search(r"@media\s*\(min-width:\s*1281px\)\s*\{([^}]*)\}", css, re.S)
-    assert widen is not None
-    assert ".print-post-view .print-page" in widen.group(1)
-    assert ".print-post-view .print-related-section" in widen.group(1), (
-        "相关阅读区与正文框必须同宽，否则两个框线会错开"
-    )
-    assert widen.group(1).count("width: var(--post-frame-width)") == 1
-
-    # 收窄档位必须晚于 layout.css 的原框宽规则才生效：post.css 是后加载的那一层。
-    entry = Path("frontend/src/styles/editorial.css").read_text(encoding="utf-8")
-    assert entry.index('"./layout.css"') < entry.index('"./post.css"'), (
-        "post.css 必须排在 layout.css 之后，否则框宽覆盖不生效"
-    )
-
-    # 面板的宽度上限必须真的用上外侧留白，否则收窄框宽只是白收。
-    for panel, margin_token in (
-        ("article-rail", "--post-rail-margin"),
-        ("article-toc", "--post-toc-margin"),
-    ):
-        body = re.findall(r"\." + panel + r"\s*\{([^}]*)\}", css, re.S)[0]
-        width = re.search(r"width:\s*min\((.*?)\);", body, re.S)
-        assert width is not None, f".{panel} 必须用 min() 夹取宽度"
-        terms = width.group(1)
-        assert "var(--post-outer-margin" in terms
-        assert margin_token in terms
-        assert "var(--post-panel-breath)" in terms, "面板与框线之间要留呼吸带"
-
-
-def test_side_panels_are_pinned_without_touching_the_scroll_path():
-    """吸附态必须是 fixed，且滚动过程中一行脚本都不跑。
-
-    这里挡的是两次真实翻车：
-    · 交给 position: sticky —— 它只允许面板待在那条网格区域之内，而区域高度由正文
-      决定（清单不参与行高计算，目录又比正文矮）。短文下区域很快就滚过去，sticky 会
-      把面板夹着一起上滑：实测 700px 高窗口 + 217px 短文，面板顶部从 109 滑到 -193，
-      头部那枚收起/展开按钮先钻到固定顶栏底下、再滑出屏幕——表现就是「收起来了就打
-      不开」。
-    · 每帧在绝对定位的面板上手写 top —— 浏览器先把面板当普通内容滚上去，主线程之后
-      才派发 scroll 事件、脚本再把 top 补回来，这一来一回必然差一帧。实测按 55px/帧
-      滚动时面板顶部稳定停在 53px，而吸附线在 108.8px，偏差正好等于一帧的滚动量且
-      不收敛，看上去就是面板一直在抖。fixed 元素不参与滚动，位置恒定，脚本只在跨过
-      吸附线那一刻切一次类名，因此 --panel-shift 这个「每帧写一次 top」的通道必须
-      彻底不存在。
-
-    同时锁住 pointer-events：外层盒子高 0、宽度仍占着左栏，必须设 none 才不会挡住
-    正文列的命中测试，而它是继承属性，面板必须显式写回 auto，否则按钮看得见却点不动。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    for panel in ("article-rail", "article-toc"):
-        blocks = re.findall(r"\." + panel + r"\s*\{([^}]*)\}", css, re.S)
-        assert blocks, f"找不到 .{panel} 基准规则"
-        # 只检查基准档：≤1280px 那条横向目录条本来就该留在文档流里用 sticky 吸顶
-        base = re.sub(r"/\*.*?\*/", "", blocks[0], flags=re.S)
-        assert "position: absolute" in base, f".{panel} 吸附前应当绝对定位"
-        assert "position: sticky" not in base, f".{panel} 不能再用 sticky 吸附"
-        assert "top: 0" in base, f".{panel} 吸附前应贴区域顶端，不该由脚本给坐标"
-
-    pin_rule = re.search(
-        r"\.article-rail\.is-pinned,\s*\r?\n\s*\.article-toc\.is-pinned\s*\{([^}]*)\}",
-        css,
-        re.S,
-    )
-    assert pin_rule is not None, "找不到 .is-pinned 吸附规则"
-    assert "position: fixed" in pin_rule.group(1), "吸附态必须 fixed，否则会落后滚动一帧"
-    assert "top: var(--panel-pin" in pin_rule.group(1), "吸附线由 --panel-pin 提供"
-
-    # 必须限定在桌面档位里：.article-toc.is-pinned 的权重高于窄屏那条 .article-toc，
-    # 跑到档位外面就会把 ≤1280px 的横向目录条也变成固定定位。
-    enclosing = css[: pin_rule.start()]
-    assert enclosing.rindex("@media (min-width: 1281px)") > enclosing.rfind("@media (max-width: 1280px)"), (
-        ".is-pinned 必须写在 ≥1281px 档位内"
-    )
-    narrow = css[css.index("@media (max-width: 1280px)"):]
-    assert "position: sticky" in narrow, "窄屏横向目录条仍要留在文档流里 sticky 吸顶"
-
-    # 每帧写 top 的通道必须不存在：CSS 侧不能有 --panel-shift，脚本侧也不能写它。
-    assert "--panel-shift" not in css, "不能再让脚本每帧写 top，吸附态交给 fixed"
-    pin = Path("frontend/src/composables/usePanelPin.js").read_text(encoding="utf-8")
-    assert "--panel-shift" not in pin
-    assert '"--panel-pin"' in pin, "吸附线 px 值需要由脚本写入，与 pinRem 同源"
-    assert "getBoundingClientRect" in pin and "scroll" in pin and "resize" in pin
-    assert "MIN_USEFUL_PX" in pin, "区域走完时要停用面板，避免留下不可点的碎片"
-    assert "panelNeedsMoreRoom" in pin, "碎片判定要看内容能否完整放下，而不是只看一个固定高度"
-    # 只在数值变化时写样式，稳定态的滚动不该产生任何样式改写。
-    assert "lastAvail" in pin and "if (avail !== lastAvail)" in pin
-
-    assert "var(--panel-avail" in css, "面板可用高度需要由脚本给出"
-
-    rail = "\n".join(re.findall(r"\.article-rail\s*\{([^}]*)\}", css, re.S))
-    assert "pointer-events: none" in rail, "零高的外层盒子不该拦住正文列的点击"
-
-    shared = re.search(r"\.article-rail__body,\s*\r?\n\s*\.article-rail__spine\s*\{([^}]*)\}", css, re.S)
-    assert shared is not None
-    assert "pointer-events: auto" in shared.group(1), "面板必须显式写回可点击"
-
-
-def test_article_rail_is_not_laid_out_below_its_breakpoint():
-    """清单在轨道不够宽时必须彻底不布局，而不是靠 JS 挡住。
-
-    ≤1280px 的区域模板是单列 `"toc"` / `"article"`，里面没有 rail 那一格；一个仍然
-    可见的面板会被自动放进隐式行，直接冒在正文上方。因此基准规则必须是
-    `display: none`，由 min-width 档位打开——JS 的 matchMedia 只管发不发请求。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    base = re.search(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
-    assert base is not None, "找不到 .article-rail 基准规则"
-    assert "display: none" in base.group(1), "基准档必须不布局，否则窄屏会出现隐式行"
-
-    widen = re.search(r"@media\s*\(min-width:\s*1440px\)\s*\{([^}]*)\}", css, re.S)
-    assert widen is not None, "找不到清单的 min-width 档位"
-    assert "display: block" in widen.group(1)
-
-    assert base.start() < widen.start(), "基准档必须先于放宽档位"
-    assert base.start() < css.index("@media (max-width: 1280px)"), (
-        "基准的 display:none 必须排在窄屏单列档位之前"
-    )
-
-
-def test_panel_chevrons_point_outward_when_collapsing():
-    """收起箭头朝外、展开箭头朝内，四条控制件都不能漏。
-
-    四个控制件的模板路径并不统一：左栏两处与目录书脊用的是朝左的 `M15 5l-7 7 7 7`，
-    目录的收起按钮用的是朝右的 `M9 5l7 7-7 7`。要满足「左栏收起朝左、左栏展开朝右、
-    目录收起朝右、目录展开朝左」，只有左栏书脊需要翻转；此前错给目录的两处各加了一次
-    180°，结果目录的收起键朝左（用户看到的就是这个）。与其逐个核对路径方向，不如把
-    「整份 post.css 里只允许一处 rotate(180deg)，且必须落在左栏书脊上」钉死。
-    """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    hits = re.findall(r"([^{}]+)\{([^{}]*rotate\(180deg\)[^{}]*)\}", css, re.S)
-    allowed = {
-        # 左栏书脊：面板从左侧拉出，展开时的箭头要指回正文
-        ".article-rail__spine svg",
-        # 范围切换器的折角：菜单展开时朝上
-        '.article-rail__scope[aria-expanded="true"] .article-rail__scope-caret',
-    }
-    found = {hit[0].strip() for hit in hits}
-    assert found <= allowed, f"出现了计划外的箭头翻转：{sorted(found - allowed)}"
-    assert ".article-rail__spine svg" in found, "左栏书脊的箭头必须翻转，否则指向反了"
-    assert ".article-toc__toggle svg" not in found and ".article-toc__spine svg" not in found, (
-        "目录的两处箭头用另一条朝右的路径，本来就对，翻转会让它指反"
-    )
+    pages = Path("frontend/src/styles/pages.css").read_text(encoding="utf-8")
+    for selector in (r"\.year-group__head", r"\.notes-year__head"):
+        year_rule = re.search(selector + r" \{([^}]*)\}", pages)
+        assert year_rule is not None, f"找不到 {selector} 规则"
+        assert "scroll-margin-top" in year_rule.group(1), f"{selector} 是右栏跳表的锚点，落点要留白"
 
 
 def test_router_view_survives_query_only_navigation():
@@ -824,183 +581,18 @@ def test_router_view_survives_query_only_navigation():
     )
 
 
-def test_article_rail_height_is_decoupled_from_the_reading_row():
-    """左侧清单的高度不能参与阅读版式那一行的高度计算。
+def test_reduced_motion_is_respected_globally():
+    """减弱动态效果是系统级契约（DESIGN.md §7）。
 
-    清单天生可以很长。若让它像右侧目录那样直接撑开盒子，网格行高就跟着它走：
-    30 条清单（实测 944px）配一篇只有一段的短文，会在正文之后空出几百像素只有
-    左栏的留白（实测 327px），折叠清单时整页高度骤降、浏览器还会把读者的滚动位置
-    夹回去（实测 scrollY 1400 → 1201）。所以外层盒子高 0、真正的面板绝对定位撑开：
-    面板因此能占到「视口减去顶栏」的整段高度，文档高度却完全不受它影响。
+    base.css 必须有全局降级媒体查询；v2 不提供手动动效开关，
+    `zhizhi-motion` / `html.motion-off` 随 v1 一起退役。
     """
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    rail = re.search(r"\.article-rail\s*\{([^}]*)\}", css, re.S)
-    assert rail is not None, "找不到 .article-rail 基准规则"
-    assert "height: 0;" in rail.group(1), "清单外层盒子必须不占高度"
-    assert "max-height" not in rail.group(1), "高度上限不能压在参与行高计算的那一层"
+    base = Path("frontend/src/styles/base.css").read_text(encoding="utf-8")
+    assert "@media (prefers-reduced-motion: reduce)" in base
 
-    panel = re.search(r"\.article-rail__body,\s*\r?\n\s*\.article-rail__spine\s*\{([^}]*)\}", css, re.S)
-    assert panel is not None, "展开态与折叠态的面板需要同一条定位规则"
-    assert "position: absolute" in panel.group(1)
-
-    body = re.search(r"\.article-rail__body\s*\{([^}]*)\}", css, re.S)
-    assert body is not None
-    assert "max-height: var(--panel-avail, calc(100vh - 8.5rem))" in body.group(1), (
-        "面板高度由脚本给出（视口与区域末端的较小值），按正文高度收窄会让长清单只剩几行"
-    )
-
-    view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
-    assert ":body-ref" not in view, "清单高度已与正文解耦，不需要再传正文元素进来"
-
-
-def test_short_viewport_footer_rule_comes_after_the_equal_specificity_base():
-    """矮视口档位的页脚内距必须排在同特异性的基准之后。
-
-    `:has()` 的特异性按其中权重最高的参数计算，因此
-    `.print-shell:has(> .print-main > .print-subpage) > .print-colophon.site-footer`
-    与 `@media (max-height: 780px)` 里的 `.print-shell.page-theme-articles > ...`
-    特异性相同（都是 (0,2,0)），胜负完全由源码顺序决定。矮屏档位一旦排在前面就会被
-    静默吃掉——实测 1366×768 下页脚读到 1.2rem 而非本档的 0.9rem，且不报错。
-    """
-    footer_css = Path("frontend/src/styles/footer.css").read_text(encoding="utf-8")
-    layout_css = Path("frontend/src/styles/layout.css").read_text(encoding="utf-8")
-
-    base = footer_css.index("padding-top: clamp(1.2rem, 2.8svh, 3.6rem) !important")
-    knee = footer_css.index("@media (max-height: 780px)")
-    assert knee > base, "矮视口页脚档位必须排在基准之后，否则被同特异性规则吃掉"
-    assert "padding-top: 0.9rem !important" in footer_css[knee:]
-
-    # 矮屏页脚档位只能存在于 footer.css：layout.css 排在它前面，放那里会被吃掉。
-    # layout.css 里的 `.print-colophon.site-footer` 是基础版式（非 padding 覆盖），
-    # 这里只断言它没有夹带 `!important` 的页脚内距覆盖。
-    for rule in re.findall(r"\{([^}]*)\}", layout_css):
-        if "print-colophon" in rule or "site-footer" in rule:
-            assert "!important" not in rule, (
-                f"layout.css 不应出现页脚内距的 !important 覆盖（会被 footer.css 的基准吃掉）：{rule[:80]}"
-            )
-
-
-def test_reveal_safety_net_does_not_pre_reveal_scroll_targets():
-    """`.rv` 的兜底放行不能把还没进入视口的内容提前标成 `.vis`。
-
-    兜底一旦无条件执行，`markVisible` 会把屏外元素也标成 `.vis`，而观察器只处理
-    `.rv:not(.vis)`，于是「滚动到它们时」不再有入场动效（实测首页第 2/3 版共 7 个
-    元素在翻页前就已被揭示）。因此兜底必须先确认观察器是否真的工作过。
-    """
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "sawIntersection" in reveal, "兜底需要依据观察器是否产生过交集"
-    assert "if (sawIntersection) return;" in reveal, (
-        "兜底在观察器已正常工作时应直接返回，避免提前揭示屏外内容"
-    )
-    assert "sawIntersection = true;" in reveal
-
-
-def test_stagger_delay_is_capped():
-    """阶梯延迟必须有上限。
-
-    未声明 `data-reveal-delay` 的元素按「揭示序号 × staggerMs」计算，序号在整页
-    范围内累加；长文章里这类元素一多，延迟会涨到数秒，表现为内容迟迟不出现
-    （实测长文章页在 5s 后仍有元素未淡入）。这里锁住上限的存在。
-    """
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "MAX_STAGGER_STEPS" in reveal
-    assert "Math.min(staggerIndex, MAX_STAGGER_STEPS)" in reveal
-
-
-def test_motion_is_on_by_default_regardless_of_system_preference():
-    """入场动效默认开启，不因系统 `prefers-reduced-motion` 而整站停用。
-
-    本站以视觉呈现为主，动效属于版式的一部分：页面切换就应当播放。因此
-    `motionDisabled()` 只认手动开关，媒体查询只在应用接管前（`html:not(.app-ready)`）
-    作为无 JS 兜底存在。
-    """
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    motion_fn = reveal.split("export function motionDisabled()", 1)
-    assert len(motion_fn) == 2, "找不到 motionDisabled()"
-    body = motion_fn[1].split("\n}", 1)[0]
-    assert "MOTION_STORAGE_KEY" in body
-    assert "prefers-reduced-motion" not in body, (
-        "motionDisabled() 不应再读取系统偏好——动效默认开启"
-    )
-
-    # CSS 兜底必须限定在应用接管之前，否则系统开关会整站抹掉动效
-    for name in ("feedback.css", "layout.css", "home.css"):
-        css = Path("frontend/src/styles", name).read_text(encoding="utf-8")
-        if "prefers-reduced-motion" in css:
-            assert "html:not(.app-ready)" in css, f"{name} 的 reduced-motion 兜底缺少 html:not(.app-ready)"
-
-    # main.js 必须在挂载前打上 app-ready
-    main = Path("frontend/src/main.js").read_text(encoding="utf-8")
-    assert 'classList.add("app-ready")' in main
-
-
-def test_no_motion_toggle_button_in_header():
-    """站头不再提供动效开关（动效默认开启，无需 UI 入口）。"""
-    header = Path("frontend/src/components/SiteHeader.vue").read_text(encoding="utf-8")
-    assert "toggleMotion" not in header
-    assert "print-nav__motion" not in header
-    css = Path("frontend/src/styles/header.css").read_text(encoding="utf-8")
-    assert "print-nav__motion" not in css
-
-
-def test_cover_reveal_waits_for_the_initial_loader():
-    """首屏封面必须等加载页离场后再入场。
-
-    加载页整屏遮挡约 1.55s；封面若在被遮挡期间就入场，用户揭开时看到的只是最终态
-    （实测标题单字在覆盖层内已从 op=0 走到 op=9、位移归零，观感就是「标题没有动效」）。
-    做法：`.focused-cover` 的 `.rv` 与逐字浮现单字在 `html:not(.loader-done)` 期间
-    被按在基准态并关掉过渡；`loader-done` 由 App 在加载页离场时加上。
-    """
-    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
-    hold = css.split("html:not(.loader-done) .focused-cover .rv", 1)
-    assert len(hold) == 2, "找不到「加载页期间按住封面」的规则"
-    assert "opacity: 0 !important" in hold[1]
-    assert "transition: none !important" in hold[1]
-    # 必须连逐字浮现的单字一起按住：父级透明不会阻止子元素自身的动画推进
-    assert "html:not(.loader-done) .focused-cover .split-text__char" in css
-
-    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
-    assert 'classList.add("loader-done")' in app, "App 需要在加载页离场时加上 loader-done"
-    assert 'InitialLoader @ready="onLoaderReady"' in app, "需要接住加载页的 ready 事件"
-
-
-def test_split_char_uses_a_keyframe_animation():
-    """逐字浮现必须用 keyframes，且靠「换动画名」来重播。
-
-    用 transition 时无法可靠重播：同一个任务里摘掉再加回 `.vis`，浏览器在帧末算出的
-    净状态没有变化，过渡不会启动（实测加了强制 reflow 也无效，1s 内位移恒为终值）。
-    keyframes 则在 `.vis` 重新挂上、或 `animation-name` 变化时一定从头播。
-    另外换名必须「每次重播只前进一格」——按元素逐个前进时，元素个数若是名字个数的
-    整数倍（首页封面 9 个单字 × 3 个名字）会绕回同名，动画同样不会重启。
-    """
-    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
-    assert "@keyframes split-char-rise" in css
-    assert "animation: var(--rise-name, split-char-rise)" in css
-    # 三组同内容不同名的 keyframes 供轮换
-    for suffix in ("", "-b", "-c"):
-        assert f"@keyframes split-char-rise{suffix}" in css
-
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "RISE_ANIMATIONS" in reveal
-    assert 'setProperty("--rise-name"' in reveal
-    # 每次重播只前进一格（在 forEach 之外）
-    bump = reveal.split("function replayCharAnimations", 1)[1].split("}", 1)[0]
-    assert "animSeq = (animSeq + 1)" in bump
-    assert bump.index("animSeq = (animSeq + 1)") < bump.index("forEach")
-
-
-def test_char_animation_endpoints_share_one_transform_function():
-    """入场动画的首尾必须使用同一个 transform 函数名。
-
-    构建时的 CSS 压缩器会把 `translate3d(0,0,0)` 改写成 `translateZ(0)`
-    （压缩产物里实测存在 translateZ，而源码中根本没有）；函数名不一致时无法插值，
-    整段退化为离散跳变——单字「啪」地出现而不是滑入，读起来就是卡顿。
-    """
-    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
-    block = css.split("@keyframes split-char-rise {", 1)[1].split("\n}", 1)[0]
-    assert "translateY(88%)" in block
-    assert "translateY(0)" in block
-    assert "translate3d" not in block, "首尾不要混用 translate3d / translateY"
+    for path in Path("frontend/src/styles").glob("*.css"):
+        text = path.read_text(encoding="utf-8")
+        assert "motion-off" not in text, f"{path.name} 不应残留手动动效开关"
 
 
 def test_public_csp_allows_the_designed_webfonts():
@@ -1015,184 +607,29 @@ def test_public_csp_allows_the_designed_webfonts():
     assert "https://fonts.gstatic.com" in security, "font-src 需要放行字体文件域"
 
 
-def test_route_change_replays_entry_animation():
-    """每次页面切换都要重播入场动效，不能只在首次加载时出现。
-
-    路由视图虽然用 `:key` 强制重建，但重建后的元素初始就在视口内时，观察器回调
-    与 Vue 补丁存在竞态，会出现「切回来是静止的」。需要在过渡结束后显式重播。
-    """
-    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
-    assert "replayPageReveal" in app, "App.vue 需要在页面切换后重播入场动效"
-    assert '@after-enter="replayPageReveal"' in app, "重播应挂在过渡结束时机上"
-    assert "replayReveal" in app, "需要从 useReveal 取用重播能力"
-
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "function replayReveal(" in reveal
-    # 重播必须同时换动画名，否则逐字浮现不会重启
-    assert "replayCharAnimations(root)" in reveal
-
-
-def test_latest_page_shows_a_lead_plus_two_secondary_posts():
-    """第 2 版是「头版头条 + 两篇次要稿」的主从版面。
-
-    头条沿用原有的大版式（HomeFeature）；次要稿用同一套排版语言（分类行 / 标题 / 摘要 /
-    元信息，复用 `.art__t` / `.art__p` / `.art__meta`）但整体缩小一档，
-    因此标题最大字号必须明显小于头条，形成清晰的主从关系。
-    """
-    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    assert "HomeLatestRow" in home, "第 2 版需要渲染次要稿件行"
-    assert "HomeFeature" in home, "头条保留原有大版式"
-    assert "LATEST_FETCH_LIMIT = 3" in home, "取数要覆盖头条 + 2 篇次要稿"
-    assert "secondaryPosts" in home
-
-    row = Path("frontend/src/components/home/HomeLatestRow.vue").read_text(encoding="utf-8")
-    # 复用头条的排版类，保证是「同一套版式」
-    for cls in ("art__t", "art__p", "art__meta"):
-        assert cls in row, f"次要稿应复用 {cls} 以保持同一套版式"
-    # 没有封面图时不渲染空图槽
-    assert 'v-if="post.cover_image"' in row
-
-    css = Path("frontend/src/styles/pages.css").read_text(encoding="utf-8")
-    card_title = re.search(r"\.home-secondary-card \.art__t \{[^}]*font-size:\s*clamp\(([^)]+)\)", css, re.S)
-    assert card_title, "找不到次要稿标题的字号规则"
-    assert card_title.group(1).strip().startswith("1rem"), "次要稿标题应从 1rem 起，明显小于头条"
-    # 列数按实际稿件数收缩
-    assert "repeat(var(--row-cols, 2)" in css
-    assert "--row-cols" in row
-    # 「仅一篇」分支走 .is-single 类，不用内联样式属性选择器（后者依赖声明文本，很脆）
-    assert "is-single" in row and "is-single" in css
-    assert "[style*=" not in css, "不要用内联样式属性选择器分支布局"
-
-    # 缩略图按 4:3 出图。若只定宽并撑满行高，矮屏下会得到 112×52 的信箱式裁切，
-    # 封面被截成一条横带；aspect-ratio + height 才能稳定拿到 4:3。
-    thumb = re.search(r"\.home-secondary-card__thumb \{([^}]*)\}", css, re.S)
-    assert thumb, "找不到缩略图规则"
-    assert "aspect-ratio: 4 / 3" in thumb.group(1)
-    assert "height: clamp(" in thumb.group(1)
-    assert "width: clamp(" not in thumb.group(1)
-
-    # 两篇并排时竖线由中缝分隔条承担，不能贴到缩略图上
-    card_rule = re.search(r"\n\.home-secondary-card \{([^}]*)\}", css, re.S)
-    assert card_rule, "找不到次要稿卡片规则"
-    assert "border-right" not in card_rule.group(1)
-    assert ":not(.is-single) .home-secondary-card + .home-secondary-card::before" in css
-
-
-def test_home_sections_about_and_articles_drop_the_section_number():
-    """首页第 2/3 版、关于页与文章目录都不再使用版次编号（`.sec-hd__n`）。
-
-    这些小节序号（02 / 03 / 03 / 02）属于冗余装饰：首页版次已由右侧轨道表达，
-    关于页是单页无序号可言，文章目录也只有一页目录。
-    「下一篇」/404 仍需要它，所以基础的 `.sec-hd__n` 样式必须保留。
-    """
-    for name in ("HomeView", "AboutView", "PostsView"):
-        src = Path(f"frontend/src/views/{name}.vue").read_text(encoding="utf-8")
-        assert 'class="sec-hd__n"' not in src, f"{name} 的版次编号应已移除"
-        # 标题与分隔线保留，页头结构不变
-        assert "sec-hd__t" in src and "sec-hd__line" in src
-
-    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    assert "最近更新 Latest" in home and "热点文章 Most Read" in home
-    posts = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
-    assert "文章 Articles" in posts
-
-    # 仍然需要编号的地方不能一起删掉
-    related = Path("frontend/src/components/post/RelatedPostsGrid.vue").read_text(encoding="utf-8")
-    assert 'class="sec-hd__n"' in related, "「下一篇」标注仍在使用"
-    footer = Path("frontend/src/styles/footer.css").read_text(encoding="utf-8")
-    assert ".sec-hd__n {" in footer and ".sec-hd__n::after" in footer
-
-    # 这四处专属的着色规则已成死代码，应一并清理
-    for dead in (
-        ".home-latest-section .sec-hd__n",
-        ".home-hot-section .sec-hd__n",
-        ".page-theme-about .sec-hd__n",
-        ".unified-posts-page .sec-hd__n",
-    ):
-        assert dead not in footer, f"{dead} 已无对应元素"
-
-
-def test_home_rail_labels_use_names_instead_of_issue_numbers():
-    """右侧版次轨道的可见标签用「首页 / 最近 / 热点」，不用 001/002/003。
-
-    数字对读者没有意义；标签换成栏目名后，轨道也能自解释。
-    无障碍名仍保留「第 N 版 · 栏目」以便与版面结构对应。
-    """
-    rail = Path("frontend/src/components/home/HomePageRail.vue").read_text(encoding="utf-8")
-    for label in ("首页", "最近", "热点"):
-        assert f'label: "{label}"' in rail, f"轨道应有「{label}」标签"
-    for gone in ("001", "002", "003"):
-        assert f'label: "{gone}"' not in rail, f"轨道不应再出现编号 {gone}"
-    # 无障碍名与悬停提示仍指向版次与栏目
-    assert "第 ${page.index + 1} 版 · ${page.name}" in rail
-    assert '":title="' not in rail and ":title=" in rail
-    # 刻度盒宽度固定，悬停只伸缩线本身，轨道总宽不随悬停变化
-    assert "width: 26px" in rail
-
-
 def test_posts_page_is_a_single_year_grouped_index():
-    """文章目录只有一种形态：按年份分组的编年索引。
+    """文章目录只有一种形态：按年份分组的编年索引；筛选只按「栏目」。
 
-    原先「最新 / 归档 / 标签」三套视图装的是同一批文章，读者要先做一次与内容
-    无关的选择。合并后：视图切换器消失，筛选改为按「栏目」，年份由 68px 展示级
-    大字降为分节横杆。筛选按栏目而不是标签——标签会随写作无限生长。
+    栏目走服务端 category 查询参数（筛选与翻页可以并存）；标签链接走检索
+    维度 ?q=。守住 v2 的核心契约，v1 的三视图切换 / 标签筛选不再回来。
     """
     view = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
     assert "article-view-switch" not in view and "VIEW_OPTIONS" not in view
     assert "activeView" not in view, "视图维度应已取消"
-    # 只剩索引一个分支
-    assert view.count("<ArchiveLedger") == 1
-    assert "v-else" in view
-    # 筛选走服务端（category 查询参数），因此筛选与翻页可以并存
     assert "params.category = selectedCategory.value" in view
     assert "query.cat = selectedCategory.value" in view
     assert "route.query.cat" in view
-
-    # 前台筛选按「栏目」而不是标签
     assert "selectedTag" not in view, "目录不再按标签筛选"
     assert "site.value?.categories" in view
-    toolbar = Path("frontend/src/components/posts/PostsToolbox.vue").read_text(encoding="utf-8")
-    assert "article-cat-filter" in toolbar and "cat-filter-button" in toolbar
-    assert "tag-filter-button" not in toolbar
-    # 搜索提示要说明关键词也能搜（关键词本身不展示）
-    assert "关键词" in toolbar
-    # 篇数必须来自服务端：按「当前已加载的文章」现算，筛选后其余栏目会显示成 0 篇
-    assert "site.value?.categories" in view and "count" in view
 
     # buildQueryString 是显式白名单，漏掉新维度会静默丢掉筛选参数
     api = Path("frontend/src/services/api.js").read_text(encoding="utf-8")
     assert 'search.set("category", params.category)' in api
 
-    # 已退休的两个视图组件不应残留
+    # 已退休的 v1 视图组件不应残留
     for gone in ("PostLatestList", "TagResultsGrid"):
         assert not Path(f"frontend/src/components/posts/{gone}.vue").exists(), f"{gone} 应已下线"
         assert gone not in view
-
-    # 索引行必须带摘要与阅读时长，否则读者无法从标题判断值不值得点开
-    ledger = Path("frontend/src/components/posts/ArchiveLedger.vue").read_text(encoding="utf-8")
-    assert "archive__excerpt" in ledger and "archive__read" in ledger
-    assert "archive__year-rule" in ledger and "archive__badge" in ledger
-
-    css = Path("frontend/src/styles/posts.css").read_text(encoding="utf-8")
-    # 栏目胶囊
-    assert ".cat-filter-button" in css
-    assert "tag-filter-button" not in css
-    # 年份不再是展示级大字
-    year_fs = re.search(r"\.archive__year span \{\s*font-size:\s*clamp\(([^)]+)\)", css)
-    assert year_fs and float(year_fs.group(1).split(",")[0].strip().rstrip("rem")) <= 1.6
-    # 限宽用 em 而非 ch：等宽字体下 1ch 只有约 0.6em，中文占满一个 em
-    assert "max-width: min(100%, 26em)" in css
-    assert "max-width: min(100%, 52em)" in css
-
-    # 退休选择器不能再出现在任何样式文件里（含诸如同权重覆盖用的前缀写法）
-    dead = ("article-view-switch", "article-view-button", "unified-archive-view",
-            "unified-tags-view", "unified-latest-list", "print-list-item",
-            "print-article-list", "print-tag-results", "article-item__thumb",
-            "article-tag-filter", "tag-filter-button", "article-search__label")
-    for path in Path("frontend/src/styles").glob("*.css"):
-        text = path.read_text(encoding="utf-8")
-        for token in dead:
-            assert token not in text, f"{path.name} 仍残留已下线选择器 {token}"
 
 
 def test_posts_endpoint_always_returns_the_same_envelope(app_bundle):
@@ -1231,82 +668,25 @@ def test_posts_endpoint_always_returns_the_same_envelope(app_bundle):
     assert paged["page"] == 2 and paged["per_page"] == 10
 
 
-def test_article_rail_scope_is_switchable_and_truthful():
-    """左栏的表头是一个范围切换器，不是一块写死的标签。
-
-    需求：读者除了「最新」还应该能选别的范围，但不能臃肿。所以选项收进菜单，表头只占
-    一个词的位置；勾选与表头都读「当前装载的范围」，于是本栏目太薄退化为最新时标签写实、
-    菜单里再说明本栏目只剩自己。菜单里「本栏目」发出的 key 是栏目名而不是空串：读者
-    明确点了它，就不该再被「本栏目太薄→退化为最新」这条默认策略顶掉。
-    """
-    rail = Path("frontend/src/components/post/PostRail.vue").read_text(encoding="utf-8")
-    assert 'class="article-rail__scope"' in rail and 'aria-haspopup="menu"' in rail
-    assert 'role="menuitemradio"' in rail and ':aria-checked=' in rail
-    assert "select-scope" in rail, "切换范围要能上抛给视图层"
-    assert "key: follow," in rail, "本栏目这一项必须发栏目名，否则显式选择会被默认策略覆盖"
-    assert 'hint: count > 1 ? String(count) : "仅此一篇"' in rail
-
-    store = Path("frontend/src/composables/usePostRail.js").read_text(encoding="utf-8")
-    assert "const railScope = ref" in store and "function setRailScope" in store
-    assert "MIN_SCOPE_POSTS = 2" in store, "本栏目只要还有一篇别的文章就照列"
-    # 显式选择不做退化：只有「跟随当前文章」那条路径才允许回落到最新
-    explicit = re.search(r"function loadExplicitScope\(scope\) \{(.*?)\n\}", store, re.S)
-    assert explicit is not None
-    assert 'mode: "latest"' in explicit.group(1)
-    assert "MIN_SCOPE_POSTS" not in explicit.group(1), "显式选择不该再做厚薄判断"
-
-    view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
-    assert '@select-scope="setRailScope"' in view
-    assert ":follow-category=" in view and ":categories=" in view
-
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    assert ".article-rail__scopes" in css and ".article-rail__scope-option" in css
-    assert "var(--panel-avail" in css.split(".article-rail__scopes")[1][:400], (
-        "菜单高度要跟着面板可用高度走，否则短面板下菜单会比面板还高"
-    )
-
-
-def test_collapsed_spines_carry_no_numbers():
-    """折叠后的书脊只留箭头与竖排名称，不再挂数字。
-
-    两条书脊的数字含义互不相干（目录是当前章节号、清单是总篇数），并排放着读者无从
-    分辨，去掉后左右视觉一致。
-    """
-    rail = Path("frontend/src/components/post/PostRail.vue").read_text(encoding="utf-8")
-    toc = Path("frontend/src/components/post/PostToc.vue").read_text(encoding="utf-8")
-    for name, src in (("PostRail", rail), ("PostToc", toc)):
-        spine = re.search(r'class="article-(?:rail|toc)__spine"(.*?)</button>', src, re.S)
-        assert spine is not None, f"{name} 找不到书脊按钮"
-        assert "<strong>" not in spine.group(1), f"{name} 的书脊不应再有数字"
-
-    css = Path("frontend/src/styles/post.css").read_text(encoding="utf-8")
-    assert ".article-toc__spine strong" not in css, "书脊数字的样式应一并删除"
-    assert ".article-rail__spine strong" not in css
-    # 折叠态右书脊要与左书脊同高：展开态那段上内距必须归零
-    assert re.search(r"\.article-toc\.is-collapsed \{[^}]*padding-top: 0", css, re.S) is not None
-
-
 def test_article_tag_chips_lead_to_a_search_that_actually_works():
-    """文章页的标签要成为能生效的入口，而不是点了没反应的链接。
+    """文章页的标签要成为能生效的入口：走检索维度 q，而不是目录页不解析的 tag。
 
-    标签不参与目录筛选（前台只有「栏目」一个筛选维度，见上一个测试），所以标签链接
-    走检索维度 `q`——服务端会匹配标题/摘要/标签/关键词。此前它指向 `?tag=…`，而目录页
-    只读 q/cat/page，参数被静默丢掉、URL 随后被规范化回 /posts，点了等于没点
-    （实测：点「链表」→ URL 变 /posts，全部胶囊高亮，2 篇全列）。
+    此前它指向 ?tag=…，而目录页只读 q/cat/page，参数被静默丢掉、URL 随后被
+    规范化回 /posts，点了等于没点。顺带锁住重复取数：初次进入 ?q=… 时
+    route state 已经取过一次，normalizedQuery 的防抖 watcher 必须跳过
+    application 阶段，否则同一 key 请求两遍。
     """
-    hero = Path("frontend/src/components/post/PostHero.vue").read_text(encoding="utf-8")
-    assert "posts?tag=" not in hero, "标签链接不能再用目录页不解析的 tag 参数"
-    assert "query: { q: tag }" in hero, "标签链接应走检索维度 q"
+    view = Path("frontend/src/views/PostView.vue").read_text(encoding="utf-8")
+    assert "posts?tag=" not in view, "标签链接不能再用目录页不解析的 tag 参数"
+    assert "query: { q: tag }" in view, "标签链接应走检索维度 q"
 
-    # 顺带锁住重复取数：初次进入 ?q=… 时 route state 已经取过一次，
-    # normalizedQuery 的防抖 watcher 必须跳过 application 阶段，否则同一 key 请求两遍
-    # ——scheduleReload 是强制取数，绕过了 fetchList 的去重。
-    view = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
-    watcher = re.search(r"watch\(normalizedQuery, \(\) => \{(.*?)\n\}\)", view, re.S)
+    posts = Path("frontend/src/views/PostsView.vue").read_text(encoding="utf-8")
+    watcher = re.search(r"watch\(normalizedQuery, \(\) => \{(.*?)\n\}\)", posts, re.S)
     assert watcher is not None, "找不到 normalizedQuery 的防抖 watcher"
     assert "applyingRouteState" in watcher.group(1), (
         "初次应用 route state 时不应再触发一次搜索取数"
     )
+
 
 def test_keywords_are_searchable_but_never_rendered(app_bundle):
     """关键词只用于检索，不出现在任何对外载荷里。
@@ -1456,35 +836,6 @@ def test_admin_category_field_is_a_fixed_select(client, app_bundle):
     assert 'name="keywords"' in page
 
 
-def test_route_replay_does_not_restart_a_running_char_animation():
-    """路由切换后的重播，不能把已经在播的逐字浮现从半途重启。
-
-    新建的视图一挂载就落在视口内，观察器会立刻把封面标题标成 `.vis`，单字动画随即
-    开跑；过渡结束后的重播若再换一次动画名，就会把这几个字清零重来——观感正是
-    「从文章页/关于页切回封面页时标题渲染了两遍」（实测重播时刻「至/知」的
-    currentTime 已走到 261ms，换名后被重置为 0，不重复的下标也从 9 变成 11）。
-
-    但整屏翻页必须保留重播（单字动画那时早已播完），所以这个判断只能是入口级选项。
-    """
-    reveal = Path("frontend/src/composables/useReveal.js").read_text(encoding="utf-8")
-    assert "function charEntranceRunning(" in reveal
-    assert 'animation.playState === "running"' in reveal
-    assert "replayReveal(root, { skipRunningCharAnimation = false } = {})" in reveal
-    # 命中时只标已揭示，必须在「摘掉 .vis」之前就返回，
-    # 否则容器的入场会重来而单字继续播，两侧时序错位。
-    guard = reveal.index("skipRunningCharAnimation && charEntranceRunning(root)")
-    detach = reveal.index("targets.forEach((el) => el.classList.remove(\"vis\"));")
-    assert guard < detach, "已在播的判断必须早于摘除 .vis"
-
-    app = Path("frontend/src/App.vue").read_text(encoding="utf-8")
-    assert "skipRunningCharAnimation: true" in app, "路由切换入口应跳过已在播的逐字动画"
-
-    # 翻页入口不得带上这个选项：切回封面（含从第 2/3 版切回）必须重播。
-    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    assert "await replayReveal(sections[page]);" in home
-    assert "skipRunningCharAnimation" not in home
-
-
 def test_no_unused_css_classes():
     """样式表里不该留下没人用的类。
 
@@ -1493,7 +844,7 @@ def test_no_unused_css_classes():
     让它变成一道可持续的红线。
 
     三类例外不算死类：
-    - Vue `<Transition>` 注入的 `page-fade-*`、Vue Router 的 `router-link-*`；
+    - Vue `<Transition>` 注入的 `page-fade-*` / `list-swap-*` / `backtop-*`、Vue Router 的 `router-link-*`；
     - highlight.js 运行时生成的 `hljs-*`；
     - Jinja 用 f-string 拼出的 flash 类 `message--*`。
     `url(...)` 与注释要先抠掉：`data:image/svg+xml` 里的 `www.w3.org` 会被朴素正则读成
@@ -1513,7 +864,7 @@ def test_no_unused_css_classes():
         + [p.read_text(encoding="utf-8-sig") for p in walk("backend/src/blog/templates", {".html"})]
         + [p.read_text(encoding="utf-8-sig") for p in walk("backend/src/blog/static/admin", {".js"})]
     )
-    dynamic = re.compile(r"^(hljs-|page-fade-|router-link|message--)")
+    dynamic = re.compile(r"^(hljs-|page-fade-|list-swap-|backtop-|router-link|message--)")
 
     offenders: list[str] = []
     for path in sorted(Path("frontend/src/styles").glob("*.css")):
@@ -1521,11 +872,45 @@ def test_no_unused_css_classes():
             continue
         text = path.read_text(encoding="utf-8-sig")
         text = re.sub(r"url\((?:[^()]|\([^()]*\))*\)", "", re.sub(r"/\*.*?\*/", "", text, flags=re.S))
+        # hljs 复合选择器（.hljs-title.function_）的尾段也是运行时类，剥掉再提取，
+        # 否则 function_ / class_ 会被当成「无人使用的类」误报。
+        text = re.sub(r"(\.hljs-[\w-]+)(?:\.[\w-]+)+", r"\1", text)
         for name in sorted(set(re.findall(r"\.(-?[_a-zA-Z][\w-]*)", text))):
             if name in corpus or dynamic.match(name):
                 continue
             offenders.append(f"{path.name}: .{name}")
     assert not offenders, "存在无人使用的 CSS 类：\n  " + "\n  ".join(offenders)
+
+
+def test_v2_style_modules_and_tokens_integrity():
+    """v2 架构契约：6 个样式模块、令牌纪律、读迹减法与三栏书案版式。
+
+    1. styles/ 下只存在规定的 6 个模块（v1 的 13 个文件已收敛）；
+    2. 除 base.css 与 print.css 外不允许裸十六进制颜色字面量——颜色只能用令牌，
+       否则改主题时那几十处仍旧是旧颜色；
+    3. 「正」字描红图形已随 v2.1 减法收口移除，读迹只剩计数文案；
+    4. layout.css 必须同时定义壳（.shell）与三栏书案网格（.page-grid）。
+    """
+    styles_dir = Path("frontend/src/styles")
+    modules = sorted(path.name for path in styles_dir.glob("*.css"))
+    assert modules == [
+        "base.css", "components.css", "layout.css", "pages.css", "print.css", "prose.css",
+    ], f"样式模块集合应为规定的 6 个，实际是 {modules}"
+
+    hex_color = re.compile(r"#[0-9a-fA-F]{3,8}(?![\w-])")
+    for path in styles_dir.glob("*.css"):
+        if path.name in ("base.css", "print.css"):
+            continue
+        text = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
+        hits = hex_color.findall(text)
+        assert not hits, f"{path.name} 出现裸十六进制颜色字面量：{hits[:5]}"
+
+    components = (styles_dir / "components.css").read_text(encoding="utf-8")
+    assert ".read-trace__strokes" not in components, "「正」字描红图形样式应已移除"
+
+    layout = (styles_dir / "layout.css").read_text(encoding="utf-8")
+    assert ".shell" in layout
+    assert ".page-grid" in layout, "三栏书案网格 .page-grid 应定义在 layout.css"
 
 
 def test_js_sources_have_no_stray_escaped_quotes():
@@ -1567,95 +952,6 @@ def test_stylesheets_have_no_orphaned_selector_fragments():
             if not selector.strip():
                 continue
             assert "\n\n" not in selector, f"{path.name} 存在悬空选择器：{selector.strip()[:80]}"
-
-
-def test_posts_index_fits_one_screen_and_still_scrolls_when_long():
-    """目录一页之内要把页脚一起收进首屏（与封面页、关于页一致）。
-
-    原先尾部叠了三层留白（.posts-index 4rem + .print-year-block 3rem 级的
-    .archive__list 2.5rem，实测 152px 纯空白），把页脚顶出折叠线。
-    列表长到需要滚动时留白是呼吸，一屏放得下时它就只是碍事，所以改为按视口高度流式收紧。
-    """
-    css = Path("frontend/src/styles/posts.css").read_text(encoding="utf-8")
-
-    # 尾部留白收敛
-    assert re.search(r"\.unified-posts-page \.print-year-block \{\s*padding-bottom: 0;\s*\}", css)
-    list_rule = re.search(r"\.unified-posts-page \.archive__list \{\s*margin-bottom: ([^;]+);", css)
-    assert list_rule and "svh" in list_rule.group(1), "列表尾部内距应按视口高度流式收紧"
-
-    # 矮视口分档存在
-    assert "@media (max-height: 700px)" in css
-    assert "@media (max-height: 620px)" in css
-
-    # 关键顺序陷阱：`.unified-posts-page .archive__li` 与 `.posts-index .archive__li`
-    # 同权重，分档里若只写 padding-top/bottom，会被后面那条整体 padding 简写吃掉，
-    # 而且完全不报错（实测分档曾因此失效）。所以分档必须排在索引规则之后。
-    tier = css.index("@media (max-height: 700px)")
-    base_li = css.index(".posts-index .archive__li {")
-    assert tier > base_li, "矮视口分档必须排在索引基础规则之后，否则会被同权重的 padding 简写静默覆盖"
-
-    # 顶栏高度 68px 是 padding-top 的下限，否则章节标签会滑到报头底下
-    top = re.search(r"@media \(max-height: 700px\) \{.*?\.unified-posts-page\.content-view \{\s*padding-top: clamp\(([^)]+)\)",
-                    css, re.S)
-    assert top, "矮视口分档应压低 .content-view 的顶部内距"
-    assert float(top.group(1).split(",")[0].strip().rstrip("rem")) >= 4.5, "顶部内距不得低于顶栏高度"
-
-    # 流式收紧只改内距，不得给容器引入裁切或限高（列表变长必须仍能正常滚动）。
-    # 摘要的单行截断是文本级 -webkit-line-clamp，属于预期用法，这里只看容器。
-    containers = (
-        ".posts-index", ".print-year-ledger", ".print-year-block", ".archive__list",
-        ".unified-posts-page", ".unified-posts-page.content-view",
-    )
-    for path in sorted(Path("frontend/src/styles").glob("*.css")):
-        for rule in re.finditer(r"([^{}]+)\{([^}]*)\}", path.read_text(encoding="utf-8")):
-            selector, body = rule.group(1).strip(), rule.group(2)
-            if not any(selector == c or selector.startswith(c + " ") for c in containers):
-                continue
-            assert "overflow: hidden" not in body, f"{path.name} 不应给目录容器 {selector} 加裁切"
-            assert "max-height" not in body, f"{path.name} 不应给目录容器 {selector} 限高（应让页面自然滚动）"
-
-
-def test_home_flip_replays_reveal_for_target_page():
-    """首页整屏翻页必须显式重播入场动效。
-
-    翻页时正文不滚动，被切走的版面里 `.rv` 早已是 `.vis`，观察器不会再触发；
-    而首次进入第 2/3 版时元素可能迟迟不被判定为相交（实测内容 op=0，要等 4s
-    兜底才现形，看起来就是「翻过去是空白页」）。两种情形都要靠显式重播兜住。
-    """
-    home = Path("frontend/src/views/HomeView.vue").read_text(encoding="utf-8")
-    assert "replayReveal" in home
-    assert "watch([currentPage, isFlipActive]" in home, "需要在切版时触发重播"
-    assert "nextTick" in re.search(r'^import \{([^}]+)\} from "vue";', home, re.M).group(1), (
-        "watch 回调里用了 nextTick，必须从 vue 引入"
-    )
-    # 只重播刚进入的那一版：把「当前版 + 上一版」都重播会让封面在屏外空转一遍
-    assert "replayReveal(sections[page])" in home
-
-
-def test_motion_off_keeps_the_split_text_fade():
-    """手动关闭动效时，逐字浮现要保留可见的显现过程，而不是直接闪出。
-
-    历史写法是 `transition: none; opacity: 1; transform: none`，等于把品牌动效连同时长
-    一起取消——实测加载页标题全程 op=1.00、无位移，开场节奏完全消失。
-    现在这段动效改用 keyframes；降级时仍要求它「有可见的进行时」，
-    而不是一帧之内直接到位。
-    """
-    css = Path("frontend/src/styles/feedback.css").read_text(encoding="utf-8")
-
-    # 基准态必须保留位移起点，形成可见的滑动/淡入过程
-    assert ".split-text__char {" in css
-    assert "translateY(88%)" in css
-
-    # 入场用 keyframes，首尾都要有 opacity 与 transform 的变化
-    rise = css.split("@keyframes split-char-rise {", 1)[1].split("\n}", 1)[0]
-    assert "opacity: 0" in rise and "opacity: 1" in rise
-    assert "translateY(88%)" in rise and "translateY(0)" in rise
-
-    # 手动关闭动效时不得把动画时长压成 0，也不得直接把 opacity 设为 1
-    motion_off = re.findall(r"html\.motion-off [^{]*\.split-text__char[^{]*\{([^}]*)\}", css)
-    for rule in motion_off:
-        assert "opacity: 1" not in rule, "不得直接把 opacity 设为 1（会跳过逐字淡入）"
-        assert "transition: none" not in rule
 
 
 def test_import_normalizes_nbsp(app_bundle):
@@ -1840,7 +1136,6 @@ def test_image_pipeline_strips_exif_and_downscales(app_bundle, client):
     assert cached.status_code == 200
     assert "max-age=31536000" in cached.headers.get("Cache-Control", "")
     assert "immutable" in cached.headers.get("Cache-Control", "")
-
 
 
 def post_fields(title="Revision article", slug="revision-article", markdown="# Revision\n\n## Section\n\nBody text"):

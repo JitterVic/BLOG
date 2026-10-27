@@ -11,6 +11,7 @@ function buildQueryString(params = {}) {
   const search = new URLSearchParams();
   if (params.tag) search.set("tag", params.tag);
   if (params.category) search.set("category", params.category);
+  if (params.type) search.set("type", params.type);
   if (params.q) search.set("q", params.q);
   if (params.sort) search.set("sort", params.sort);
   if (params.limit) search.set("limit", String(params.limit));
@@ -36,4 +37,14 @@ export function getPosts(tagOrOptions = "", options = {}) {
 
 export function getPost(slug, options = {}) {
   return request(`/posts/${encodeURIComponent(slug)}`, options);
+}
+
+export function getNotes(options = {}) {
+  const { signal, timeoutMs, type, limit, page } = options;
+  const query = buildQueryString({ type, limit, page });
+  return request(`/notes${query}`, { signal, timeoutMs });
+}
+
+export function getNote(slug, options = {}) {
+  return request(`/notes/${encodeURIComponent(slug)}`, options);
 }

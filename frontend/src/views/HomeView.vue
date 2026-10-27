@@ -1,44 +1,34 @@
 <script setup>
-// 首页（DESIGN.md §5.1）：读者进来的第一件事是读到最新的东西。
-// 不放横幅：导语之后直接是最新一篇，其后是一份正常滚动的目录。
+// 首页（DESIGN.md §5.1）：品牌封面（手写「知至而后意诚」）之后直接是目录——
+// 主卷「最近更新」最新一篇领衔（无独立大块），右辅栏「近笺 + 读得最多」。
 // 页面正常滚动，不劫持任何输入。
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import AsyncState from "../components/AsyncState.vue";
+import BrandCover from "../components/home/BrandCover.vue";
 import HomeHotLedger from "../components/home/HomeHotLedger.vue";
 import PostRow from "../components/PostRow.vue";
-import { readTimeLabel } from "../composables/useFormat";
 import { useSite } from "../composables/useSite";
 import { useTitleMorph } from "../composables/useTitleMorph";
-import { getPosts } from "../services/api";
-import { useMediaQuery } from "../composables/useMediaQuery";
+import { getNotes, getPosts } from "../services/api";
 
-const LATEST_FETCH_LIMIT = 9; // 最新一篇 + 最近更新 8 篇
+const LATEST_FETCH_LIMIT = 8; // 最近更新 8 篇（含最新一篇）
 const HOT_FETCH_LIMIT = 5;
+const NOTES_FETCH_LIMIT = 4;
 
 const { site, ensureSite } = useSite();
 const { handleOpen } = useTitleMorph();
 
 const latestPosts = ref([]);
 const hotPosts = ref([]);
+const recentNotes = ref([]);
 const postsTotal = ref(0);
 const postsError = ref("");
 const postsLoading = ref(false);
 let postsController = null;
 let postsRequestSequence = 0;
-
-const feature = computed(() => latestPosts.value[0] || null);
-const recentPosts = computed(() => latestPosts.value.slice(1, LATEST_FETCH_LIMIT));
-
-// 封面两栏版式只在 ≥900px 且确有封面时成立（§5.1）
-const wideViewport = useMediaQuery("(min-width: 900px)");
-const featureHasCover = computed(() =>
-  Boolean(feature.value?.cover_image) && wideViewport.value,
-);
-
-const featureTime = computed(() => readTimeLabel(feature.value?.read_time));
 
 async function loadHomePosts() {
   const requestId = ++postsRequestSequence;
@@ -48,13 +38,15 @@ async function loadHomePosts() {
   postsError.value = "";
 
   try {
-    const [latestList, hotList] = await Promise.all([
+    const [latestList, hotList, notesList] = await Promise.all([
       getPosts({ sort: "latest", limit: LATEST_FETCH_LIMIT, signal: postsController.signal }),
       getPosts({ sort: "hot", limit: HOT_FETCH_LIMIT, signal: postsController.signal }),
+      getNotes({ limit: NOTES_FETCH_LIMIT, signal: postsController.signal }),
     ]);
     if (requestId !== postsRequestSequence) return;
     latestPosts.value = latestList?.items || [];
     hotPosts.value = hotList?.items || [];
+    recentNotes.value = notesList?.items || [];
     postsTotal.value = latestList?.total || latestPosts.value.length;
   } catch (err) {
     if (requestId !== postsRequestSequence || err?.code === "REQUEST_ABORTED") return;
@@ -80,6 +72,8 @@ onBeforeUnmount(() => postsController?.abort());
 
 <template>
   <div class="home-view">
+    <!-- 品牌封面：每次进入首页手写一遍「知至而后意诚」（§5.1、§7） -->
+    <BrandCover />
     <p v-if="site?.headline" class="home-intro">{{ site.headline }}</p>
 
     <AsyncState
@@ -91,79 +85,65 @@ onBeforeUnmount(() => postsController?.abort());
     <AsyncState
       v-else-if="postsLoading && !latestPosts.length"
       loading
-      variant="feature"
+      variant="rows"
       loading-message="正在加载…"
     />
 
     <template v-else>
-      <!-- 最新一篇：标题是页面 h1，也是标题共享转场的出发点 -->
-      <section v-if="feature" class="feature" :class="{ 'feature--cover': featureHasCover }">
-        <div class="feature__body">
-          <h1 class="feature__title">
-            <RouterLink
-              class="feature__link"
-              :to="{ name: 'post', params: { slug: feature.slug } }"
-              @click="handleOpen($event, { name: 'post', params: { slug: feature.slug } })"
-            >{{ feature.title }}</RouterLink>
-          </h1>
-          <p v-if="feature.excerpt" class="feature__excerpt">{{ feature.excerpt }}</p>
-          <p class="feature__meta">
-            <RouterLink
-              v-if="feature.category"
-              class="feature__meta-link"
-              :to="{ name: 'posts', query: { cat: feature.category } }"
-            >{{ feature.category }}</RouterLink>
-            <time :datetime="feature.published_at">{{ feature.published_at }}</time>
-            <span>{{ featureTime }}</span>
-          </p>
-        </div>
-        <RouterLink
-          v-if="featureHasCover"
-          class="feature__cover"
-          :to="{ name: 'post', params: { slug: feature.slug } }"
-          tabindex="-1"
-          aria-hidden="true"
-          @click="handleOpen($event, { name: 'post', params: { slug: feature.slug } })"
-        >
-          <img :src="feature.cover_image" :alt="feature.title" decoding="async">
-        </RouterLink>
-        <!-- <900px：封面整宽排在元信息之后 -->
-        <RouterLink
-          v-else-if="feature.cover_image"
-          class="feature__cover feature__cover--stacked"
-          :to="{ name: 'post', params: { slug: feature.slug } }"
-          tabindex="-1"
-          aria-hidden="true"
-          @click="handleOpen($event, { name: 'post', params: { slug: feature.slug } })"
-        >
-          <img :src="feature.cover_image" :alt="feature.title" decoding="async">
-        </RouterLink>
-      </section>
+      <!-- 三栏书案：主卷「最近更新」最新一篇领衔，右栏「近笺 + 读得最多」 -->
+      <div class="page-grid">
+        <section class="page-grid__main home-primary" aria-label="最近更新">
+          <header class="section-head">
+            <h1>最近更新</h1>
+            <RouterLink class="text-link" :to="{ name: 'posts' }">全部 {{ postsTotal }} 篇文章</RouterLink>
+          </header>
+          <div v-if="latestPosts.length">
+            <PostRow
+              v-for="post in latestPosts"
+              :key="post.slug"
+              :post="post"
+              date-format="full"
+            />
+          </div>
+          <p v-else class="home-section__empty">还没有文章。</p>
+        </section>
 
-      <!-- 最近更新 -->
-      <section class="home-section" aria-label="最近更新">
-        <header class="section-head">
-          <h2>最近更新</h2>
-          <RouterLink class="text-link" :to="{ name: 'posts' }">全部 {{ postsTotal }} 篇文章</RouterLink>
-        </header>
-        <div v-if="recentPosts.length">
-          <PostRow
-            v-for="post in recentPosts"
-            :key="post.slug"
-            :post="post"
-            date-format="full"
-          />
-        </div>
-        <p v-else class="home-section__empty">还没有文章。</p>
-      </section>
+        <aside class="page-grid__side home-side" aria-label="余笺与热门">
+          <!-- 近笺：像笔记本边上的手记，不与文章列表争夺主层级 -->
+          <section class="side-block home-side__notes" aria-label="近笺">
+            <header class="side-block__head">
+              <h2 class="side-block__title">近笺</h2>
+              <RouterLink class="side-block__sub text-link" :to="{ name: 'notes' }">全部余笺</RouterLink>
+            </header>
+            <div v-if="recentNotes.length">
+              <article v-for="note in recentNotes" :key="note.slug" class="home-note-row">
+                <p class="home-note-row__meta">
+                  <time :datetime="note.published_at">{{ note.published_at }}</time>
+                  <span v-if="note.type_label">{{ note.type_label }}</span>
+                </p>
+                <h3 class="home-note-row__title">
+                  <RouterLink
+                    class="home-note-row__link"
+                    :to="{ name: 'note', params: { slug: note.slug } }"
+                    @click="handleOpen($event, { name: 'note', params: { slug: note.slug } })"
+                  >{{ note.title }}</RouterLink>
+                </h3>
+                <p v-if="note.excerpt" class="home-note-row__excerpt">{{ note.excerpt }}</p>
+              </article>
+            </div>
+            <p v-else class="home-section__empty">还没有余笺。</p>
+          </section>
 
-      <!-- 读得最多 -->
-      <section class="home-section" aria-label="读得最多">
-        <header class="section-head">
-          <h2>读得最多</h2>
-        </header>
-        <HomeHotLedger :posts="hotPosts" />
-      </section>
+          <!-- 读得最多：紧凑行，名次 + 标题 + 阅读数 -->
+          <section class="side-block home-hot-strip" aria-label="读得最多">
+            <header class="side-block__head">
+              <h2 class="side-block__title">读得最多</h2>
+              <span class="side-block__sub">前 5 篇</span>
+            </header>
+            <HomeHotLedger :posts="hotPosts.slice(0, 5)" />
+          </section>
+        </aside>
+      </div>
     </template>
   </div>
 </template>

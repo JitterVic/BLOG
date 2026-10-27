@@ -6,6 +6,7 @@ from flask import abort, flash, redirect, render_template, request, url_for
 
 from ..serializers import build_edit_post, build_profile_form
 from ..taxonomy import CATEGORY_PRESETS
+from ..repository.notes import NOTE_TYPE_LABELS
 
 
 def build_admin_context(store, admin_prefix: str, **extra):
@@ -68,6 +69,22 @@ def register(bp, *, store, security, settings) -> None:
         )
 
     @security.admin_required
+    def admin_notes(note_id=None):
+        note = store.notes.get_by_id(note_id) if note_id else None
+        if note_id and note is None:
+            abort(404)
+        return render_template(
+            "admin_notes.html",
+            **build_admin_context(
+                store,
+                admin_prefix,
+                admin_page="notes",
+                edit_note=note or {"status": "draft", "type": "thought"},
+                note_types=NOTE_TYPE_LABELS,
+            ),
+        )
+
+    @security.admin_required
     def admin_profile_page():
         profile = store.get_site_profile()
         return render_template(
@@ -104,6 +121,8 @@ def register(bp, *, store, security, settings) -> None:
     )
     bp.add_url_rule("/write/<int:post_id>", "admin_write", admin_write, methods=["GET"])
     bp.add_url_rule("/media", "admin_media", admin_media, methods=["GET"])
+    bp.add_url_rule("/notes", "admin_notes", admin_notes, methods=["GET"], defaults={"note_id": None})
+    bp.add_url_rule("/notes/<int:note_id>", "admin_notes", admin_notes, methods=["GET"])
     bp.add_url_rule("/profile", "admin_profile_page", admin_profile_page, methods=["GET"])
     bp.add_url_rule("/profile", "admin_profile", admin_profile, methods=["POST"])
     bp.add_url_rule("/preview/<int:post_id>", "admin_full_preview", admin_full_preview, methods=["GET"])

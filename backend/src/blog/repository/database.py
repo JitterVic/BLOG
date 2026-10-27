@@ -104,6 +104,23 @@ class Database:
                 deleted_at TEXT DEFAULT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'thought',
+                excerpt TEXT DEFAULT '',
+                published_at TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                media TEXT NOT NULL DEFAULT '[]',
+                external_url TEXT DEFAULT '',
+                markdown_content TEXT DEFAULT '',
+                html_content TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                deleted_at TEXT DEFAULT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS post_revisions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER NOT NULL,
@@ -142,6 +159,9 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_posts_status_tags
             ON posts (status, tags);
 
+            CREATE INDEX IF NOT EXISTS idx_notes_status_type_order
+            ON notes (status, type, published_at DESC, updated_at DESC, id DESC);
+
             CREATE INDEX IF NOT EXISTS idx_post_revisions_post_created
             ON post_revisions (post_id, created_at DESC, id DESC);
 
@@ -151,6 +171,28 @@ class Database:
         )
 
     def _migrate_schema(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'thought',
+                excerpt TEXT DEFAULT '',
+                published_at TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                media TEXT NOT NULL DEFAULT '[]',
+                external_url TEXT DEFAULT '',
+                markdown_content TEXT DEFAULT '',
+                html_content TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                deleted_at TEXT DEFAULT NULL
+            )"""
+        )
+        connection.execute(
+            """CREATE INDEX IF NOT EXISTS idx_notes_status_type_order
+            ON notes (status, type, published_at DESC, updated_at DESC, id DESC)"""
+        )
         post_columns = {
             row["name"] for row in connection.execute("PRAGMA table_info(posts)").fetchall()
         }

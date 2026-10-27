@@ -11,6 +11,18 @@ from .admin_pages import build_admin_context
 
 def register(bp, *, store, security) -> None:
     @security.admin_required
+    def admin_save_note():
+        note_id = request.form.get("note_id", type=int)
+        action = form_value(request.form, "action", "draft") or "draft"
+        try:
+            saved_id = store.save_note(request.form, note_id=note_id, action=action)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_notes", note_id=note_id) if note_id else url_for("admin_notes"))
+        flash("余笺已发布。" if action == "publish" else "余笺草稿已保存。", "success")
+        security.audit("note.saved", note_id=saved_id, action=action)
+        return redirect(url_for("admin_notes", note_id=saved_id))
+    @security.admin_required
     def admin_save_post():
         post_id = request.form.get("post_id", type=int)
         action = form_value(request.form, "action", "draft") or "draft"
@@ -147,3 +159,4 @@ def register(bp, *, store, security) -> None:
     bp.add_url_rule("/posts/<int:post_id>/quick-publish", "admin_quick_publish_post", admin_quick_publish_post, methods=["POST"])
     bp.add_url_rule("/posts/<int:post_id>/unpublish", "admin_unpublish_post", admin_unpublish_post, methods=["POST"])
     bp.add_url_rule("/posts/bulk", "admin_bulk_posts", admin_bulk_posts, methods=["POST"])
+    bp.add_url_rule("/notes/save", "admin_save_note", admin_save_note, methods=["POST"])

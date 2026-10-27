@@ -1,6 +1,7 @@
 <script setup>
 // 左栏（DESIGN.md §4.2，≥ 1100px）：回答「我在哪」「附近有什么」。
-// 列表页里它是栏目索引；文章页里它是本文目录 + 阅读进度（数据经 useRailState 共享）。
+// 列表页里它是栏目索引；文章页里它是栏目文章目录（本栏目各篇，当前篇高亮），
+// 本文目录在文章页右栏批注栏。左栏可在文章页整栏收起（书脊页签展开）。
 
 import { computed } from "vue";
 import { useRoute } from "vue-router";
@@ -8,25 +9,32 @@ import { RouterLink } from "vue-router";
 
 import RailSearch from "./RailSearch.vue";
 import ReadTrace from "./ReadTrace.vue";
+import { NOTE_TYPES } from "../composables/useNotes";
+import { useDeskPanels } from "../composables/useDeskPanels";
 import { useRailState } from "../composables/useRailState";
+import { useReadLog } from "../composables/useReadLog";
 import { useSite } from "../composables/useSite";
 import { useTheme } from "../composables/useTheme";
 
 const route = useRoute();
 const { site } = useSite();
-const { articleToc, articleActiveId, articleProgress, articleCategory } = useRailState();
+const { articleSiblings, articleCategory } = useRailState();
+const { isRead } = useReadLog();
+const { toggleRail } = useDeskPanels();
 const { label: themeLabel, cycle: cycleTheme } = useTheme();
 
 const isPost = computed(() => route.name === "post");
+const isNotesSection = computed(() => route.name === "notes" || route.name === "note");
 
 const NAV_ITEMS = [
   { name: "home", label: "首页", to: "/" },
   { name: "posts", label: "文章", to: "/posts" },
+  { name: "notes", label: "余笺", to: "/notes" },
   { name: "about", label: "关于", to: "/about" },
 ];
 
 const backToCategory = computed(() => ({
-  label: articleCategory.value ? `回到「${articleCategory.value}」` : "回到文章列表",
+  label: "返回",
   to: articleCategory.value
     ? { name: "posts", query: { cat: articleCategory.value } }
     : { name: "posts" },
@@ -49,6 +57,7 @@ const categories = computed(() => {
 
 function isNavActive(name) {
   if (name === "home") return route.name === "home";
+  if (name === "notes") return route.name === "notes" || route.name === "note";
   return route.name === name || (name === "posts" && route.name === "post");
 }
 
@@ -56,25 +65,31 @@ function isCategoryActive(name) {
   return route.name === "posts" && route.query.cat === name;
 }
 
-function prefersReducedMotion() {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
+function isNoteTypeActive(typeValue) {
+  if (route.name !== "notes") return false;
+  const raw = typeof route.query.type === "string" ? route.query.type : "";
+  return raw === typeValue;
 }
 
-function jumpToHeading(id) {
-  const heading = document.getElementById(id);
-  if (!heading) return;
-  heading.scrollIntoView({
-    behavior: prefersReducedMotion() ? "auto" : "smooth",
-    block: "start",
-  });
+/** 目录项状态：当前篇套荧光扫过，已读套荧光笔，其余素色。 */
+function siblingClass(slug) {
+  if (slug === route.params.slug) return "marker-sweep is-on";
+  if (isRead(slug)) return "marker";
+  return "";
 }
-
-const progressPercent = computed(() => Math.round(articleProgress.value * 100));
 </script>
 
 <template>
   <aside class="rail">
-    <p class="rail-brand"><RouterLink class="rail-brand__link" to="/">至知</RouterLink></p>
+    <p class="rail-brand">
+      <RouterLink class="rail-brand__link" to="/">至知</RouterLink>
+      <button
+        v-if="isPost"
+        type="button"
+        class="panel-collapse"
+        @click="toggleRail(true)"
+      >‹ 收起</button>
+    </p>
 
     <nav class="rail-nav" aria-label="站点导航">
       <template v-if="!isPost">
@@ -88,36 +103,74 @@ const progressPercent = computed(() => Math.round(articleProgress.value * 100));
           <span class="marker-sweep" :class="{ 'is-on': isNavActive(item.name) }">{{ item.label }}</span>
         </RouterLink>
       </template>
-      <RouterLink v-else class="rail-nav__link" :to="backToCategory.to">
-        {{ backToCategory.label }}
-      </RouterLink>
+      <template v-else>
+        <RouterLink class="rail-nav__link rail-nav__back" :to="backToCategory.to">
+          {{ backToCategory.label }}
+        </RouterLink>
+        <div class="rail-nav__mini" aria-label="快捷导航">
+          <RouterLink
+            v-for="item in NAV_ITEMS"
+            :key="item.name"
+            class="rail-nav__mini-link"
+            :to="item.to"
+          >{{ item.label }}</RouterLink>
+        </div>
+      </template>
     </nav>
 
     <div class="rail-mid">
-      <template v-if="isPost && articleToc.length">
-        <p class="rail-mid__label">本文目录</p>
-        <nav class="rail-toc" aria-label="本文目录">
-          <a
-            v-for="item in articleToc"
-            :key="item.id"
-            class="rail-toc__link"
-            :class="{ 'rail-toc__link--sub': item.level === 3 }"
-            :href="`#${item.id}`"
-            :aria-current="item.id === articleActiveId ? 'location' : undefined"
-            @click.prevent="jumpToHeading(item.id)"
-          >
+      <!-- 文章页：栏目文章目录（本栏目各篇，当前篇高亮；本文目录在右栏批注栏） -->
+      <template v-if="isPost && articleSiblings.length">
+        <p class="rail-mid__label">{{ articleCategory }} · {{ articleSiblings.length }} 篇</p>
+        <nav class="rail-siblings" :aria-label="`${articleCategory} 栏目文章目录`">
+          <template v-for="item in articleSiblings" :key="item.slug">
             <span
-              class="marker-sweep"
-              :class="{ 'is-on': item.id === articleActiveId }"
-            >{{ item.label }}</span>
-          </a>
+              v-if="item.slug === route.params.slug"
+              class="rail-siblings__link"
+              aria-current="page"
+            >
+              <span class="marker-sweep is-on">{{ item.title }}</span>
+              <span class="sr-only">（当前篇目）</span>
+            </span>
+            <RouterLink
+              v-else
+              class="rail-siblings__link"
+              :to="{ name: 'post', params: { slug: item.slug } }"
+            >
+              <span :class="siblingClass(item.slug)">{{ item.title }}</span>
+            </RouterLink>
+          </template>
         </nav>
-        <p class="rail-progress" aria-hidden="true">阅读进度 {{ progressPercent }}%</p>
+      </template>
+
+      <template v-else-if="isNotesSection">
+        <p class="rail-mid__label">余笺类型</p>
+        <nav class="rail-categories" aria-label="余笺类型">
+          <RouterLink
+            v-for="item in NOTE_TYPES"
+            :key="item.value || 'all'"
+            class="rail-categories__link"
+            :to="{ name: 'notes', query: item.value ? { type: item.value } : {} }"
+            :aria-current="isNoteTypeActive(item.value) ? 'page' : undefined"
+          >
+            <span class="marker-sweep" :class="{ 'is-on': isNoteTypeActive(item.value) }">
+              {{ item.label }}
+            </span>
+          </RouterLink>
+        </nav>
       </template>
 
       <template v-else>
         <p class="rail-mid__label">栏目</p>
         <nav class="rail-categories" aria-label="栏目">
+          <RouterLink
+            v-if="route.name === 'posts'"
+            class="rail-categories__link"
+            :to="{ name: 'posts' }"
+            :aria-current="!route.query.cat ? 'page' : undefined"
+          >
+            <span class="marker-sweep" :class="{ 'is-on': !route.query.cat }">全部</span>
+          </RouterLink>
           <RouterLink
             v-for="category in categories"
             :key="category.name"

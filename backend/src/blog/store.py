@@ -30,6 +30,8 @@ from .markdown_tools import (  # noqa: F401  (兼容重导出)
 from .repository.database import Database
 from .repository.media import MediaRepository
 from .repository.posts import PostRepository
+from .repository.notes import NoteRepository, NOTE_TYPE_LABELS
+from .markdown_tools import build_excerpt as _build_excerpt, render_markdown as _render_markdown, slugify as _slugify
 from .repository.profile import ProfileRepository
 from .repository.revisions import RevisionRepository
 from .services.dashboard_service import DashboardService
@@ -81,6 +83,7 @@ class BlogStore:
         self.max_image_pixels = env_int("BLOG_MAX_IMAGE_PIXELS", uploads.DEFAULT_MAX_IMAGE_PIXELS, minimum=1)
 
         self.posts = PostRepository(self.db)
+        self.notes = NoteRepository(self.db)
         self.revisions = RevisionRepository(self.db)
         self.profile_repo = ProfileRepository(self.db)
         self.media_repo = MediaRepository(self.db)
@@ -190,6 +193,53 @@ class BlogStore:
 
     def list_taxonomy(self) -> dict[str, list[str]]:
         return self.posts.list_taxonomy()
+
+    # ------------------------------------------------------------------
+    # 余笺读取
+    # ------------------------------------------------------------------
+
+    def list_notes(self, **kwargs) -> list[dict[str, Any]]:
+        items = self.notes.list(**kwargs)
+        for item in items:
+            item["type_label"] = NOTE_TYPE_LABELS.get(item.get("type", ""), item.get("type", ""))
+        return items
+
+    def count_notes(self, **kwargs) -> int:
+        return self.notes.count(**kwargs)
+
+    def get_note_by_slug(self, slug: str, *, include_drafts: bool = False) -> dict[str, Any] | None:
+        note = self.notes.get_by_slug(slug, include_drafts=include_drafts)
+        if note:
+            note["type_label"] = NOTE_TYPE_LABELS.get(note.get("type", ""), note.get("type", ""))
+        return note
+
+    def save_note(self, form_data, *, note_id: int | None = None, action: str = "draft") -> int:
+        title = str(form_data.get("title") or "").strip()
+        markdown = str(form_data.get("markdown_content") or "")
+        if not title:
+            raise ValueError("请先填写余笺标题。")
+        if not markdown.strip():
+            raise ValueError("请先填写余笺正文。")
+        note_type = str(form_data.get("type") or "thought").strip()
+        if note_type not in NOTE_TYPE_LABELS:
+            raise ValueError("余笺类型无效。")
+        slug = self.notes.ensure_unique_slug(_slugify(str(form_data.get("slug") or title)), note_id=note_id)
+        status = "published" if action == "publish" else "draft"
+        published_at = str(form_data.get("published_at") or "").strip()
+        if status == "published" and not published_at:
+            published_at = __import__("datetime").datetime.now().date().isoformat()
+        return self.notes.save({
+            "slug": slug,
+            "title": title,
+            "type": note_type,
+            "excerpt": str(form_data.get("excerpt") or _build_excerpt(markdown)),
+            "published_at": published_at,
+            "media": [],
+            "external_url": str(form_data.get("external_url") or "").strip(),
+            "markdown_content": markdown,
+            "html_content": _render_markdown(markdown),
+            "status": status,
+        }, note_id=note_id)
 
     # ------------------------------------------------------------------
     # 文章生命周期

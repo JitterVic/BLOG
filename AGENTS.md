@@ -58,10 +58,10 @@
 
 > 前端设计的唯一权威文档是根目录 `DESIGN.md`（v2「笔记本」版本）；本节只记架构分层与硬约束，参数以 DESIGN.md 为准。
 
-- **状态管理**：采用单例 Composables 模式（`useSite.js`, `usePosts.js`, `usePost.js` 等在模块作用域持有响应式状态并去重并发请求），不引入额外的状态管理库（Pinia/Vuex）。跨组件的壳状态同样走模块级单例：`useRailState.js`（左栏文章目录/阅读进度，PostView 写、AppRail/TopBar 读）、`useReadLog.js`（读迹，localStorage `zhizhi:read`，与有效 slug 取交集）、`useTheme.js`（三态主题，`zhizhi:theme`）。
+- **状态管理**：采用单例 Composables 模式（`useSite.js`, `usePosts.js`, `usePost.js` 等在模块作用域持有响应式状态并去重并发请求），不引入额外的状态管理库（Pinia/Vuex）。跨组件的壳状态同样走模块级单例：`useRailState.js`（文章页共享态：栏目文章目录/阅读进度，PostView 写、AppRail/TopBar 读）、`useDeskPanels.js`（文章页左右栏折叠，离开文章页复位）、`useReadLog.js`（读迹，localStorage `zhizhi:read`，与有效 slug 取交集）、`useTheme.js`（三态主题，`zhizhi:theme`）。
 - **组件划分**：壳组件平铺于 `components/`（`AppRail.vue` 左栏、`TopBar.vue` 窄屏顶栏+菜单 dialog、`PostRow.vue` 全站共用列表行、`ReadTrace.vue` 读迹、`RailSearch.vue`）；业务子目录仅剩 `home/`（榜单）、`post/`（阅读工具、灯箱）、`pet/`（桌宠）。
-- **布局壳**：`≥1100px` 左栏常驻（`.shell` 双列网格，左栏 `position: sticky`——容器恒不矮于视口，此用法安全）；`<1100px` 左栏隐去、顶栏接管，菜单是原生 `<dialog>`。断点全站只有四档：640 / 1100 / 1360。文章页不再有右侧悬浮面板，目录进左栏（窄屏为 `<details>`）。
-- **动效只有四件**（DESIGN.md §7，其余一律不做）：状态变色、荧光笔扫过（`background-size` 0%→100%）、标题共享转场（View Transitions API，`useTitleMorph.js` 渐进增强，`view-transition-name: post-title` 同一时刻只设在一个元素上）、读迹落笔（`stroke-dashoffset`）。全部遵从 `prefers-reduced-motion`，无手动开关；滚动永不劫持（无 wheel/touch 翻页、无 body 锁定）。
+- **布局壳**：`≥1100px` 左栏常驻（`.shell` 双列网格，左栏 `position: sticky`——容器恒不矮于视口，此用法安全）；`<1100px` 左栏隐去、顶栏接管，菜单是原生 `<dialog>`。文章页：左栏为栏目文章目录（可整栏收起、左缘书脊页签展开），本文目录在右栏批注栏（可收起、右缘书脊页签展开）；窄屏目录仍为 `<details>`。断点全站只有两档：640 / 1100。
+- **动效只有六件**（DESIGN.md §7，其余一律不做）：状态变色、荧光笔扫过（`background-size` 0%→100%）、品牌书写（首页品牌封面 SVG 描红，签名豁免不随 reduce 静默）、标题共享转场（View Transitions API，`useTitleMorph.js` 渐进增强，`view-transition-name: post-title` 同一时刻只设在一个元素上）、路由纸面微淡入、列表筛选淡入。全部遵从 `prefers-reduced-motion`（品牌书写除外），无手动开关；滚动永不劫持（无 wheel/touch 翻页、无 body 锁定）。
 - **文章目录页（`/posts`）**：按年份分组的编年索引（`PostRow` 行），筛选走服务端 `category` 参数（左栏/窄屏栏目条），标签链接走检索维度 `?q=`；URL 是唯一状态源（`cat/q/page` 可分享可后退）。`/api/posts` **只有一种载荷形状**：永远返回 `{items, total, page, per_page, has_more}`，缺省即 `page=1`（不带 `page` 时 `per_page` 上限 50），不再有裸数组分支。
 - **样式体系**：`src/styles.css` 聚合 6 个模块（base / layout / components / pages / prose / print），顺序即层叠顺序。十六进制字面量只允许出现在 `base.css`；半透明一律 `color-mix()`；字体自托管（`@fontsource-variable/noto-serif-sc` + `lxgw-wenkai-webfont`，黑体用系统栈），不走 Google Fonts CDN。
 - **读完判定**：正文末尾哨兵进入视口且停留 ≥ `min(15s, 预计时长×20%)` 才记读迹（防一把拉到底）；观察器触发后即 `disconnect`，目录观察器随文章页卸载 `disconnect()`。

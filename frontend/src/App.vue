@@ -6,19 +6,31 @@ import { nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import AppRail from "./components/AppRail.vue";
-import CatPet from "./components/pet/CatPet.vue";
+import BackToTop from "./components/BackToTop.vue";
 import SiteFooter from "./components/SiteFooter.vue";
 import TopBar from "./components/TopBar.vue";
+import { useDeskPanels } from "./composables/useDeskPanels";
 import { usePageMeta } from "./composables/usePageMeta";
 import { useSite } from "./composables/useSite";
 
 const route = useRoute();
 const { site, ensureSite } = useSite();
+const { railCollapsed, toggleRail, resetPanels } = useDeskPanels();
+
+// 折叠是文章页的阅读姿态：离开文章页即复位，防止读者在别页找不到导航
+watch(
+  () => route.name,
+  (name) => {
+    if (name !== "post") resetPanels();
+  },
+);
 
 usePageMeta(() => {
   const name = route.name;
   const siteName = site.value?.name || "至知";
   if (name === "posts") return { title: `文章 · ${siteName}`, description: "浏览至知的技术实践、项目复盘、阅读笔记与长期学习记录。" };
+  if (name === "notes") return { title: `余笺 · ${siteName}`, description: "记下那些尚未必要成为文章的事。" };
+  if (name === "note") return { title: `余笺 · ${siteName}`, description: "正在打开余笺……" };
   if (name === "about") return { title: `关于 · ${siteName}`, description: site.value?.summary || "了解这份个人博客的作者、写作方向与联系方式。" };
   if (name === "post") return { title: `文章 · ${siteName}`, description: "正在打开文章……" };
   if (name === "not-found") return { title: `找不到这一页 · ${siteName}`, description: "你访问的页面不存在，回到首页或全部文章继续阅读。" };
@@ -77,16 +89,30 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'shell--rail-collapsed': railCollapsed }">
     <a class="skip-link" href="#main-content">跳到正文</a>
     <AppRail />
+    <!-- 左栏收起后的书脊：竖排品牌字，点开即重新展开左栏 -->
+    <button
+      v-if="railCollapsed"
+      type="button"
+      class="rail-spine"
+      aria-label="展开侧栏"
+      @click="toggleRail(false)"
+    >至知</button>
     <div class="shell-main">
       <TopBar />
       <main id="main-content" class="app-main" tabindex="-1">
-        <router-view />
+        <!-- 跨页纸面微淡入（§7）：key 只取 path——筛选/翻页是同视图就地更新，不换页。
+             原生 View Transition（标题共享转场）激活时由 data-vt-active 禁用本层过渡。 -->
+        <router-view v-slot="{ Component, route: viewRoute }">
+          <Transition name="page-fade" mode="out-in">
+            <component :is="Component" :key="viewRoute.path" />
+          </Transition>
+        </router-view>
       </main>
       <SiteFooter />
     </div>
+    <BackToTop />
   </div>
-  <CatPet />
 </template>

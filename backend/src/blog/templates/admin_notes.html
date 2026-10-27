@@ -1,0 +1,25 @@
+{% extends "admin_base.html" %}
+{% block title %}余笺 · 至知编辑台{% endblock %}
+{% block page_title %}余笺{% endblock %}
+{% block page_description %}记录那些尚未必要成为文章的事。{% endblock %}
+{% block content %}
+<main class="write-page">
+  <section class="write-panel">
+    <div class="section-heading"><span>Notes / 余笺</span><strong>轻量记录</strong></div>
+    <form method="post" action="{{ url_for('admin_save_note') }}" class="write-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="note_id" value="{{ edit_note.id or '' }}" />
+      <label class="field"><span>标题</span><input name="title" value="{{ edit_note.title or '' }}" required /></label>
+      <div class="form-grid">
+        <label class="field"><span>类型</span><select name="type">{% for value, label in note_types.items() %}<option value="{{ value }}" {% if edit_note.type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="field"><span>日期</span><input type="date" name="published_at" value="{{ edit_note.published_at or '' }}" /></label>
+      </div>
+      <label class="field"><span>Slug（可留空）</span><input name="slug" value="{{ edit_note.slug or '' }}" /></label>
+      <label class="field"><span>摘要（可留空自动生成）</span><textarea name="excerpt" rows="2">{{ edit_note.excerpt or '' }}</textarea></label>
+      <label class="field"><span>正文 Markdown</span><textarea name="markdown_content" rows="18" required>{{ edit_note.markdown_content or '' }}</textarea></label>
+      <label class="field"><span>外部链接（可选）</span><input type="url" name="external_url" value="{{ edit_note.external_url or '' }}" /></label>
+      <div class="write-actions"><button class="primary-button" type="submit" name="action" value="publish">发布余笺</button><button class="ghost-link" type="submit" name="action" value="draft">保存草稿</button></div>
+    </form>
+  </section>
+</main>
+{% endblock %}

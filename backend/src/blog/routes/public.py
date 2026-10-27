@@ -12,7 +12,10 @@ from ..serializers import (
     summarize_adjacent_post,
     summarize_post,
     summarize_related_post,
+    build_note_detail_payload,
+    summarize_note,
 )
+from ..repository.notes import NOTE_TYPES
 
 
 # The view-dedup marker rides in the same signed cookie as admin_authenticated
@@ -121,6 +124,35 @@ def build_blueprint(store) -> Blueprint:
             )
         )
 
+    def notes():
+        note_type = (request.args.get("type") or "").strip().lower()
+        if note_type and note_type not in NOTE_TYPES:
+            note_type = None
+        raw_page = request.args.get("page", type=int)
+        page = max(1, raw_page or 1)
+        per_page = max(1, min(request.args.get("limit", type=int) or 20, 50))
+        start = (page - 1) * per_page
+        total = store.count_notes(note_type=note_type, published_only=True)
+        items = store.list_notes(
+            note_type=note_type,
+            published_only=True,
+            limit=per_page,
+            offset=start,
+        )
+        return jsonify({
+            "items": [summarize_note(note) for note in items],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "has_more": start + per_page < total,
+        })
+
+    def note_detail(slug):
+        note = store.get_note_by_slug(slug)
+        if note is None:
+            abort(404)
+        return jsonify(build_note_detail_payload(note))
+
     def uploads_file(path):
         if not uploads.is_allowed_public_upload_path(path):
             abort(404)
@@ -134,5 +166,7 @@ def build_blueprint(store) -> Blueprint:
     bp.add_url_rule("/api/site", "site", site, methods=["GET"])
     bp.add_url_rule("/api/posts", "posts", posts, methods=["GET"])
     bp.add_url_rule("/api/posts/<slug>", "post_detail", post_detail, methods=["GET"])
+    bp.add_url_rule("/api/notes", "notes", notes, methods=["GET"])
+    bp.add_url_rule("/api/notes/<slug>", "note_detail", note_detail, methods=["GET"])
     bp.add_url_rule("/uploads/<path:path>", "uploads", uploads_file, methods=["GET"])
     return bp

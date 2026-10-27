@@ -20,6 +20,26 @@ def summarize_post(post) -> dict[str, Any]:
     }
 
 
+def summarize_note(note) -> dict[str, Any]:
+    return {
+        "slug": note["slug"],
+        "title": note["title"],
+        "type": note["type"],
+        "type_label": note.get("type_label", ""),
+        "excerpt": note.get("excerpt") or "",
+        "published_at": note.get("published_at") or "",
+        "media": note.get("media") or [],
+        "external_url": note.get("external_url") or "",
+    }
+
+
+def build_note_detail_payload(note) -> dict[str, Any]:
+    return {
+        **summarize_note(note),
+        "html_content": note.get("html_content") or "",
+    }
+
+
 def summarize_related_post(post) -> dict[str, Any]:
     return {
         "slug": post["slug"],
