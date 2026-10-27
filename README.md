@@ -1,8 +1,20 @@
-# 至知 Journal (Paper Notes)
+# 至知 Journal（Notebook）
 
-> 一份"报刊排版"的个人博客：前台是翻开的报纸，后台是同一位排字工的编辑台。
+> 一本摊开的笔记本：蓝黑墨水写字、荧光笔划线、读完一篇记一笔。
+> 基于 **Flask 3 + Vue 3** 构建，SQLite 单文件持久化，内置单管理员内容管理后台。Markdown 是正文的唯一真实数据源，读写两侧共用同一套渲染与消毒管线。
 
-基于 **Flask 3 + Vue 3** 构建，SQLite 单文件持久化，内置单管理员内容管理后台。Markdown 是正文的唯一真实数据源，读写两侧都走同一套渲染与消毒管线。
+---
+
+## 分支方向
+
+本仓库有两条**长期分支**，是同一项目的两种版面方向——各自独立演化，**永不合并**：
+
+| 分支 | 方向 | 状态 |
+|---|---|---|
+| `notebook`（本分支） | **笔记本 · v2**：蓝黑墨水 + 浅蓝格线 + 荧光笔 + 宋/楷/黑三体分工，三栏书案版式 | 活跃开发 |
+| `main` | 报刊 · v1：米色纸 + 朱红 + 细线的报刊版面 | 历史归档，已冻结 |
+
+前端设计的唯一权威文档是 [DESIGN.md](DESIGN.md)（v2.1「三栏书案」）；架构分层与开发约束见 [AGENTS.md](AGENTS.md)。
 
 ---
 
@@ -26,30 +38,19 @@
 
 ### 前台（Vue 3 SPA）
 
-- **报刊版式**：报头封面、头条大图、热点排行，正文按"版次"分节并带页码；打印样式单独成层，屏幕与纸张两套节奏。
-- **文章阅读页**：视口级对称三轨网格 —— 左轨是同栏目编年索引（范围可在「本栏目 / 全站最新 / 其它栏目」之间切换），右轨是章节目录。两轨都可折叠成竖排书脊并记住偏好，正文列恒定居中、宽度不随开合变化。
-- **文章目录页**：单一形态的年份分组编年索引（日期 / 标题 + 摘要 / 时长 + 标签），配栏目筛选与站内搜索；筛选与翻页可以并存。
-- **阅读增强**：实时阅读进度、目录跟随、代码高亮与一键复制、图片灯箱、相邻文章导航、相关文章推荐。
-- **彩蛋**：无文字的交互式桌面宠物（单击回顶 / 长按抚摸 / 拖动换位 / 右键切换音效 / 打字时打鼓）。
+- **摊开的笔记本**：左栏（栏目 / 余笺类型 / 本文目录）随页面切换内容；首页品牌封面每次进入以楷体笔顺手写「知至而后意诚」——SVG 描红逐笔勾勒、逐字落墨、落款渐显。
+- **三栏书案**：列表类页面均为「主卷 + 17rem 右辅栏」双轨版式——首页近笺与读得最多、文章目录页年份跳表与标签索引、余笺页项目精选与最近文章、关于页联系方式与更新日历。
+- **文章批注栏**：本文目录（粘性跟随、可整栏收起）、脚注边注、本文标签与相关推荐；左栏为栏目文章目录，亦可整栏收起——书脊页签展开，正文位置分毫不动。
+- **内容双轨**：文章（长内容）与余笺（短内容）两套资源；搜索一次命中、两侧同屏；读迹「已读 N / 共 M 篇」与已读标题荧光笔是站点的计数签名。
+- **阅读增强**：标题共享转场（View Transitions）、路由纸面微淡入、代码高亮与一键复制、图片灯箱、相邻文章导航、相关推荐、长页回顶。
+- **动效六件**（DESIGN.md §7，其余一律不做）：状态变色、荧光笔扫过、品牌书写、标题共享转场、路由微淡入、列表筛选淡入；全部遵从 `prefers-reduced-motion`（品牌书写为签名豁免）。
 - **SEO**：服务端为 SPA 外壳动态注入 Open Graph 与 canonical，另有 Atom Feed、Sitemap 与 robots.txt。
 
 ### 后台（Jinja2 编辑台）
 
-- **四页工作流**：稿件总览（Desk）→ 文章写作（Write）→ 封面资料（Profile）→ 媒体资源（Media），顶栏常驻四页入口与稿件计数。
+- **五页工作流**：稿件总览（Desk）→ 文章写作（Write）→ 余笺管理（Notes）→ 封面资料（Profile）→ 媒体资源（Media）。
 - **写作台**：写作 / 分栏 / 预览三种视图，Markdown 快捷工具栏，目录、文章设置、图片、版本四个抽屉。
-- **状态保障**：本地草稿缓存 + 服务端自动同步 + 版本冲突检测 + 离线重试；顶栏状态点会明确区分"仅本地 / 同步中 / 已入服务端 / 出错"。
-- **发布预检**：发布前逐项校验必填与风险项，点击问题项可直接跳到对应字段。
-- **版本追踪**：发布、下架、回收站等关键动作自动留档，可对比任意历史版本并恢复。
-- **稿件运维**：多条件筛选（标题 / slug / 栏目 / 标签 / 状态）+ 排序 + 批量操作 + 回收站（30 天自动清理）。
-- **媒体库**：粘贴 / 拖拽上传、Pillow 内存安全压缩、文章引用关系追踪（可筛选"未引用"图片）。
-
-### 数据与安全
-
-- SQLite WAL 模式运行，启动时自动建表并做幂等增量迁移。
-- **XSS 防御**：所有 Markdown 渲染产物经 `SafeHTMLCleaner` 白名单消毒后才入库 / 出库。
-- **上传边界**：图片类型与像素上限校验，`/uploads/<path>` 必须先通过路径白名单。
-- **访问控制**：可自定义后台路径、基于 HMAC 的会话鉴权、CSRF 校验、登录失败限流与审计日志。
-- **生产强校验**：`BLOG_DEBUG=false` 时，默认密钥 / 弱密码 / 默认后台路径会直接阻断启动。
+- **状态保障**：本地草稿缓存 + 服务端自动同步 + 版本冲突检测 + 离线重试；顶栏状态点会明确区分“仅本地 / 同步中 / 已入服务端 / 出错”。
 
 ---
 
@@ -67,15 +68,14 @@
 
 ### 后台与前台共用一套纸面
 
-后台不是另一个产品。`static/admin/css/theme.css` 里的设计令牌与 `frontend/src/styles/base.css` **保持同一份取值**（纸色 `--paper: #f6f1e8`、墨色、栏线、字体栈、缓动曲线），两个渲染入口各自 `@import` 它：
+后台不是另一个产品。`static/admin/css/theme.css` 里的设计令牌与 `frontend/src/styles/base.css` **保持同一份取值**（纸色 `--paper`、墨色、栏线、字体栈、缓动），两个渲染入口各自 `@import` 它：
 
-- 纸色与墨色分叉的后果是肉眼可见的 —— 同一张封面图在前后台会显出两种偏色。
-- `admin_base.html`、`admin_login.html`、`admin_preview.html` 都必须加载与前台相同的 Google Fonts；缺了这一句，中文标题会掉回系统宋体、正文掉回 Consolas，同一屏并排就能看出不是一家刊物。
-- 半透明纸面统一写成 `rgb(var(--paper-rgb) / 0.9)` 这类形式，颜色只在令牌里定义一次；散落的 `rgba(244, 239, 230, .9)` 会让"改 `--paper`"变成一句空话。
+- 纸色与墨色分叉的后果是肉眼可见的——同一篇文章在前后台会显出两种气质。
+- 令牌纪律：十六进制字面量只允许出现在 `base.css`；半透明一律 `color-mix()`；宋楷两族字体自托管（`@fontsource-variable/noto-serif-sc` + `lxgw-wenkai-webfont`），黑体用系统栈，不走 Google Fonts CDN。
 
 ### `/api/posts` 只有一种载荷形状
 
-永远返回 `{ items, total, page, per_page, has_more }`。不带 `page` 时按 `page=1` 处理，此时页大小缺省为 50（带 `page` 时缺省为 10），上限同为 50；不存在"有时是数组、有时是信封"的分支。
+永远返回 `{ items, total, page, per_page, has_more }`。不带 `page` 时按 `page=1` 处理，此时页大小缺省为 50（带 `page` 时缺省为 10），上限同为 50；不存在“有时是数组、有时是信封”的分支。
 
 ---
 
@@ -86,7 +86,7 @@
 | 领域 | 选型 | 说明 |
 |---|---|---|
 | 前端 SPA | Vue 3 + Vue Router 4 + Vite 6 | `<script setup>`，单例 Composables 管理状态，不引入 Pinia/Vuex |
-| 样式 | 原生 CSS 变量 + Editorial CSS | 12 个按层叠顺序 `@import` 的主题模块，无预处理器 |
+| 样式 | 原生 CSS 变量 + 6 个主题模块 | `styles.css` 按 base → layout → components → pages → prose → print 顺序聚合，层叠顺序即模块顺序 |
 | 后端 API | Python ≥ 3.10 / Flask 3 | 路由 → 服务 → 仓储三层，统一 JSON 响应 |
 | 管理后台 | Flask + Jinja2 + 原生 ES Modules | 服务端渲染，与前台 SPA 完全解耦；主题与前台同源 |
 | 数据与渲染 | SQLite 3 (WAL) + Python-Markdown + Pillow | 自定义渲染扩展、HTML 消毒、图片安全压缩 |
@@ -111,21 +111,22 @@ BLOG/
 │   │   ├── store.py              # BlogStore 门面与依赖装配（兼容层）
 │   │   ├── routes/               # public / feed / spa / admin_auth / admin_pages / admin_posts / admin_api
 │   │   ├── services/             # post / media / profile / dashboard / import
-│   │   ├── repository/           # database / posts / revisions / profile / media
+│   │   ├── repository/           # database / posts / revisions / profile / media / notes
 │   │   ├── markdown_tools/       # renderer（含 SafeHTMLCleaner）/ analysis / frontmatter
-│   │   ├── templates/            # 后台 Jinja2 模板（admin_base + 四页 + partials）
+│   │   ├── templates/            # 后台 Jinja2 模板（admin_base + 各页 + partials）
 │   │   └── static/admin/         # 后台静态资产
-│   │       ├── css/              # theme（与前台同源令牌）/ base / login / dashboard / write / media / profile
+│   │       ├── css/              # theme（与前台同源令牌）/ base / login / dashboard / write / media / profile / notes
 │   │       └── js/write/         # 写作台 ES Modules（autosave / editor / preview / publish / revisions…）
 │   └── tests/                    # pytest 测试套件
 ├── frontend/                     # 前端 Vue 3 单页应用
 │   ├── vite.config.js            # 开发代理：/api 与 /uploads → :5000
 │   └── src/
-│       ├── components/           # home / post / posts / pet / 通用组件
-│       ├── composables/          # useSite / usePosts / usePost / usePostRail / usePanelPin …
+│       ├── components/           # AppRail / TopBar / PostRow / ReadTrace / BrandCover 等壳与通用组件
+│       ├── composables/          # useSite / usePosts / usePost / useNotes / useDeskPanels / useTitleMorph …
+│       ├── lib/                  # brandStrokes（品牌封面笔画数据）/ articleEnhancer / postGroups
 │       ├── services/             # http.js（超时与 ApiError）+ api.js
-│       ├── styles/               # editorial.css 聚合 12 个主题模块
-│       └── views/                # Home / Posts / Post / About / NotFound
+│       ├── styles/               # styles.css 聚合 6 个模块（base / layout / components / pages / prose / print）
+│       └── views/                # Home / Posts / Post / Notes / Note / About / NotFound
 ├── deploy/                       # 生产部署与运维脚本（deploy / backup / restore + 配置模板）
 ├── scripts/                      # 本地开发辅助（dev.ps1 / verify.ps1 / backup.ps1 / dev_watchdog.py）
 ├── docs/                         # 上线核对清单与设计稿
